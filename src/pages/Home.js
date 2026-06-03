@@ -26,26 +26,6 @@ function Home() {
       />
       <Slider />
 
-      <section className="shell fade-up mt-8">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-lg sm:p-10">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Account access</p>
-              <h2 className="mt-2 text-3xl font-bold text-slate-900 sm:text-4xl">Customer login is here</h2>
-              <p className="mt-3 max-w-2xl text-slate-600">
-                Use the button below for customer sign in. Admin and manager access is available separately via a link.
-              </p>
-            </div>
-            <Link
-              to="/login?mode=customer-signin"
-              className="inline-flex h-14 items-center justify-center rounded-full bg-primary px-8 text-sm font-bold text-white transition hover:bg-red-700"
-            >
-              {t('nav.signIn')}
-            </Link>
-          </div>
-        </div>
-      </section>
-
       <section className="mt-10">
         <div className="logo-marquee w-full bg-white py-6 sm:py-8">
           <div className="logo-track">

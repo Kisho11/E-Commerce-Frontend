@@ -1,4 +1,4 @@
-import React, { startTransition, useEffect, useState } from 'react';
+import React, { startTransition, useEffect, useMemo, useState } from 'react';
 import { useProducts } from '../context/ProductContext';
 import ProductContentEditor from '../components/ProductContentEditor';
 import UiIcon from '../components/UiIcon';
@@ -39,6 +39,29 @@ const getFinalizedVariantGroups = (variantGroups = []) =>
         .filter(Boolean),
     }))
     .filter((group) => group.attribute && group.values.length > 0);
+
+const normalizeVariantAttributeName = (value = '') => value.trim().toLowerCase();
+
+const hasDuplicateVariantAttribute = (variantGroups = [], targetIndex) => {
+  const targetName = normalizeVariantAttributeName(variantGroups[targetIndex]?.attribute || '');
+  if (!targetName) return false;
+
+  return variantGroups.some(
+    (group, index) => index !== targetIndex && normalizeVariantAttributeName(group.attribute || '') === targetName
+  );
+};
+
+const hasAnyDuplicateVariantAttributes = (variantGroups = []) => {
+  const seen = new Set();
+
+  return variantGroups.some((group) => {
+    const normalizedName = normalizeVariantAttributeName(group.attribute || '');
+    if (!normalizedName) return false;
+    if (seen.has(normalizedName)) return true;
+    seen.add(normalizedName);
+    return false;
+  });
+};
 
 const buildVariantCombinations = (variantGroups = []) => {
   if (variantGroups.length === 0) return [];
@@ -119,6 +142,8 @@ function ProductManagement() {
   const [statusPopup, setStatusPopup] = useState({ visible: false, title: '', message: '', id: null });
   const [isPreparingEdit, setIsPreparingEdit] = useState(false);
   const [pendingDeleteProduct, setPendingDeleteProduct] = useState(null);
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [selectedProductCategory, setSelectedProductCategory] = useState('__all__');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -139,6 +164,7 @@ function ProductManagement() {
     'Grocery store', 'Butcher', 'Organic shops', 'Pharmacy store', 'Restaurants', 'Bakery'
   ];
   const nextProductId = Math.max(...products.map((p) => Number(p.id) || 0), 0) + 1;
+  const normalizedProductSearch = productSearchQuery.trim().toLowerCase();
   const availableSubcategories = Array.from(
     new Map(
       categories
@@ -147,6 +173,29 @@ function ProductManagement() {
         .map((subcategory) => [subcategory.name, subcategory])
     ).values()
   );
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const matchesCategory =
+        selectedProductCategory === '__all__' ||
+        (product.categories || []).includes(selectedProductCategory);
+
+      if (!matchesCategory) return false;
+
+      if (!normalizedProductSearch) return true;
+
+      const searchableText = [
+        product.name,
+        product.description,
+        ...(product.categories || []),
+        ...(product.subcategories || []),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchableText.includes(normalizedProductSearch);
+    });
+  }, [normalizedProductSearch, products, selectedProductCategory]);
 
   useEffect(() => {
     if (!statusPopup.visible) return undefined;
@@ -347,6 +396,11 @@ function ProductManagement() {
   };
 
   const handleFinalizeVariantGroup = (groupIndex) => {
+    if (hasDuplicateVariantAttribute(formData.variantGroups, groupIndex)) {
+      setError('Each attribute name must be unique. You cannot repeat names like Color more than once.');
+      return;
+    }
+
     setFormData((prev) => {
       const nextGroups = [...prev.variantGroups];
       const targetGroup = nextGroups[groupIndex];
@@ -412,6 +466,11 @@ function ProductManagement() {
 
     if (formData.categories.length === 0) {
       setError('Please select at least one category');
+      return;
+    }
+
+    if (hasAnyDuplicateVariantAttributes(formData.variantGroups)) {
+      setError('Each attribute name must be unique. Please remove duplicate attribute names before saving.');
       return;
     }
 
@@ -791,6 +850,11 @@ function ProductManagement() {
                               placeholder="Attribute name (e.g. Color)"
                               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                             />
+                            {hasDuplicateVariantAttribute(formData.variantGroups, groupIndex) && (
+                              <p className="mt-2 text-xs font-semibold text-red-600">
+                                This attribute name is already used. Pick a unique name.
+                              </p>
+                            )}
                           </div>
 
                           <div className="space-y-2">
@@ -871,29 +935,6 @@ function ProductManagement() {
                     )}
                   </div>
                 </div>
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Description *</label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                rows="4"
-                className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Additional Information</label>
-              <ProductContentEditor
-                value={formData.additionalInformation}
-                onChange={(nextValue) => setFormData((prev) => ({ ...prev, additionalInformation: nextValue }))}
-              />
-              <p className="mt-3 text-sm text-slate-500">
-                Stored as one structured object in `additionalInformation`, which maps cleanly to a single JSON column in a backend product table.
-              </p>
             </div>
 
             <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/60 p-4 sm:p-5">
@@ -998,6 +1039,29 @@ function ProductManagement() {
                 ))}
               </ul>
               <p className="mt-2 text-xs text-slate-500">Upload as many images as you want (up to 10). Drag to reorder; the first image is always the main image.</p>
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Description *</label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+                rows="4"
+                className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Additional Information</label>
+              <ProductContentEditor
+                value={formData.additionalInformation}
+                onChange={(nextValue) => setFormData((prev) => ({ ...prev, additionalInformation: nextValue }))}
+              />
+              <p className="mt-3 text-sm text-slate-500">
+                Stored as one structured object in `additionalInformation`, which maps cleanly to a single JSON column in a backend product table.
+              </p>
             </div>
 
             {/* Categories */}
@@ -1156,7 +1220,54 @@ function ProductManagement() {
       {/* Products List */}
       {!showAddForm && (
         <div className="bg-white rounded-xl shadow-md p-6">
-          <h4 className="text-xl font-bold text-gray-800 mb-6">All Products ({products.length})</h4>
+          <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <h4 className="text-xl font-bold text-gray-800">All Products ({filteredProducts.length})</h4>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px_auto] xl:min-w-[760px]">
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                  Search Products
+                </label>
+                <input
+                  type="search"
+                  value={productSearchQuery}
+                  onChange={(event) => setProductSearchQuery(event.target.value)}
+                  placeholder="Search by name, category, or subcategory"
+                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-red-100"
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                  Filter by Category
+                </label>
+                <select
+                  value={selectedProductCategory}
+                  onChange={(event) => setSelectedProductCategory(event.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 focus:border-primary focus:outline-none focus:ring-2 focus:ring-red-100"
+                >
+                  <option value="__all__">All Categories</option>
+                  {categoryNames.map((categoryName) => (
+                    <option key={categoryName} value={categoryName}>
+                      {categoryName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProductSearchQuery('');
+                    setSelectedProductCategory('__all__');
+                  }}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Clear Filters
+                </button>
+              </div>
+            </div>
+          </div>
           <div>
             <table className="w-full table-fixed">
               <thead className="bg-gray-100">
@@ -1174,7 +1285,13 @@ function ProductManagement() {
                 </tr>
               </thead>
               <tbody>
-                {products.map((product) => (
+                {filteredProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan="10" className="px-4 py-10 text-center text-sm text-slate-500">
+                      No products match the selected category or search term.
+                    </td>
+                  </tr>
+                ) : filteredProducts.map((product) => (
                   <tr key={product.id} className="border-b border-gray-200 hover:bg-gray-50">
                     <td className="px-3 py-4 align-top text-sm font-semibold text-gray-800">#{product.id}</td>
                     <td className="px-3 py-4 align-top text-sm font-semibold text-gray-800 break-words">{product.name}</td>
