@@ -69,6 +69,16 @@ function Navbar() {
     handleNavigate();
   };
 
+  const handleScopeChange = (event) => {
+    const value = event.target.value;
+    setSearchScope(value);
+    if (value === 'all') {
+      navigate('/categories');
+    } else {
+      navigate(`/categories?category=${encodeURIComponent(value)}`);
+    }
+  };
+
   const handleLogout = () => {
     logout();
     handleNavigate();
@@ -200,7 +210,7 @@ function Navbar() {
                   <select
                     id="header-search-scope"
                     value={searchScope}
-                    onChange={(event) => setSearchScope(event.target.value)}
+                    onChange={handleScopeChange}
                     className="h-[34px] w-full appearance-none bg-transparent px-3.5 pr-9 text-sm font-semibold text-slate-700 outline-none"
                   >
                     {searchScopes.map((scope) => (
@@ -375,7 +385,7 @@ function Navbar() {
               <div className="relative w-[122px] shrink-0 border-r border-slate-200 bg-slate-100">
                 <select
                   value={searchScope}
-                  onChange={(event) => setSearchScope(event.target.value)}
+                  onChange={handleScopeChange}
                   className="h-[32px] w-full appearance-none bg-transparent px-2.5 pr-7 text-[11px] font-semibold text-slate-700 outline-none"
                 >
                   {searchScopes.map((scope) => (

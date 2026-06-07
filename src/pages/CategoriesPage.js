@@ -6,7 +6,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useProducts } from '../context/ProductContext';
 
 function CategoriesPage() {
-  const { categories, products } = useProducts();
+  const { categories, products, productsLoading, productsError } = useProducts();
   const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const [selectedCategory, setSelectedCategory] = useState('__all__');
@@ -212,7 +212,7 @@ function CategoriesPage() {
                     )}
                   </div>
                   <p className={`text-xs font-semibold ${isActive ? 'text-blue-100' : 'text-slate-500'}`}>
-                    {categoryCounts[category.name] || 0} {t('categories.items')}
+                    {productsLoading ? '…' : `${categoryCounts[category.name] || 0} ${t('categories.items')}`}
                   </p>
                 </button>
               );
@@ -238,7 +238,7 @@ function CategoriesPage() {
                     >
                       <p className="truncate text-sm font-bold">{subCategory.name}</p>
                       <p className={`mt-1 text-xs font-semibold ${isSubcategoryActive ? 'text-blue-100' : 'text-slate-500'}`}>
-                        {categoryCounts[subCategory.name] || 0} {t('categories.items')}
+                        {productsLoading ? '…' : `${categoryCounts[subCategory.name] || 0} ${t('categories.items')}`}
                       </p>
                     </button>
                   );
@@ -259,15 +259,28 @@ function CategoriesPage() {
                 : selectedCategory}
           </h2>
           <p className="mt-2 text-sm text-slate-600 sm:text-base">
-            {t('categories.showing')} <span className="font-bold text-slate-900">{filteredProducts.length}</span> {t('categories.products')}
+            {productsLoading
+              ? 'Loading products...'
+              : <>{t('categories.showing')} <span className="font-bold text-slate-900">{filteredProducts.length}</span> {t('categories.products')}</>}
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-          {filteredProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+        {productsLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-700" />
+          </div>
+        ) : productsError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center text-red-700">
+            <p className="font-semibold">Failed to load products</p>
+            <p className="mt-1 text-sm">{productsError}</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            {filteredProducts.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

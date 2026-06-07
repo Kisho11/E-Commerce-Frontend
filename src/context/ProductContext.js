@@ -382,6 +382,8 @@ const getLocalFallbackProducts = () =>
 
 export function ProductProvider({ children }) {
   const [products, setProducts] = useState(() => (API_BASE_URL ? [] : getLocalFallbackProducts()));
+  const [productsLoading, setProductsLoading] = useState(() => Boolean(API_BASE_URL));
+  const [productsError, setProductsError] = useState(null);
   const [categories, setCategories] = useState(initialCategories);
 
   const refreshCategoriesFromApi = useCallback(async () => {
@@ -435,7 +437,7 @@ export function ProductProvider({ children }) {
 
     const loadProducts = async () => {
       try {
-        const response = await performRequest(`${API_BASE_URL}/products/?per_page=100`, {}, 'Unable to load products');
+        const response = await performRequest(`${API_BASE_URL}/products/?per_page=2000`, {}, 'Unable to load products');
         if (!response.ok) {
           throw new Error('Failed to load products');
         }
@@ -448,6 +450,9 @@ export function ProductProvider({ children }) {
         console.error('Unable to load backend products:', error);
         if (!isMounted) return;
         setProducts([]);
+        setProductsError(error?.message || 'Failed to load products');
+      } finally {
+        if (isMounted) setProductsLoading(false);
       }
     };
 
@@ -1159,6 +1164,8 @@ export function ProductProvider({ children }) {
   const value = useMemo(
     () => ({
       products,
+      productsLoading,
+      productsError,
       categories,
       categoryNames,
       addProduct,
@@ -1178,6 +1185,8 @@ export function ProductProvider({ children }) {
     }),
     [
       products,
+      productsLoading,
+      productsError,
       categories,
       categoryNames,
       addProduct,

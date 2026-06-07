@@ -11,7 +11,7 @@ const catalogues = [
 ];
 
 function Categories() {
-  const { products, categories } = useProducts();
+  const { products, categories, productsLoading } = useProducts();
   const { t } = useLanguage();
 
   const [selectedCategory, setSelectedCategory] = useState('__all__');
@@ -351,7 +351,7 @@ function Categories() {
                             )}
                           </div>
                           <p className={`text-[11px] font-semibold ${isActive ? 'text-blue-100' : 'text-slate-500'}`}>
-                            {categoryCounts[category.name] || 0} {t('categories.items')}
+                            {productsLoading ? '…' : `${categoryCounts[category.name] || 0} ${t('categories.items')}`}
                           </p>
                         </div>
                       </div>
@@ -421,7 +421,7 @@ function Categories() {
                               {subCategory.name}
                             </p>
                             <p className={`text-[11px] font-semibold ${isSubcategoryActive ? 'text-blue-100' : 'text-slate-500'}`}>
-                              {categoryCounts[subCategory.name] || 0} {t('categories.items')}
+                              {productsLoading ? '…' : `${categoryCounts[subCategory.name] || 0} ${t('categories.items')}`}
                             </p>
                           </div>
                         </div>
@@ -515,7 +515,9 @@ function Categories() {
               )}
             </div>
             <p className="mt-2 text-base text-slate-600">
-              {t('categories.showing')} <span className="font-bold text-slate-900">{filteredProducts.length}</span> {t('categories.products')}
+              {productsLoading
+                ? 'Loading products…'
+                : <>{t('categories.showing')} <span className="font-bold text-slate-900">{filteredProducts.length}</span> {t('categories.products')}</>}
             </p>
           </div>
 
@@ -561,11 +563,17 @@ function Categories() {
                 </div>
               </div>
             )}
-            <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4 ${showCategoryNav ? 'xl:grid-cols-5 2xl:grid-cols-6' : 'xl:grid-cols-6'}`}>
-              {filteredProducts.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
+            {productsLoading ? (
+              <div className="flex items-center justify-center py-24">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-700" />
+              </div>
+            ) : (
+              <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4 ${showCategoryNav ? 'xl:grid-cols-5 2xl:grid-cols-6' : 'xl:grid-cols-6'}`}>
+                {filteredProducts.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
