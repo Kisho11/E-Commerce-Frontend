@@ -306,3 +306,36 @@ a {
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.18), rgba(15, 23, 42, 0.1));
   pointer-events: none;
 }
+
+/* TipTap editor */
+.tiptap-content .ProseMirror {
+  outline: none;
+  min-height: 120px;
+}
+.tiptap-content .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+.tiptap-content .ProseMirror h2 { font-size: 1.25rem; font-weight: 700; margin: 0.75rem 0 0.25rem; }
+.tiptap-content .ProseMirror h3 { font-size: 1.1rem; font-weight: 600; margin: 0.5rem 0 0.25rem; }
+.tiptap-content .ProseMirror ul { list-style: disc; padding-left: 1.5rem; margin: 0.5rem 0; }
+.tiptap-content .ProseMirror ol { list-style: decimal; padding-left: 1.5rem; margin: 0.5rem 0; }
+.tiptap-content .ProseMirror blockquote { border-left: 3px solid #e2e8f0; padding-left: 1rem; color: #64748b; margin: 0.5rem 0; }
+.tiptap-content .ProseMirror strong { font-weight: 700; }
+.tiptap-content .ProseMirror em { font-style: italic; }
+.tiptap-content .ProseMirror s { text-decoration: line-through; }
+.tiptap-content .ProseMirror p { margin: 0.25rem 0; }
+
+/* TipTap rendered HTML in product detail */
+.tiptap-render h2 { font-size: 1.25rem; font-weight: 700; margin: 0.75rem 0 0.25rem; }
+.tiptap-render h3 { font-size: 1.1rem; font-weight: 600; margin: 0.5rem 0 0.25rem; }
+.tiptap-render ul { list-style: disc; padding-left: 1.5rem; margin: 0.5rem 0; }
+.tiptap-render ol { list-style: decimal; padding-left: 1.5rem; margin: 0.5rem 0; }
+.tiptap-render blockquote { border-left: 3px solid #e2e8f0; padding-left: 1rem; color: #64748b; margin: 0.5rem 0; }
+.tiptap-render strong { font-weight: 700; }
+.tiptap-render em { font-style: italic; }
+.tiptap-render s { text-decoration: line-through; }
+.tiptap-render p { margin: 0.25rem 0; }

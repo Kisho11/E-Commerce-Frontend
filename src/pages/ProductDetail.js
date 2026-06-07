@@ -3,9 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useProducts } from '../context/ProductContext';
 import UiIcon from '../components/UiIcon';
-import ProductContentRenderer from '../components/ProductContentRenderer';
+import BackButton from '../components/BackButton';
 import Seo from '../components/Seo';
-import { isProductContentEmpty, summarizeProductContent } from '../utils/productContent';
 import { getProductPriceDisplay, PRODUCT_TYPES, resolveProductType } from '../utils/productType';
 
 const uiConfig = {
@@ -100,12 +99,11 @@ function ProductDetail() {
       : [product.image, product.image, product.image, product.image].filter(Boolean);
   const selectedImage = gallery[selectedImageIndex] || product.image;
   const breadcrumbs = [product.categories?.[0], product.industries?.[0], product.name].filter(Boolean);
-  const seoDescription = summarizeProductContent(product.description, product.name);
   const productSchema = {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: product.name,
-    description: seoDescription,
+    description: product.description,
     image: gallery.map((image) => new URL(image, window.location.origin).toString()),
     category: product.categories?.join(', '),
     brand: {
@@ -154,13 +152,16 @@ function ProductDetail() {
     <div className="bg-white pb-10">
       <Seo
         title={product.name}
-        description={seoDescription}
+        description={product.description}
         image={product.image || '/main.webp'}
         type="product"
         canonicalPath={`/product/${product.id}`}
         structuredData={productSchema}
       />
       <div className="pt-6">
+        <div className="shell px-2 sm:px-4">
+          <BackButton className="mb-4" />
+        </div>
         <nav aria-label="Breadcrumb" className="shell">
           <ol className="mx-auto flex max-w-7xl items-center space-x-2 px-2 sm:px-4">
             {breadcrumbs.map((crumb, idx) => (
@@ -347,9 +348,22 @@ function ProductDetail() {
               )}
             </form>
 
-            {!isProductContentEmpty(product.description) && (
+            {product.mainNote && (
               <div className="mt-10">
-                <ProductContentRenderer content={product.description} />
+                <div
+                  className="tiptap-render text-base text-slate-900"
+                  dangerouslySetInnerHTML={{ __html: product.mainNote }}
+                />
+              </div>
+            )}
+
+            {product.description && (
+              <div className="mt-6">
+                <h3 className="text-sm font-medium text-slate-900 mb-2">Description</h3>
+                <div
+                  className="tiptap-render text-base text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: product.description }}
+                />
               </div>
             )}
 
@@ -372,14 +386,44 @@ function ProductDetail() {
           </div>
         </div>
 
-        {!isProductContentEmpty(product.additionalInformation) && (
-          <div className="shell mx-auto mt-12 max-w-7xl px-2 sm:px-4">
-            <div className="border-t border-slate-200 pt-8 text-left">
-              <h3 className="mb-4 text-sm font-medium text-slate-900">Additional Information</h3>
-              <div className="max-w-none">
-                <ProductContentRenderer content={product.additionalInformation} />
+        {(product.keyFeatures || product.whatsIncluded || product.importantNotes || product.additionalInformation) && (
+          <div className="shell mx-auto mt-12 max-w-7xl px-2 sm:px-4 space-y-8">
+            {product.keyFeatures && (
+              <div className="border-t border-slate-200 pt-8 text-left">
+                <h3 className="mb-4 text-sm font-medium text-slate-900">Key Features</h3>
+                <div
+                  className="tiptap-render text-sm text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: product.keyFeatures }}
+                />
               </div>
-            </div>
+            )}
+            {product.whatsIncluded && (
+              <div className="border-t border-slate-200 pt-8 text-left">
+                <h3 className="mb-4 text-sm font-medium text-slate-900">What's Included</h3>
+                <div
+                  className="tiptap-render text-sm text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: product.whatsIncluded }}
+                />
+              </div>
+            )}
+            {product.importantNotes && (
+              <div className="border-t border-slate-200 pt-8 text-left">
+                <h3 className="mb-4 text-sm font-medium text-slate-900">Important Notes</h3>
+                <div
+                  className="tiptap-render text-sm text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: product.importantNotes }}
+                />
+              </div>
+            )}
+            {product.additionalInformation && (
+              <div className="border-t border-slate-200 pt-8 text-left">
+                <h3 className="mb-4 text-sm font-medium text-slate-900">Additional Information</h3>
+                <div
+                  className="tiptap-render text-sm text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: product.additionalInformation }}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
