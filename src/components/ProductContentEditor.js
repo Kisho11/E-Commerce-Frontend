@@ -1,429 +1,294 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback } from 'react';
+import { useEditor, EditorContent, NodeViewWrapper, NodeViewContent, ReactNodeViewRenderer } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
+import Image from '@tiptap/extension-image';
+import Placeholder from '@tiptap/extension-placeholder';
+import { Node, mergeAttributes } from '@tiptap/core';
+import { normalizeProductContent } from '../utils/productContent';
 import UiIcon from './UiIcon';
-import {
-  createDefaultProductContent,
-  createImageBlock,
-  createListBlock,
-  createTableBlock,
-  createTextBlock,
-  normalizeProductContent,
-} from '../utils/productContent';
 
-const textBlockLabels = {
-  paragraph: 'Paragraph',
-  heading: 'Heading',
-  subheading: 'Subheading',
-  quote: 'Quote',
-  table: 'Table',
-};
+// ---------------------------------------------------------------------------
+// Custom node: TwoColumn
+// ---------------------------------------------------------------------------
+
+function ColumnView() {
+  return (
+    <NodeViewWrapper
+      as="div"
+      className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white p-4"
+    >
+      <NodeViewContent as="div" />
+    </NodeViewWrapper>
+  );
+}
+
+const Column = Node.create({
+  name: 'column',
+  group: 'block',
+  content: 'block+',
+  isolating: true,
+  parseHTML() { return [{ tag: 'div[data-type="column"]' }]; },
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'column' }), 0];
+  },
+  addNodeView() { return ReactNodeViewRenderer(ColumnView); },
+});
+
+function TwoColumnView() {
+  return (
+    <NodeViewWrapper as="div" className="my-2">
+      <NodeViewContent as="div" className="flex gap-4" />
+    </NodeViewWrapper>
+  );
+}
+
+const TwoColumn = Node.create({
+  name: 'twoColumn',
+  group: 'block',
+  content: 'column{2}',
+  parseHTML() { return [{ tag: 'div[data-type="two-column"]' }]; },
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'two-column' }), 0];
+  },
+  addNodeView() { return ReactNodeViewRenderer(TwoColumnView); },
+});
+
+// ---------------------------------------------------------------------------
+// Custom node: Callout
+// ---------------------------------------------------------------------------
+
+function CalloutView({ node, updateAttributes }) {
+  return (
+    <NodeViewWrapper as="div" className="my-2 rounded-xl border border-amber-300 bg-amber-50 px-5 py-4">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-amber-600">
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4M12 17h.01M10.3 3.9 1.8 18.4A1.2 1.2 0 0 0 2.8 20h18.4a1.2 1.2 0 0 0 1-1.6L13.7 3.9a1.2 1.2 0 0 0-2.4 0Z" />
+          </svg>
+        </span>
+        <input
+          type="text"
+          value={node.attrs.title}
+          onChange={(e) => updateAttributes({ title: e.target.value })}
+          placeholder="Callout title"
+          className="flex-1 bg-transparent text-sm font-bold text-amber-800 placeholder-amber-400 focus:outline-none"
+        />
+      </div>
+      <NodeViewContent as="div" className="text-sm text-amber-900" />
+    </NodeViewWrapper>
+  );
+}
+
+const Callout = Node.create({
+  name: 'callout',
+  group: 'block',
+  content: 'block+',
+  isolating: true,
+  addAttributes() {
+    return { title: { default: 'Important Information' } };
+  },
+  parseHTML() { return [{ tag: 'div[data-type="callout"]' }]; },
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'callout' }), 0];
+  },
+  addNodeView() { return ReactNodeViewRenderer(CalloutView); },
+});
+
+// ---------------------------------------------------------------------------
+// Toolbar button helpers
+// ---------------------------------------------------------------------------
+
+function TBtn({ onClick, active, title, children }) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => { e.preventDefault(); onClick(); }}
+      title={title}
+      className={`inline-flex items-center justify-center rounded-lg px-2.5 py-1.5 text-sm font-semibold transition
+        ${active
+          ? 'bg-slate-900 text-white'
+          : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+        }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TBtnIcon({ icon, ...rest }) {
+  return (
+    <TBtn {...rest}>
+      <UiIcon name={icon} className="h-4 w-4" />
+    </TBtn>
+  );
+}
+
+function TSep() {
+  return <div className="mx-1 hidden h-6 w-px bg-slate-200 sm:block" />;
+}
+
+// ---------------------------------------------------------------------------
+// Main editor
+// ---------------------------------------------------------------------------
+
+const EXTENSIONS = [
+  StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+  Underline,
+  Link.configure({ openOnClick: false, autolink: true }),
+  Image.configure({ inline: false }),
+  Placeholder.configure({ placeholder: 'Start writing…' }),
+  Column,
+  TwoColumn,
+  Callout,
+];
+
+function insertTwoColumn(editor) {
+  editor
+    .chain()
+    .focus()
+    .insertContent({
+      type: 'twoColumn',
+      content: [
+        { type: 'column', content: [{ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Column heading' }] }, { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item' }] }] }] }] },
+        { type: 'column', content: [{ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Column heading' }] }, { type: 'paragraph', content: [{ type: 'text', text: 'Content' }] }] },
+      ],
+    })
+    .run();
+}
+
+function insertCallout(editor) {
+  editor
+    .chain()
+    .focus()
+    .insertContent({
+      type: 'callout',
+      attrs: { title: 'Important Information' },
+      content: [{ type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Add your note here' }] }] }] }],
+    })
+    .run();
+}
+
+function insertImage(editor) {
+  const url = window.prompt('Image URL');
+  if (!url) return;
+  editor.chain().focus().setImage({ src: url }).run();
+}
+
+function setLink(editor) {
+  const prev = editor.getAttributes('link').href;
+  const url = window.prompt('URL', prev || 'https://');
+  if (url === null) return;
+  if (!url) { editor.chain().focus().unsetLink().run(); return; }
+  editor.chain().focus().setLink({ href: url, target: '_blank' }).run();
+}
 
 function ProductContentEditor({ value, onChange }) {
-  const content = normalizeProductContent(value);
-  const activeBlockIdRef = useRef(null);
-  const blockRefs = useRef({});
+  const editor = useEditor({
+    extensions: EXTENSIONS,
+    content: normalizeProductContent(value),
+    onUpdate({ editor: e }) {
+      onChange(e.getJSON());
+    },
+  });
 
-  useEffect(() => {
-    content.blocks.forEach((block) => {
-      if (!['paragraph', 'heading', 'subheading', 'quote'].includes(block.type)) return;
-      const node = blockRefs.current[block.id];
-      if (!node) return;
-      if (node.innerHTML !== block.html) {
-        node.innerHTML = block.html || '';
-      }
-    });
-  }, [content]);
+  // Sync external value resets (e.g. form reset or edit-mode load)
+  const prevValueRef = React.useRef(value);
+  React.useEffect(() => {
+    if (!editor) return;
+    if (prevValueRef.current === value) return;
+    prevValueRef.current = value;
+    const normalized = normalizeProductContent(value);
+    // Only replace if the document actually changed to avoid cursor jumping
+    if (JSON.stringify(editor.getJSON()) !== JSON.stringify(normalized)) {
+      editor.commands.setContent(normalized, false);
+    }
+  }, [editor, value]);
 
-  const updateContent = (nextBlocks) => {
-    onChange({
-      version: 1,
-      updatedAt: new Date().toISOString(),
-      blocks: nextBlocks,
-    });
-  };
-
-  const updateBlock = (blockId, updater) => {
-    updateContent(
-      content.blocks.map((block) => (block.id === blockId ? updater(block) : block))
-    );
-  };
-
-  const addBlock = (type) => {
-    const nextBlock =
-      type === 'image'
-        ? createImageBlock()
-        : type === 'table'
-          ? createTableBlock()
-        : type === 'bullet-list' || type === 'number-list'
-          ? createListBlock(type)
-          : createTextBlock(type);
-    updateContent([...content.blocks, nextBlock]);
-  };
-
-  const moveBlock = (blockId, direction) => {
-    const index = content.blocks.findIndex((block) => block.id === blockId);
-    const targetIndex = index + direction;
-    if (index < 0 || targetIndex < 0 || targetIndex >= content.blocks.length) return;
-    const nextBlocks = [...content.blocks];
-    const [moved] = nextBlocks.splice(index, 1);
-    nextBlocks.splice(targetIndex, 0, moved);
-    updateContent(nextBlocks);
-  };
-
-  const removeBlock = (blockId) => {
-    const nextBlocks = content.blocks.filter((block) => block.id !== blockId);
-    updateContent(nextBlocks.length > 0 ? nextBlocks : createDefaultProductContent().blocks);
-  };
-
-  const runInlineCommand = (command) => {
-    const activeBlock = content.blocks.find((block) => block.id === activeBlockIdRef.current);
-    if (!activeBlock || !['paragraph', 'heading', 'subheading', 'quote'].includes(activeBlock.type)) return;
-    const node = blockRefs.current[activeBlock.id];
-    if (!node) return;
-    node.focus();
-    document.execCommand(command, false);
-    updateBlock(activeBlock.id, (block) => ({ ...block, html: node.innerHTML }));
-  };
-
-  const applyLink = () => {
-    const href = window.prompt('Enter a URL');
-    if (!href) return;
-    const activeBlock = content.blocks.find((block) => block.id === activeBlockIdRef.current);
-    const node = activeBlock ? blockRefs.current[activeBlock.id] : null;
-    if (!node) return;
-    node.focus();
-    document.execCommand('createLink', false, href);
-    updateBlock(activeBlock.id, (block) => ({ ...block, html: node.innerHTML }));
-  };
-
-  const handleImageUpload = (blockId, file) => {
-    if (!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
-      updateBlock(blockId, (block) => ({ ...block, src: result }));
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleListItemChange = (block, itemIndex, nextValue) => {
-    updateBlock(block.id, (current) => ({
-      ...current,
-      items: current.items.map((item, index) => (index === itemIndex ? nextValue : item)),
-    }));
-  };
-
-  const handleTableHeaderChange = (blockId, headerIndex, nextValue) => {
-    updateBlock(blockId, (current) => ({
-      ...current,
-      headers: current.headers.map((header, index) => (index === headerIndex ? nextValue : header)),
-    }));
-  };
-
-  const handleTableCellChange = (blockId, rowIndex, cellIndex, nextValue) => {
-    updateBlock(blockId, (current) => ({
-      ...current,
-      rows: current.rows.map((row, currentRowIndex) =>
-        currentRowIndex === rowIndex
-          ? row.map((cell, currentCellIndex) => (currentCellIndex === cellIndex ? nextValue : cell))
-          : row
-      ),
-    }));
-  };
-
-  const addTableRow = (blockId) => {
-    updateBlock(blockId, (current) => ({
-      ...current,
-      rows: [...current.rows, Array.from({ length: current.headers.length }, () => '')],
-    }));
-  };
-
-  const removeTableRow = (blockId) => {
-    updateBlock(blockId, (current) => ({
-      ...current,
-      rows: current.rows.length > 1 ? current.rows.slice(0, -1) : current.rows,
-    }));
-  };
-
-  const addTableColumn = (blockId) => {
-    updateBlock(blockId, (current) => ({
-      ...current,
-      headers: [...current.headers, `Column ${current.headers.length + 1}`],
-      rows: current.rows.map((row) => [...row, '']),
-    }));
-  };
-
-  const removeTableColumn = (blockId) => {
-    updateBlock(blockId, (current) => ({
-      ...current,
-      headers: current.headers.length > 1 ? current.headers.slice(0, -1) : current.headers,
-      rows: current.rows.map((row) => (row.length > 1 ? row.slice(0, -1) : row)),
-    }));
-  };
-
-  const ToolbarButton = ({ icon, label, onClick, variant = 'secondary' }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-        variant === 'primary'
-          ? 'bg-primary text-white hover:bg-red-800'
-          : variant === 'dark'
-            ? 'bg-slate-900 text-white hover:bg-slate-700'
-            : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-      }`}
-    >
-      <UiIcon name={icon} className="h-4 w-4" />
-      <span>{label}</span>
-    </button>
+  const is = useCallback(
+    (name, attrs) => (editor ? editor.isActive(name, attrs) : false),
+    [editor]
   );
 
-  const SmallActionButton = ({ icon, label, onClick, disabled = false, tone = 'neutral' }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${
-        tone === 'danger'
-          ? 'border border-red-200 text-red-700 hover:bg-red-50'
-          : 'border border-slate-300 text-slate-700 hover:bg-slate-50'
-      }`}
-    >
-      <UiIcon name={icon} className="h-3.5 w-3.5" />
-      <span>{label}</span>
-    </button>
-  );
+  if (!editor) return null;
 
   return (
-    <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/70 p-4">
-      <div className="mb-4 flex flex-wrap gap-2 border-b border-slate-200 pb-4">
-        <ToolbarButton icon="bold" label="Bold" onClick={() => runInlineCommand('bold')} />
-        <ToolbarButton icon="italic" label="Italic" onClick={() => runInlineCommand('italic')} />
-        <ToolbarButton icon="underline" label="Underline" onClick={() => runInlineCommand('underline')} />
-        <ToolbarButton icon="link" label="Link" onClick={applyLink} />
-        <div className="mx-2 hidden w-px bg-slate-200 sm:block" />
-        <ToolbarButton icon="paragraph" label="Paragraph" onClick={() => addBlock('paragraph')} variant="dark" />
-        <ToolbarButton icon="heading" label="Heading" onClick={() => addBlock('heading')} variant="dark" />
-        <ToolbarButton icon="subheading" label="Subheading" onClick={() => addBlock('subheading')} variant="dark" />
-        <ToolbarButton icon="list" label="Bullet List" onClick={() => addBlock('bullet-list')} variant="dark" />
-        <ToolbarButton icon="orderedList" label="Numbered List" onClick={() => addBlock('number-list')} variant="dark" />
-        <ToolbarButton icon="quote" label="Quote" onClick={() => addBlock('quote')} variant="dark" />
-        <ToolbarButton icon="table" label="Table" onClick={() => addBlock('table')} variant="dark" />
-        <ToolbarButton icon="image" label="Image" onClick={() => addBlock('image')} variant="primary" />
+    <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/70 overflow-hidden">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 bg-white px-3 py-2">
+        {/* Inline formatting */}
+        <TBtnIcon icon="bold"      title="Bold"      active={is('bold')}      onClick={() => editor.chain().focus().toggleBold().run()} />
+        <TBtnIcon icon="italic"    title="Italic"    active={is('italic')}    onClick={() => editor.chain().focus().toggleItalic().run()} />
+        <TBtnIcon icon="underline" title="Underline" active={is('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()} />
+        <TBtn title="Strikethrough" active={is('strike')} onClick={() => editor.chain().focus().toggleStrike().run()}>
+          <span className="line-through text-sm font-bold leading-none">S</span>
+        </TBtn>
+        <TBtnIcon icon="link" title="Link" active={is('link')} onClick={() => setLink(editor)} />
+
+        <TSep />
+
+        {/* Headings */}
+        <TBtn title="Heading 1" active={is('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
+          <span className="text-xs font-bold">H1</span>
+        </TBtn>
+        <TBtn title="Heading 2" active={is('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+          <span className="text-xs font-bold">H2</span>
+        </TBtn>
+        <TBtn title="Heading 3" active={is('heading', { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
+          <span className="text-xs font-bold">H3</span>
+        </TBtn>
+
+        <TSep />
+
+        {/* Lists */}
+        <TBtnIcon icon="list"        title="Bullet list"   active={is('bulletList')}  onClick={() => editor.chain().focus().toggleBulletList().run()} />
+        <TBtnIcon icon="orderedList" title="Numbered list" active={is('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
+        <TBtnIcon icon="quote"       title="Blockquote"    active={is('blockquote')}  onClick={() => editor.chain().focus().toggleBlockquote().run()} />
+
+        <TSep />
+
+        {/* Media */}
+        <TBtnIcon icon="image" title="Insert image" active={false} onClick={() => insertImage(editor)} />
+
+        <TSep />
+
+        {/* Custom blocks */}
+        <TBtn title="Insert two-column layout" active={false} onClick={() => insertTwoColumn(editor)}>
+          <span className="text-xs font-semibold whitespace-nowrap">Two Columns</span>
+        </TBtn>
+        <TBtn title="Insert callout box" active={false} onClick={() => insertCallout(editor)}>
+          <span className="text-xs font-semibold whitespace-nowrap">Callout</span>
+        </TBtn>
       </div>
 
-      <div className="space-y-4">
-        {content.blocks.map((block, index) => {
-          const isTextBlock = ['paragraph', 'heading', 'subheading', 'quote'].includes(block.type);
-          return (
-            <div key={block.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-                  {textBlockLabels[block.type] || block.type.replace('-', ' ')}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <SmallActionButton icon="arrowUp" label="Up" onClick={() => moveBlock(block.id, -1)} disabled={index === 0} />
-                  <SmallActionButton icon="arrowDown" label="Down" onClick={() => moveBlock(block.id, 1)} disabled={index === content.blocks.length - 1} />
-                  <SmallActionButton icon="trash" label="Delete" onClick={() => removeBlock(block.id)} tone="danger" />
-                </div>
-              </div>
+      {/* Editor body */}
+      <EditorContent
+        editor={editor}
+        className="min-h-[200px] px-5 py-4 focus-within:outline-none prose-editor"
+      />
 
-              {isTextBlock && (
-                <div
-                  ref={(node) => {
-                    blockRefs.current[block.id] = node;
-                  }}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onFocus={() => {
-                    activeBlockIdRef.current = block.id;
-                  }}
-                  onInput={(event) => {
-                    const nextHtml = event.currentTarget.innerHTML;
-                    updateBlock(block.id, (current) => ({ ...current, html: nextHtml }));
-                  }}
-                  className={`min-h-[120px] rounded-xl border border-slate-200 px-4 py-3 focus:border-primary focus:outline-none ${
-                    block.type === 'heading'
-                      ? 'text-3xl font-bold text-slate-900'
-                      : block.type === 'subheading'
-                        ? 'text-xl font-bold text-slate-800'
-                        : block.type === 'quote'
-                          ? 'border-l-4 border-primary bg-slate-50 italic text-slate-700'
-                          : 'text-base text-slate-800'
-                  }`}
-                  data-placeholder="Write content here..."
-                />
-              )}
-
-              {(block.type === 'bullet-list' || block.type === 'number-list') && (
-                <div className="space-y-3">
-                  {(block.items || []).map((item, itemIndex) => (
-                    <div key={`${block.id}-item-${itemIndex}`} className="flex items-start gap-3">
-                      <span className="mt-3 text-sm font-semibold text-slate-500">
-                        {block.type === 'number-list' ? `${itemIndex + 1}.` : '•'}
-                      </span>
-                      <textarea
-                        value={item}
-                        onChange={(event) => handleListItemChange(block, itemIndex, event.target.value)}
-                        rows="2"
-                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 focus:border-primary focus:outline-none"
-                        placeholder="List item"
-                      />
-                    </div>
-                  ))}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => updateBlock(block.id, (current) => ({ ...current, items: [...current.items, ''] }))}
-                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700"
-                    >
-                      <UiIcon name="plus" className="h-4 w-4" />
-                      <span>Add Item</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateBlock(block.id, (current) => ({ ...current, items: current.items.length > 1 ? current.items.slice(0, -1) : current.items }))}
-                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700"
-                    >
-                      <UiIcon name="trash" className="h-4 w-4" />
-                      <span>Remove Last</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {block.type === 'table' && (
-                <div className="space-y-4">
-                  <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="min-w-full border-collapse">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          {block.headers.map((header, headerIndex) => (
-                            <th key={`${block.id}-header-${headerIndex}`} className="border-b border-r border-slate-200 p-2 last:border-r-0">
-                              <input
-                                type="text"
-                                value={header}
-                                onChange={(event) => handleTableHeaderChange(block.id, headerIndex, event.target.value)}
-                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 focus:border-primary focus:outline-none"
-                                placeholder={`Column ${headerIndex + 1}`}
-                              />
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {block.rows.map((row, rowIndex) => (
-                          <tr key={`${block.id}-row-${rowIndex}`}>
-                            {row.map((cell, cellIndex) => (
-                              <td key={`${block.id}-cell-${rowIndex}-${cellIndex}`} className="border-r border-t border-slate-200 p-2 last:border-r-0">
-                                <textarea
-                                  value={cell}
-                                  onChange={(event) => handleTableCellChange(block.id, rowIndex, cellIndex, event.target.value)}
-                                  rows="2"
-                                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-primary focus:outline-none"
-                                  placeholder="Cell value"
-                                />
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => addTableRow(block.id)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700"
-                    >
-                      <UiIcon name="plus" className="h-4 w-4" />
-                      <span>Add Row</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeTableRow(block.id)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700"
-                    >
-                      <UiIcon name="trash" className="h-4 w-4" />
-                      <span>Remove Row</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => addTableColumn(block.id)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700"
-                    >
-                      <UiIcon name="plus" className="h-4 w-4" />
-                      <span>Add Column</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeTableColumn(block.id)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700"
-                    >
-                      <UiIcon name="trash" className="h-4 w-4" />
-                      <span>Remove Column</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {block.type === 'image' && (
-                <div className="space-y-4">
-                  {block.src ? (
-                    <img src={block.src} alt={block.alt || 'Editor upload'} className="max-h-80 w-full rounded-xl object-cover" />
-                  ) : (
-                    <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-sm text-slate-500">
-                      Upload an image or paste a URL below
-                    </div>
-                  )}
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
-                      Upload image
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="mt-2 block w-full text-sm"
-                        onChange={(event) => handleImageUpload(block.id, event.target.files?.[0])}
-                      />
-                    </label>
-                    <div>
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Image URL</label>
-                      <input
-                        type="text"
-                        value={block.src}
-                        onChange={(event) => updateBlock(block.id, (current) => ({ ...current, src: event.target.value }))}
-                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 focus:border-primary focus:outline-none"
-                        placeholder="https://example.com/image.jpg"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Alt text</label>
-                      <input
-                        type="text"
-                        value={block.alt}
-                        onChange={(event) => updateBlock(block.id, (current) => ({ ...current, alt: event.target.value }))}
-                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 focus:border-primary focus:outline-none"
-                        placeholder="Describe the image"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Caption</label>
-                      <input
-                        type="text"
-                        value={block.caption}
-                        onChange={(event) => updateBlock(block.id, (current) => ({ ...current, caption: event.target.value }))}
-                        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 focus:border-primary focus:outline-none"
-                        placeholder="Optional caption"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <style>{`
+        .prose-editor .ProseMirror { outline: none; min-height: 200px; }
+        .prose-editor .ProseMirror p { margin: 0 0 0.75em; color: #334155; line-height: 1.75; }
+        .prose-editor .ProseMirror h1 { font-size: 1.875rem; font-weight: 700; color: #0f172a; margin: 1em 0 0.5em; }
+        .prose-editor .ProseMirror h2 { font-size: 1.25rem; font-weight: 700; color: #1e293b; margin: 0.9em 0 0.4em; }
+        .prose-editor .ProseMirror h3 { font-size: 1.05rem; font-weight: 600; color: #1e293b; margin: 0.8em 0 0.4em; }
+        .prose-editor .ProseMirror ul { list-style: disc; padding-left: 1.5em; margin: 0.5em 0 0.75em; color: #475569; }
+        .prose-editor .ProseMirror ol { list-style: decimal; padding-left: 1.5em; margin: 0.5em 0 0.75em; color: #475569; }
+        .prose-editor .ProseMirror li { margin-bottom: 0.25em; }
+        .prose-editor .ProseMirror blockquote { border-left: 4px solid #e11d48; background: #f8fafc; padding: 0.75em 1em; margin: 0.75em 0; border-radius: 0 0.75rem 0.75rem 0; color: #475569; font-style: italic; }
+        .prose-editor .ProseMirror a { color: #e11d48; text-decoration: underline; }
+        .prose-editor .ProseMirror img { max-width: 100%; border-radius: 0.75rem; margin: 0.75em 0; }
+        .prose-editor .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #94a3b8; pointer-events: none; float: left; height: 0; }
+        .prose-editor .ProseMirror table { border-collapse: collapse; width: 100%; margin: 0.75em 0; }
+        .prose-editor .ProseMirror th, .prose-editor .ProseMirror td { border: 1px solid #e2e8f0; padding: 0.5em 0.75em; text-align: left; }
+        .prose-editor .ProseMirror th { background: #f8fafc; font-weight: 600; }
+        .prose-editor .ProseMirror .selectedCell { background: #fef3c7; }
+        .prose-editor .ProseMirror code { background: #f1f5f9; border-radius: 0.3rem; padding: 0.1em 0.4em; font-size: 0.85em; font-family: ui-monospace, 'Cascadia Code', monospace; color: #0f172a; }
+        .prose-editor .ProseMirror pre { background: #1e293b; border-radius: 0.75rem; padding: 1em 1.25em; margin: 0.75em 0; overflow-x: auto; }
+        .prose-editor .ProseMirror pre code { background: none; color: #e2e8f0; padding: 0; font-size: 0.875em; }
+      `}</style>
     </div>
   );
 }

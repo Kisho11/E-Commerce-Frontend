@@ -5,6 +5,7 @@ import { useProducts } from '../context/ProductContext';
 import UiIcon from '../components/UiIcon';
 import ProductContentRenderer from '../components/ProductContentRenderer';
 import Seo from '../components/Seo';
+import { isProductContentEmpty, summarizeProductContent } from '../utils/productContent';
 import { getProductPriceDisplay, PRODUCT_TYPES, resolveProductType } from '../utils/productType';
 
 const uiConfig = {
@@ -99,11 +100,12 @@ function ProductDetail() {
       : [product.image, product.image, product.image, product.image].filter(Boolean);
   const selectedImage = gallery[selectedImageIndex] || product.image;
   const breadcrumbs = [product.categories?.[0], product.industries?.[0], product.name].filter(Boolean);
+  const seoDescription = summarizeProductContent(product.description, product.name);
   const productSchema = {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: product.name,
-    description: product.description,
+    description: seoDescription,
     image: gallery.map((image) => new URL(image, window.location.origin).toString()),
     category: product.categories?.join(', '),
     brand: {
@@ -152,7 +154,7 @@ function ProductDetail() {
     <div className="bg-white pb-10">
       <Seo
         title={product.name}
-        description={product.description}
+        description={seoDescription}
         image={product.image || '/main.webp'}
         type="product"
         canonicalPath={`/product/${product.id}`}
@@ -345,9 +347,11 @@ function ProductDetail() {
               )}
             </form>
 
-            <div className="mt-10">
-                  <p className="text-base text-slate-900">{product.description}</p>
-                </div>
+            {!isProductContentEmpty(product.description) && (
+              <div className="mt-10">
+                <ProductContentRenderer content={product.description} />
+              </div>
+            )}
 
             {product.specs && (
               <div className="mt-10">
@@ -368,11 +372,7 @@ function ProductDetail() {
           </div>
         </div>
 
-        {product.additionalInformation?.blocks?.some((block) => {
-          if (block.type === 'image') return Boolean(block.src);
-          if (block.type === 'bullet-list' || block.type === 'number-list') return (block.items || []).some(Boolean);
-          return Boolean(block.html);
-        }) && (
+        {!isProductContentEmpty(product.additionalInformation) && (
           <div className="shell mx-auto mt-12 max-w-7xl px-2 sm:px-4">
             <div className="border-t border-slate-200 pt-8 text-left">
               <h3 className="mb-4 text-sm font-medium text-slate-900">Additional Information</h3>

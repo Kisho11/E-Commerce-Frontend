@@ -5,6 +5,7 @@ import UiIcon from '../components/UiIcon';
 import { getProductPriceDisplay, resolveProductType } from '../utils/productType';
 import {
   createDefaultProductContent,
+  isProductContentEmpty,
   normalizeProductContent,
 } from '../utils/productContent';
 
@@ -146,7 +147,7 @@ function ProductManagement() {
   const [selectedProductCategory, setSelectedProductCategory] = useState('__all__');
   const [formData, setFormData] = useState({
     name: '',
-    description: '',
+    description: createDefaultProductContent(),
     additionalInformation: createDefaultProductContent(),
     price: '',
     variantGroups: [],
@@ -208,7 +209,7 @@ function ProductManagement() {
   const resetForm = () => {
     setFormData({
       name: '',
-      description: '',
+      description: createDefaultProductContent(),
       additionalInformation: createDefaultProductContent(),
       price: '',
       variantGroups: [],
@@ -459,7 +460,7 @@ function ProductManagement() {
     setError('');
     setSuccess('');
 
-    if (!formData.name.trim() || !formData.description.trim() || !formData.price) {
+    if (!formData.name.trim() || isProductContentEmpty(formData.description) || !formData.price) {
       setError('Please fill in all required fields');
       return;
     }
@@ -524,7 +525,7 @@ function ProductManagement() {
 
     const payload = {
       name: formData.name,
-      description: formData.description,
+      description: normalizeProductContent(formData.description),
       additionalInformation: normalizeProductContent(formData.additionalInformation),
       price: formData.price,
       variantPricing: productHasVariants ? matrixVariantPricing : [],
@@ -588,7 +589,7 @@ function ProductManagement() {
       startTransition(() => {
         setFormData({
           name: product.name || '',
-          description: product.description || '',
+          description: normalizeProductContent(product.description, product.description || ''),
           additionalInformation: normalizeProductContent(product.additionalInformation),
           price: product.price || '',
           variantGroups: Array.isArray(product.variantPricing) && product.variantPricing.length > 0
@@ -1043,13 +1044,9 @@ function ProductManagement() {
 
             <div>
               <label className="block text-gray-700 font-semibold mb-2">Description *</label>
-              <textarea
-                name="description"
+              <ProductContentEditor
                 value={formData.description}
-                onChange={handleInputChange}
-                rows="4"
-                className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
-                required
+                onChange={(nextValue) => setFormData((prev) => ({ ...prev, description: nextValue }))}
               />
             </div>
 
