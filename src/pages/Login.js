@@ -20,17 +20,27 @@ function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [newResetPassword, setNewResetPassword] = useState('');
   const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+
+  // email-verification-pending state
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [showVerificationPending, setShowVerificationPending] = useState(false);
+
+  // resend state
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
+
   const [successMessage, setSuccessMessage] = useState('');
   const [recaptchaToken, setRecaptchaToken] = useState('');
 
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [googleError, setGoogleError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
   const recaptchaSiteKey = process.env.REACT_APP_RECAPTCHA_SITE_KEY;
@@ -38,10 +48,21 @@ function Login() {
 
   useEffect(() => {
     const requestedMode = searchParams.get('mode');
-    if (requestedMode === 'customer-signup' || requestedMode === 'customer-signin' || requestedMode === 'staff-signin') {
+    if (['customer-signup', 'customer-signin', 'staff-signin'].includes(requestedMode)) {
       setMode(requestedMode);
     } else if (window.location.pathname === '/signup') {
       setMode('customer-signup');
+    }
+
+    const urlResetToken = searchParams.get('resetToken');
+    if (urlResetToken) {
+      setResetToken(urlResetToken);
+      setShowForgotPassword(true);
+      setResetEmail(searchParams.get('email') || '');
+    }
+
+    if (searchParams.get('resend') === '1') {
+      setShowVerificationPending(true);
     }
   }, [searchParams]);
 
@@ -60,6 +81,19 @@ function Login() {
     resetRecaptcha();
   }, [mode]);
 
+  // Lock page scroll
+  useEffect(() => {
+    const prevHtml = document.documentElement.style.overflow;
+    const prevBody = document.body.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.documentElement.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+    };
+  }, []);
+
+  // Google identity button
   useEffect(() => {
     if (!recaptchaSiteKey) return;
 
@@ -110,21 +144,18 @@ function Login() {
 
     const renderGoogleButton = () => {
       if (!window.google || !googleBtnRef.current) return;
-
       googleBtnRef.current.innerHTML = '';
-
       window.google.accounts.id.initialize({
         client_id: googleClientId,
-        callback: (response) => {
-          const result = authWithGoogle(response.credential, mode === 'customer-signup' ? 'signup' : 'signin');
+        callback: async (response) => {
+          const result = await authWithGoogle(response.credential, mode === 'customer-signup' ? 'signup' : 'signin');
           if (result.success) {
-            navigate('/customer-portal');
+            navigate(result.user?.role === 'admin' ? '/admin/dashboard' : result.user?.role === 'manager' ? '/manager/dashboard' : '/customer-portal');
           } else {
             setGoogleError(result.error || 'Google authentication failed');
           }
         },
       });
-
       window.google.accounts.id.renderButton(googleBtnRef.current, {
         theme: 'outline',
         size: 'large',
@@ -133,10 +164,7 @@ function Login() {
       });
     };
 
-    if (window.google) {
-      renderGoogleButton();
-      return;
-    }
+    if (window.google) { renderGoogleButton(); return; }
 
     const existing = document.getElementById(scriptId);
     if (existing) {
@@ -151,10 +179,7 @@ function Login() {
     script.defer = true;
     script.onload = renderGoogleButton;
     document.body.appendChild(script);
-
-    return () => {
-      script.onload = null;
-    };
+    return () => { script.onload = null; };
   }, [authWithGoogle, googleClientId, isCustomerMode, mode, navigate]);
 
   useEffect(() => {
@@ -187,8 +212,7 @@ function Login() {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
-    if (!ensureCaptcha()) return;
-
+    const recaptchaToken = await getRecaptchaToken();
     setLoading(true);
     try {
       const result = await login(email, password, recaptchaToken);
@@ -207,8 +231,7 @@ function Login() {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
-    if (!ensureCaptcha()) return;
-
+    const recaptchaToken = await getRecaptchaToken();
     setLoading(true);
     try {
       const result = await signInCustomer(email, password, recaptchaToken);
@@ -238,14 +261,12 @@ function Login() {
       setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`);
       return;
     }
-
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
 
-    if (!ensureCaptcha()) return;
-
+    const recaptchaToken = await getRecaptchaToken();
     setLoading(true);
     try {
       const result = await signUpCustomer({ name, email, password, recaptchaToken });
@@ -318,11 +339,50 @@ function Login() {
   };
 
   const currentSubmitHandler =
-    mode === 'staff-signin'
-      ? handleStaffSubmit
-      : mode === 'customer-signup'
-        ? handleCustomerSignUp
-        : handleCustomerSignIn;
+    mode === 'staff-signin' ? handleStaffSubmit
+    : mode === 'customer-signup' ? handleCustomerSignUp
+    : handleCustomerSignIn;
+
+  if (showVerificationPending) {
+    return (
+      <div className="flex h-[100svh] items-center justify-center bg-gradient-to-br from-primary to-black px-4">
+        <Seo title="Verify Your Email" noindex />
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl text-center">
+          <div className="mb-4 flex justify-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100">
+              <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+          </div>
+          <h2 className="mb-2 text-xl font-bold text-primary">Check your email</h2>
+          <p className="mb-1 text-slate-600 text-sm">
+            We sent a verification link to
+          </p>
+          <p className="mb-4 font-semibold text-slate-800">{pendingEmail || email}</p>
+          <p className="mb-6 text-slate-500 text-xs">
+            Click the link in the email to activate your account. Check your spam folder if you don&apos;t see it.
+          </p>
+          <button
+            onClick={handleResendVerification}
+            disabled={resendLoading}
+            className="mb-3 w-full rounded-lg border border-primary py-2.5 font-semibold text-primary hover:bg-red-50 transition disabled:opacity-50"
+          >
+            {resendLoading ? 'Sending…' : 'Resend verification email'}
+          </button>
+          {resendMessage && (
+            <p className="mb-3 text-sm text-emerald-700">{resendMessage}</p>
+          )}
+          <button
+            onClick={() => { setShowVerificationPending(false); setMode('customer-signin'); }}
+            className="text-sm text-blue-700 hover:underline font-semibold"
+          >
+            Back to Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[100svh] items-start justify-center overflow-hidden bg-gradient-to-br from-primary to-black px-3 py-3 sm:items-center sm:px-4 sm:py-4">
@@ -393,11 +453,11 @@ function Login() {
               <input
                 type="email"
                 value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none sm:py-2.5"
-                  required
-                />
-              </div>
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none sm:py-2.5"
+                required
+              />
+            </div>
 
             <div>
               <label className="mb-1 block text-sm font-semibold text-gray-700">Password</label>
@@ -415,12 +475,7 @@ function Login() {
               <div className="-mt-1 text-right">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowForgotPassword((prev) => !prev);
-                    setResetEmail(email);
-                    setSuccessMessage('');
-                    setError('');
-                  }}
+                  onClick={() => { setShowForgotPassword((prev) => !prev); setResetEmail(email); setSuccessMessage(''); setError(''); }}
                   className="text-xs font-semibold text-blue-700 hover:underline"
                 >
                   {showForgotPassword ? 'Hide reset form' : 'Forgot password?'}
@@ -466,6 +521,28 @@ function Login() {
                   minLength={MIN_PASSWORD_LENGTH}
                   required={Boolean(resetToken.trim())}
                 />
+                {resetToken.trim() && (
+                  <>
+                    <input
+                      type="password"
+                      value={newResetPassword}
+                      onChange={(e) => setNewResetPassword(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                      placeholder="New password"
+                      minLength={MIN_PASSWORD_LENGTH}
+                      required
+                    />
+                    <input
+                      type="password"
+                      value={resetConfirmPassword}
+                      onChange={(e) => setResetConfirmPassword(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                      placeholder="Confirm new password"
+                      minLength={MIN_PASSWORD_LENGTH}
+                      required
+                    />
+                  </>
+                )}
                 <button
                   type="button"
                   onClick={handleForgotPassword}
@@ -518,7 +595,7 @@ function Login() {
               disabled={loading}
               className="w-full rounded-lg bg-primary py-2.5 font-bold text-white transition hover:bg-red-700 disabled:opacity-50 sm:py-3"
             >
-              {loading ? 'Please wait...' : 'Continue'}
+              {loading ? 'Please wait…' : 'Continue'}
             </button>
           </form>
 
@@ -529,14 +606,13 @@ function Login() {
                 <span className="text-xs text-slate-500">OR</span>
                 <div className="h-px flex-1 bg-slate-200" />
               </div>
-
               {googleClientId ? (
                 <div className="flex justify-center">
                   <div ref={googleBtnRef} />
                 </div>
               ) : (
-                <p className="text-xs text-slate-500 text-center">
-                  Google auth requires `REACT_APP_GOOGLE_CLIENT_ID` in your environment.
+                <p className="text-center text-xs text-slate-500">
+                  Google auth requires <code>REACT_APP_GOOGLE_CLIENT_ID</code> in your environment.
                 </p>
               )}
             </>
@@ -570,7 +646,7 @@ function Login() {
         </div>
 
         <div className="mt-3 text-center sm:mt-6">
-          <Link to="/" className="text-white hover:text-blue-100 transition font-semibold">
+          <Link to="/" className="font-semibold text-white transition hover:text-blue-100">
             ← Back to Store
           </Link>
         </div>

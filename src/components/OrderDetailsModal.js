@@ -129,12 +129,6 @@ function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
           )}
         </section>
 
-        <details className="mt-4 rounded-lg border border-gray-200 p-4">
-          <summary className="cursor-pointer text-sm font-bold text-gray-700">Raw Order Payload</summary>
-          <pre className="mt-3 overflow-x-auto rounded bg-gray-50 p-3 text-xs text-gray-700">
-            {JSON.stringify(order, null, 2)}
-          </pre>
-        </details>
       </div>
     </div>
   );
