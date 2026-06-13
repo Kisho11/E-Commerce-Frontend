@@ -1,4 +1,4 @@
-import React, { startTransition, useEffect, useState } from 'react';
+import React, { startTransition, useEffect, useMemo, useState } from 'react';
 import { useProducts } from '../context/ProductContext';
 import UiIcon from '../components/UiIcon';
 import TipTapEditor from '../components/TipTapEditor';
@@ -133,7 +133,7 @@ function ProductManagement() {
     categories: [],
     subcategories: [],
     industries: [],
-    imageUrls: Array(MIN_IMAGE_COUNT).fill(''),
+    imageSlots: Array.from({ length: MIN_IMAGE_COUNT }, () => ({ url: '', variantTag: '' })),
     videoUrls: Array(MIN_VIDEO_COUNT).fill(''),
   });
   const [error, setError] = useState('');
@@ -155,6 +155,16 @@ function ProductManagement() {
         .map((subcategory) => [subcategory.name, subcategory])
     ).values()
   );
+
+  const variantAttributeGroups = useMemo(() => {
+    if (formData.productType !== PRODUCT_TYPES.VARIABLE) return [];
+    return formData.variantGroups
+      .filter((g) => g.finalized)
+      .map((g) => ({
+        attribute: g.attribute,
+        values: g.values.map((e) => e.value).filter(Boolean),
+      }));
+  }, [formData.productType, formData.variantGroups]);
 
   useEffect(() => {
     if (!statusPopup.visible) return undefined;
@@ -181,7 +191,7 @@ function ProductManagement() {
       categories: [],
       subcategories: [],
       industries: [],
-      imageUrls: Array(MIN_IMAGE_COUNT).fill(''),
+      imageSlots: Array.from({ length: MIN_IMAGE_COUNT }, () => ({ url: '', variantTag: '' })),
       videoUrls: Array(MIN_VIDEO_COUNT).fill(''),
     });
     setEditingId(null);
@@ -241,9 +251,9 @@ function ProductManagement() {
     reader.onload = () => {
       const result = typeof reader.result === 'string' ? reader.result : '';
       setFormData((prev) => {
-        const nextUrls = [...prev.imageUrls];
-        nextUrls[index] = result;
-        return { ...prev, imageUrls: nextUrls };
+        const nextSlots = [...prev.imageSlots];
+        nextSlots[index] = { ...nextSlots[index], url: result };
+        return { ...prev, imageSlots: nextSlots };
       });
       setError('');
     };
@@ -252,23 +262,23 @@ function ProductManagement() {
 
   const handleImageClear = (index) => {
     setFormData((prev) => {
-      const nextUrls = [...prev.imageUrls];
-      nextUrls[index] = '';
-      return { ...prev, imageUrls: nextUrls };
+      const nextSlots = [...prev.imageSlots];
+      nextSlots[index] = { ...nextSlots[index], url: '' };
+      return { ...prev, imageSlots: nextSlots };
     });
   };
 
   const handleAddImageSlot = () => {
     setFormData((prev) => {
-      if (prev.imageUrls.length >= MAX_IMAGE_COUNT) return prev;
-      return { ...prev, imageUrls: [...prev.imageUrls, ''] };
+      if (prev.imageSlots.length >= MAX_IMAGE_COUNT) return prev;
+      return { ...prev, imageSlots: [...prev.imageSlots, { url: '', variantTag: '' }] };
     });
   };
 
   const handleRemoveLastImageSlot = () => {
     setFormData((prev) => {
-      if (prev.imageUrls.length <= MIN_IMAGE_COUNT) return prev;
-      return { ...prev, imageUrls: prev.imageUrls.slice(0, -1) };
+      if (prev.imageSlots.length <= MIN_IMAGE_COUNT) return prev;
+      return { ...prev, imageSlots: prev.imageSlots.slice(0, -1) };
     });
   };
 
@@ -351,21 +361,43 @@ function ProductManagement() {
   const handleImageDrop = (event, targetIndex) => {
     event.preventDefault();
     const sourceIndex = draggedImageIndex;
-    const inBounds = sourceIndex !== null && sourceIndex >= 0 && sourceIndex < formData.imageUrls.length;
+    const inBounds = sourceIndex !== null && sourceIndex >= 0 && sourceIndex < formData.imageSlots.length;
     if (inBounds && sourceIndex !== targetIndex) {
       setFormData((prev) => {
-        const nextUrls = [...prev.imageUrls];
-        const [moved] = nextUrls.splice(sourceIndex, 1);
-        nextUrls.splice(targetIndex, 0, moved);
+        const nextSlots = [...prev.imageSlots];
+        const [moved] = nextSlots.splice(sourceIndex, 1);
+        nextSlots.splice(targetIndex, 0, moved);
         return {
           ...prev,
-          imageUrls: nextUrls,
+          imageSlots: nextSlots,
         };
       });
     }
     setDraggedImageIndex(null);
     setDragOverImageIndex(null);
     setIsDraggingImage(false);
+  };
+
+  const handleImageVariantTagChange = (index, attribute, value) => {
+    setFormData((prev) => {
+      const nextSlots = [...prev.imageSlots];
+      const slot = nextSlots[index];
+      const parts = {};
+      if (slot.variantTag) {
+        slot.variantTag.split('||').forEach((part) => {
+          const sep = part.indexOf('::');
+          if (sep > 0) parts[part.slice(0, sep)] = part.slice(sep + 2);
+        });
+      }
+      if (value) {
+        parts[attribute] = value;
+      } else {
+        delete parts[attribute];
+      }
+      const newTag = Object.entries(parts).map(([a, v]) => `${a}::${v}`).join('||');
+      nextSlots[index] = { ...slot, variantTag: newTag };
+      return { ...prev, imageSlots: nextSlots };
+    });
   };
 
   const handleVariantGroupChange = (index, value) => {
@@ -501,8 +533,9 @@ function ProductManagement() {
       return;
     }
 
-    const imageUrls = formData.imageUrls.map((url) => url.trim());
-    const uploadedImageUrls = imageUrls.filter(Boolean);
+    const uploadedSlots = formData.imageSlots.filter((slot) => slot.url.trim());
+    const uploadedImageUrls = uploadedSlots.map((slot) => slot.url.trim());
+    const imageVariantTags = uploadedSlots.map((slot) => slot.variantTag || '');
     const cleanVariantOptions = formData.variantGroups
       .flatMap((group) => {
         const attribute = group.attribute.trim();
@@ -537,7 +570,6 @@ function ProductManagement() {
       }
     }
 
-    const mainImage = uploadedImageUrls[0];
     const uploadedVideoUrls = formData.videoUrls.map((url) => url.trim()).filter(Boolean);
     const sizeValues = cleanVariantOptions
       .filter((row) => row.attribute.toLowerCase() === 'size')
@@ -567,9 +599,10 @@ function ProductManagement() {
       categories: formData.categories,
       subcategories: formData.subcategories,
       industries: formData.industries,
-      image: mainImage,
+      image: uploadedImageUrls[0],
       galleryImages: uploadedImageUrls.slice(1),
       imageCount: uploadedImageUrls.length,
+      imageVariantTags,
       video: uploadedVideoUrls[0] || '',
       galleryVideos: uploadedVideoUrls.slice(1),
       videoCount: uploadedVideoUrls.length,
@@ -616,9 +649,12 @@ function ProductManagement() {
     setShowAddForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    const imageUrls = [product.image, ...(product.galleryImages || [])].filter(Boolean).slice(0, MAX_IMAGE_COUNT);
-    const safeUrls = [...imageUrls];
-    while (safeUrls.length < MIN_IMAGE_COUNT) safeUrls.push('');
+    const apiImages = (product._apiImages || []).slice().sort((a, b) => a.sort_order - b.sort_order);
+    const imageSlots = [product.image, ...(product.galleryImages || [])].filter(Boolean).slice(0, MAX_IMAGE_COUNT).map((url, i) => ({
+      url,
+      variantTag: apiImages[i]?.variant_tag || '',
+    }));
+    while (imageSlots.length < MIN_IMAGE_COUNT) imageSlots.push({ url: '', variantTag: '' });
     const videoUrls = [product.video, ...(product.galleryVideos || [])].filter(Boolean).slice(0, MAX_VIDEO_COUNT);
     const safeVideoUrls = [...videoUrls];
     while (safeVideoUrls.length < MIN_VIDEO_COUNT) safeVideoUrls.push('');
@@ -642,7 +678,7 @@ function ProductManagement() {
           categories: product.categories || [],
           subcategories: product.subcategories || [],
           industries: product.industries || [],
-          imageUrls: safeUrls,
+          imageSlots,
           videoUrls: safeVideoUrls,
         });
         setIsPreparingEdit(false);
@@ -1089,7 +1125,7 @@ function ProductManagement() {
                   <button
                     type="button"
                     onClick={handleAddImageSlot}
-                    disabled={formData.imageUrls.length >= MAX_IMAGE_COUNT}
+                    disabled={formData.imageSlots.length >= MAX_IMAGE_COUNT}
                     className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     + Add Image
@@ -1097,7 +1133,7 @@ function ProductManagement() {
                   <button
                     type="button"
                     onClick={handleRemoveLastImageSlot}
-                    disabled={formData.imageUrls.length <= MIN_IMAGE_COUNT}
+                    disabled={formData.imageSlots.length <= MIN_IMAGE_COUNT}
                     className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Remove Last
@@ -1105,7 +1141,7 @@ function ProductManagement() {
                 </div>
               </div>
               <ul className="flex max-w-full gap-1.5 overflow-x-auto pb-1">
-                {formData.imageUrls.map((url, idx) => (
+                {formData.imageSlots.map((slot, idx) => (
                   <li
                     key={`image-slot-${idx}`}
                     draggable
@@ -1121,7 +1157,7 @@ function ProductManagement() {
                       setDragOverImageIndex(null);
                       setIsDraggingImage(false);
                     }}
-                    className={`group relative flex h-[98px] w-[78px] shrink-0 flex-col gap-0.5 rounded-md border px-1.5 py-1.5 text-xs font-medium transition-all duration-200 ${
+                    className={`group relative flex min-h-[98px] w-[78px] shrink-0 flex-col gap-0.5 rounded-md border px-1.5 py-1.5 text-xs font-medium transition-all duration-200 ${
                       draggedImageIndex === idx
                         ? 'scale-[0.99] cursor-grabbing border-red-400 bg-red-50 shadow-lg ring-2 ring-red-200 opacity-35'
                         : dragOverImageIndex === idx
@@ -1129,7 +1165,7 @@ function ProductManagement() {
                           : 'cursor-grab border-slate-200 bg-white text-slate-800 hover:bg-slate-50'
                     }`}
                   >
-                      {url && (
+                      {slot.url && (
                         <button
                           type="button"
                           onClick={() => handleImageClear(idx)}
@@ -1154,9 +1190,9 @@ function ProductManagement() {
                         htmlFor={`image-upload-${idx}`}
                         className={`mx-auto shrink-0 ${isDraggingImage ? 'pointer-events-none' : 'cursor-pointer'}`}
                       >
-                        {url ? (
+                        {slot.url ? (
                           <img
-                            src={url}
+                            src={slot.url}
                             alt={`Product slot ${idx + 1}`}
                             className="h-11 w-11 rounded object-cover ring-1 ring-slate-200 transition group-hover:ring-red-200"
                           />
@@ -1177,9 +1213,31 @@ function ProductManagement() {
                         <p className="truncate text-[10px] font-semibold text-slate-700">
                           {idx === 0 ? `Image ${idx + 1} (Main)` : `Image ${idx + 1}`}
                         </p>
-                        <p className="text-[9px] text-slate-500">{url ? 'Uploaded' : 'Upload'}</p>
+                        <p className="text-[9px] text-slate-500">{slot.url ? 'Uploaded' : 'Upload'}</p>
                       </div>
-                      <div className="mt-auto" />
+                      {variantAttributeGroups.length > 0 && (() => {
+                        const parts = {};
+                        if (slot.variantTag) {
+                          slot.variantTag.split('||').forEach((part) => {
+                            const sep = part.indexOf('::');
+                            if (sep > 0) parts[part.slice(0, sep)] = part.slice(sep + 2);
+                          });
+                        }
+                        return variantAttributeGroups.map((group) => (
+                          <select
+                            key={group.attribute}
+                            value={parts[group.attribute] || ''}
+                            onChange={(e) => handleImageVariantTagChange(idx, group.attribute, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full rounded border border-slate-200 bg-white px-0.5 py-0.5 text-[9px] text-slate-600 focus:outline-none"
+                          >
+                            <option value="">Any {group.attribute}</option>
+                            {group.values.map((val) => (
+                              <option key={val} value={val}>{val}</option>
+                            ))}
+                          </select>
+                        ));
+                      })()}
                   </li>
                 ))}
               </ul>

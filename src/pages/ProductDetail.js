@@ -78,6 +78,26 @@ function ProductDetail() {
     setQuantity(1);
   }, [product?.id, attributeOptions]);
 
+  useEffect(() => {
+    if (!product?.imageVariantTags?.length || Object.keys(selectedAttributes).length === 0) return;
+    const allImages = [product.image, ...(product.galleryImages || [])].filter(Boolean);
+    for (let i = 0; i < allImages.length; i++) {
+      const tag = product.imageVariantTags[i] || '';
+      if (!tag) continue;
+      const tagAttrs = {};
+      tag.split('||').forEach((part) => {
+        const sep = part.indexOf('::');
+        if (sep > 0) tagAttrs[part.slice(0, sep)] = part.slice(sep + 2);
+      });
+      if (Object.keys(tagAttrs).length === 0) continue;
+      const allMatch = Object.entries(tagAttrs).every(([attr, val]) => selectedAttributes[attr] === val);
+      if (allMatch) {
+        setSelectedImageIndex(i);
+        return;
+      }
+    }
+  }, [selectedAttributes, product?.imageVariantTags, product?.image, product?.galleryImages]);
+
   if (!product) {
     return (
       <div className="shell py-16 text-center">

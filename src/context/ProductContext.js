@@ -261,6 +261,7 @@ const mapProductFromApi = (product = {}) => {
     inventory: {
       onHand: Number(product.stock_quantity || 0),
     },
+    imageVariantTags: images.map(img => img.variant_tag || ''),
     _apiImages: images,
     _apiVideos: videos,
   };
@@ -280,6 +281,7 @@ const buildOptimisticMediaShape = (media = {}) => ({
       image_url: imageUrl,
       is_primary: index === 0,
       sort_order: index,
+      variant_tag: (media.imageVariantTags || [])[index] || '',
     })),
   videos: [media.video, ...(media.galleryVideos || [])]
     .filter(Boolean)
@@ -531,13 +533,15 @@ export function ProductProvider({ children }) {
     let nextImages = existingImages;
     let nextVideos = existingVideos;
 
+    const imageVariantTags = media.imageVariantTags || imageUrls.map(() => '');
     const sameImages =
       existingImages.length === imageUrls.length &&
       [resolveMediaUrl(existingImages.find((image) => image.is_primary)?.image_url || existingImages[0]?.image_url || ''), ...existingImages
         .filter((image) => !existingImages.find((item) => item.is_primary)?.id || image.id !== existingImages.find((item) => item.is_primary)?.id)
         .map((image) => resolveMediaUrl(image.image_url))]
         .filter(Boolean)
-        .every((url, index) => url === imageUrls[index]);
+        .every((url, index) => url === imageUrls[index]) &&
+      existingImages.every((img, index) => (img.variant_tag || '') === (imageVariantTags[index] || ''));
 
     const sameVideos =
       existingVideos.length === videoUrls.length &&
@@ -557,7 +561,7 @@ export function ProductProvider({ children }) {
         const file = await dataUrlToFile(imageUrl, `${productName || 'product'}-image-${index + 1}`);
         const formData = new FormData();
         formData.append('file', file);
-        const uploadResponse = await performRequest(`${API_BASE_URL}/products/${productId}/images?is_primary=${index === 0}`, {
+        const uploadResponse = await performRequest(`${API_BASE_URL}/products/${productId}/images?is_primary=${index === 0}&variant_tag=${encodeURIComponent(imageVariantTags[index] || '')}`, {
           method: 'POST',
           headers: createAuthHeaders(),
           body: formData,
