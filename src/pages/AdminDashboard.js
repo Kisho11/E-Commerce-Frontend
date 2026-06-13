@@ -5,6 +5,7 @@ import { useOrders } from '../context/OrderContext';
 import { useProducts } from '../context/ProductContext';
 import ProductManagement from './ProductManagement';
 import CategoryManagement from './CategoryManagement';
+import IndustryManagement from './IndustryManagement';
 import ManagerManagement from './ManagerManagement';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import UiIcon from '../components/UiIcon';
@@ -252,7 +253,7 @@ function AdminDashboard() {
       <div className="container mx-auto px-4 py-8 sm:px-8">
         {/* Tabs */}
         <div className="flex gap-4 mb-8 overflow-x-auto border-b border-gray-300 pb-4">
-          {['overview', 'products', 'categories', 'managers', 'orders', 'customers', 'reports'].map((tab) => (
+          {['overview', 'products', 'categories', 'industries', 'managers', 'orders', 'customers', 'reports'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -384,6 +385,11 @@ function AdminDashboard() {
         {/* Categories Tab */}
         {activeTab === 'categories' && (
           <CategoryManagement />
+        )}
+
+        {/* Industries Tab */}
+        {activeTab === 'industries' && (
+          <IndustryManagement />
         )}
 
         {/* Managers Tab */}

@@ -469,9 +469,12 @@ function CategoryManagement() {
         </div>
 
         {editingCategory && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 px-4 py-6">
-            <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl">
-              <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 p-4">
+            {/* Modal: flex column capped at 90vh so it never overflows the screen */}
+            <div className="flex w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl" style={{ maxHeight: '90vh' }}>
+
+              {/* Header — always visible */}
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
                 <div>
                   <h4 className="text-lg font-bold text-slate-900">Edit Category</h4>
                   <p className="text-sm text-slate-500">Update the category details here and manage its subcategories.</p>
@@ -485,81 +488,94 @@ function CategoryManagement() {
                 </button>
               </div>
 
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full rounded-xl border border-primary px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-100"
-                    autoFocus
-                    placeholder="Category name"
-                  />
-                  <label className="flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-primary hover:text-primary">
+              {/* Body — scrolls when content is taller than remaining space */}
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+                  <div className="space-y-3">
                     <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleEditCategoryImageChange}
-                      className="hidden"
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="w-full rounded-xl border border-primary px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-100"
+                      autoFocus
+                      placeholder="Category name"
                     />
-                    Upload Category Image
-                  </label>
-                  {editImage ? (
-                    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                      <div className="h-12 w-12 overflow-hidden rounded-lg bg-white">
-                        <img src={editImage} alt={`${editName || editingCategory} preview`} className="h-full w-full object-cover" />
+                    <label className="flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-primary hover:text-primary">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleEditCategoryImageChange}
+                        className="hidden"
+                      />
+                      Upload Category Image
+                    </label>
+                    {editImage ? (
+                      <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="h-12 w-12 overflow-hidden rounded-lg bg-white">
+                          <img src={editImage} alt={`${editName || editingCategory} preview`} className="h-full w-full object-cover" />
+                        </div>
+                        <span className="text-xs text-slate-500">Selected image preview</span>
                       </div>
-                      <span className="text-xs text-slate-500">Selected image preview</span>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-slate-400">No image selected</div>
-                  )}
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <h5 className="text-sm font-bold uppercase tracking-[0.12em] text-slate-700">Subcategories</h5>
-                      <p className="mt-1 text-xs text-slate-500">Edit from here instead of the table list.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => openAddSubcategoryEditor(editingCategory)}
-                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                    >
-                      Add
-                    </button>
+                    ) : (
+                      <div className="text-xs text-slate-400">No image selected</div>
+                    )}
                   </div>
 
-                  <div className="space-y-2">
-                    {(categories.find((category) => category.name === editingCategory)?.subcategories || []).length > 0 ? (
-                      (categories.find((category) => category.name === editingCategory)?.subcategories || []).map((subcategory) => (
-                        <div
-                          key={`${editingCategory}:${subcategory.name}`}
-                          className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2"
-                        >
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-slate-800">{subcategory.name}</div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => openSubcategoryEditor(editingCategory, subcategory)}
-                            className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-3 py-4 text-sm text-slate-500">
-                        No subcategories yet.
+                  {/* Subcategory panel — its own scroll so the list never pushes the modal off-screen */}
+                  <div className="flex flex-col rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+                      <div>
+                        <h5 className="text-sm font-bold uppercase tracking-[0.12em] text-slate-700">
+                          Subcategories
+                          {(categories.find((c) => c.name === editingCategory)?.subcategories || []).length > 0 && (
+                            <span className="ml-1.5 rounded-full bg-slate-200 px-1.5 py-0.5 text-xs font-semibold text-slate-600">
+                              {(categories.find((c) => c.name === editingCategory)?.subcategories || []).length}
+                            </span>
+                          )}
+                        </h5>
+                        <p className="mt-1 text-xs text-slate-500">Edit from here instead of the table list.</p>
                       </div>
-                    )}
+                      <button
+                        type="button"
+                        onClick={() => openAddSubcategoryEditor(editingCategory)}
+                        className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    {/* Scrollable subcategory list — max 260px tall */}
+                    <div className="min-h-0 space-y-2 overflow-y-auto pr-1" style={{ maxHeight: '260px' }}>
+                      {(categories.find((category) => category.name === editingCategory)?.subcategories || []).length > 0 ? (
+                        (categories.find((category) => category.name === editingCategory)?.subcategories || []).map((subcategory) => (
+                          <div
+                            key={`${editingCategory}:${subcategory.name}`}
+                            className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-slate-800">{subcategory.name}</div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => openSubcategoryEditor(editingCategory, subcategory)}
+                              className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-3 py-4 text-sm text-slate-500">
+                          No subcategories yet.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-5 flex gap-3">
+              {/* Footer — always visible at bottom */}
+              <div className="flex shrink-0 gap-3 border-t border-slate-100 px-5 py-4">
                 <button
                   onClick={() => handleUpdateCategory(editingCategory)}
                   className="flex-1 rounded-xl bg-green-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
