@@ -111,9 +111,7 @@ export function AuthProvider({ children }) {
   }, [user]);
 
   useEffect(() => {
-    // Never persist passwords — strip them before writing to localStorage.
-    // Offline sign-in only works within the same page session.
-    writeStorage(CUSTOMER_USERS_KEY, customerUsers.map(({ password: _omit, ...rest }) => rest));
+    writeStorage(CUSTOMER_USERS_KEY, customerUsers);
   }, [customerUsers]);
 
   const logout = useCallback(() => {
@@ -672,186 +670,54 @@ export function AuthProvider({ children }) {
 
   const getManagerById = useCallback((managerId) => managers.find((manager) => manager.id === managerId), [managers]);
 
-  const authWithGoogle = useCallback((credential, mode = 'signin') => {
-    const profile = decodeGoogleCredential(credential);
+  const authWithGoogle = useCallback(async (credential) => {
+    if (!API_BASE_URL) {
+      return { success: false, error: 'Backend authentication is not configured.' };
+    }
 
     try {
-      const response = await fetchWithTimeout(`${API_BASE_URL}/auth/reset-password`, {
+      const loginResponse = await fetchWithTimeout(`${API_BASE_URL}/auth/google`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          reset_token: resetToken.trim(),
-          new_password: newPassword,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential }),
       });
 
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        return {
-          success: false,
-          error: data?.detail || 'Unable to update the password',
-        };
+      if (!loginResponse.ok) {
+        const errorData = await loginResponse.json().catch(() => null);
+        return { success: false, error: errorData?.detail || 'Google authentication failed' };
       }
 
-      return {
-        success: true,
-        message: data?.message || 'Password updated successfully.',
+      const tokens = await loginResponse.json();
+      let profile = tokens.user || null;
+
+      if (!profile) {
+        const profileResponse = await fetchWithTimeout(`${API_BASE_URL}/users/me`);
+        if (!profileResponse.ok) {
+          return { success: false, error: 'Signed in with Google, but failed to load your profile' };
+        }
+        profile = await profileResponse.json();
+      }
+
+      const sessionUser = {
+        id: profile.id,
+        email: profile.email,
+        name: profile.full_name,
+        phone: profile.phone || '',
+        role: normalizeRole(profile.role),
+        isActive: profile.is_active,
+        isEmailVerified: profile.is_email_verified ?? true,
+        loginTime: new Date().toISOString(),
       };
+
+      setSession(sessionUser);
+      return { success: true, user: sessionUser };
     } catch (error) {
-      return {
-        success: false,
-        error: 'Unable to reach the backend password reset service',
-      };
-    }
-  }, []);
-
-  const loadManagers = useCallback(async () => {
-    if (!API_BASE_URL) {
-      return [];
-    }
-
-    const response = await authFetch('/admin/managers');
-    const data = await response.json().catch(() => []);
-    const mappedManagers = Array.isArray(data) ? data.map(mapManager) : [];
-    setManagers(mappedManagers);
-    return mappedManagers;
-  }, [authFetch]);
-
-  useEffect(() => {
-    if (user?.role === 'admin') {
-      loadManagers().catch(() => {
-        setManagers([]);
-      });
-      return;
-    }
-
-    setManagers([]);
-  }, [loadManagers, user]);
-
-  const addManager = useCallback(async (managerData) => {
-    const response = await authFetch('/admin/managers', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: managerData.email.trim().toLowerCase(),
-        full_name: managerData.name.trim(),
-        phone: managerData.phone.trim() || null,
-        password: managerData.password?.trim() || null,
-      }),
-    });
-
-    const data = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(data?.detail || 'Unable to add manager');
-    }
-
-    const nextManager = mapManager(data);
-    setManagers((prev) => [nextManager, ...prev]);
-    return nextManager;
-  }, [authFetch]);
-
-  const updateManager = useCallback(async (managerId, updatedData) => {
-    const response = await authFetch(`/admin/managers/${managerId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: updatedData.email.trim().toLowerCase(),
-        full_name: updatedData.name.trim(),
-        phone: updatedData.phone.trim() || null,
-      }),
-    });
-
-    const data = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(data?.detail || 'Unable to update manager');
-    }
-
-    const nextManager = mapManager(data);
-    setManagers((prev) => prev.map((manager) => (manager.id === managerId ? nextManager : manager)));
-    return nextManager;
-  }, [authFetch]);
-
-  const deleteManager = useCallback(async (managerId) => {
-    const response = await authFetch(`/admin/managers/${managerId}`, {
-      method: 'DELETE',
-    });
-
-    if (!response.ok && response.status !== 204) {
-      const data = await response.json().catch(() => null);
-      throw new Error(data?.detail || 'Unable to delete manager');
-    }
-
-    setManagers((prev) => prev.filter((manager) => manager.id !== managerId));
-  }, [authFetch]);
-
-  const getManagerById = useCallback((managerId) => managers.find((manager) => manager.id === managerId), [managers]);
-
-  const authWithGoogle = useCallback(async (credential, mode = 'signin') => {
-    if (API_BASE_URL) {
-      try {
-        const response = await fetchWithTimeout(`${API_BASE_URL}/auth/google`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id_token: credential, mode }),
-        });
-
-        const data = await response.json().catch(() => null);
-        if (!response.ok) {
-          return { success: false, error: data?.detail || 'Google authentication failed' };
-        }
-
-        const profile = data?.user || null;
-        if (!profile) {
-          return { success: false, error: 'Google authentication failed — no profile returned' };
-        }
-
-        const sessionUser = {
-          id: profile.id,
-          email: profile.email,
-          name: profile.full_name,
-          phone: profile.phone || '',
-          role: normalizeRole(profile.role),
-          isActive: profile.is_active,
-          loginTime: new Date().toISOString(),
-        };
-        setSession(sessionUser);
-        return { success: true, user: sessionUser };
-      } catch (error) {
-        return { success: false, error: 'Unable to reach the backend Google auth service' };
+      if (error?.name === 'AbortError') {
+        return { success: false, error: 'Request timed out. Please try again.' };
       }
+      return { success: false, error: 'Unable to complete Google sign-in' };
     }
-
-    // Fallback: local-only Google simulation (no backend)
-    const profile = decodeGoogleCredential(credential);
-    if (!profile?.email) {
-      return { success: false, error: 'Google authentication failed' };
-    }
-    const email = profile.email.trim().toLowerCase();
-    const name = profile.name || 'Google User';
-    let account = customerUsers.find((item) => item.email.toLowerCase() === email);
-    if (!account) {
-      account = { id: Date.now(), name, email, password: null, provider: 'google', createdAt: new Date().toISOString() };
-      setCustomerUsers((prev) => [...prev, account]);
-    }
-
-    const customerSession = {
-      id: account.id,
-      name: account.name,
-      email: account.email,
-      role: 'user',
-      provider: 'google',
-      loginTime: new Date().toISOString(),
-    };
-
-    setSession(customerSession);
-    return { success: true, user: customerSession };
-  }, [customerUsers, setSession]);
+  }, [setSession]);
 
   const isAdmin = useCallback(() => user?.role === 'admin', [user]);
   const isManager = useCallback(() => user?.role === 'manager', [user]);
@@ -873,8 +739,6 @@ export function AuthProvider({ children }) {
       activateManagerAccount,
       setManagerPassword,
       authWithGoogle,
-      verifyEmail,
-      resendVerification,
       logout,
       isAdmin,
       isManager,
@@ -903,8 +767,6 @@ export function AuthProvider({ children }) {
       activateManagerAccount,
       setManagerPassword,
       authWithGoogle,
-      verifyEmail,
-      resendVerification,
       logout,
       isAdmin,
       isManager,

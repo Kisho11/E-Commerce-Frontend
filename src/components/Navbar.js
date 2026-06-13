@@ -21,12 +21,15 @@ function Navbar() {
   const desktopActionClass =
     'inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold transition';
 
-  const navLinks = useMemo(() => [
-    { to: '/about', label: t('nav.about') },
-    { to: '/clients', label: t('nav.clients') },
-    { to: '/categories', label: t('categories.categories') },
-    { to: '/catalogue', label: t('nav.catalogue') },
-  ], [t]);
+  const navLinks = useMemo(() => {
+    const base = [];
+
+    if (isAuthenticated && (user?.role === 'customer' || user?.role === 'user')) {
+      return [...base, { to: '/categories', label: t('categories.categories') }];
+    }
+
+    return base;
+  }, [isAuthenticated, t, user]);
 
   const searchScopes = useMemo(
     () => [

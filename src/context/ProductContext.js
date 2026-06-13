@@ -257,8 +257,7 @@ const mapProductFromApi = (product = {}) => {
     maxPrice,
     sizes: deriveVariantValues(variantPricing, ['size']),
     colors: deriveVariantValues(variantPricing, ['color', 'colour']),
-    variantImages: Array.isArray(product.variant_images) ? product.variant_images : [],
-    additionalInformation: normalizeProductContent(product.additional_information),
+    additionalInformation: product.additional_information || '',
     inventory: {
       onHand: Number(product.stock_quantity || 0),
     },
@@ -625,7 +624,6 @@ export function ProductProvider({ children }) {
       sku: sanitizeInventorySku(productWithId.inventory?.sku),
       product_type: productWithId.productType || 'simple',
       industries: productWithId.industries || [],
-      variant_images: productWithId.variantImages || [],
       category_ids: getCategoryIdsByNames(productWithId.categories || [], productWithId.subcategories || []),
       variant_groups: buildVariantGroupsPayload(productWithId.price, productWithId.variantPricing),
     };
@@ -696,7 +694,6 @@ export function ProductProvider({ children }) {
       sku: sanitizeInventorySku(merged.inventory?.sku),
       product_type: merged.productType || 'simple',
       industries: merged.industries || [],
-      variant_images: merged.variantImages || [],
       category_ids: getCategoryIdsByNames(merged.categories || [], merged.subcategories || []),
       variant_groups: buildVariantGroupsPayload(merged.price, merged.variantPricing),
     };

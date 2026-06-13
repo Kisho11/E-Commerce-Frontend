@@ -1,97 +1,123 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import UiIcon from '../components/UiIcon';
 import Seo from '../components/Seo';
+import { useAuth } from '../context/AuthContext';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 function VerifyEmail() {
   const [searchParams] = useSearchParams();
-  const { verifyEmail } = useAuth();
-  const [status, setStatus] = useState('verifying');
+  const [statusState, setStatusState] = useState('loading');
   const [message, setMessage] = useState('');
-  const called = useRef(false);
+  const { user, markEmailVerified } = useAuth();
 
   useEffect(() => {
-    if (called.current) return;
-    called.current = true;
-
     const token = searchParams.get('token');
     if (!token) {
-      setStatus('error');
-      setMessage('No verification token found in the link. Please check your email.');
+      setStatusState('error');
+      setMessage('No verification token found in this link.');
       return;
     }
 
-    verifyEmail(token).then((result) => {
-      if (result.success) {
-        setStatus('success');
-        setMessage(result.message || 'Email verified! You can now sign in.');
-      } else {
-        setStatus('error');
-        setMessage(result.error || 'The verification link is invalid or has expired.');
-      }
-    });
-  }, [searchParams, verifyEmail]);
+    fetch(`${API_BASE_URL}/auth/verify-email?token=${encodeURIComponent(token)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.already_verified) {
+          setStatusState('already');
+          markEmailVerified();
+        } else if (data.message && !data.detail) {
+          setStatusState('success');
+          markEmailVerified();
+        } else {
+          setStatusState('error');
+          setMessage(data.detail || 'Verification failed. The link may be expired or invalid.');
+        }
+      })
+      .catch(() => {
+        setStatusState('error');
+        setMessage('Could not reach the server. Please try again.');
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const isLoggedIn = Boolean(user);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary to-black px-4">
+    <main className="min-h-screen flex items-center justify-center bg-white px-4">
       <Seo title="Verify Email" noindex />
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl text-center">
-        <div className="mb-4 flex justify-center text-primary">
-          <UiIcon name="box" className="h-12 w-12" />
-        </div>
-        <h1 className="mb-6 text-2xl font-bold text-primary">Email Verification</h1>
-
-        {status === 'verifying' && (
-          <div className="space-y-3">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            <p className="text-slate-600">Verifying your email address…</p>
-          </div>
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-lg text-center">
+        {statusState === 'loading' && (
+          <p className="text-slate-600">Verifying your email address…</p>
         )}
 
-        {status === 'success' && (
-          <div className="space-y-4">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
-              <svg className="h-7 w-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        {statusState === 'success' && (
+          <>
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+              <svg className="h-7 w-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="font-semibold text-emerald-700">{message}</p>
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">Email Verified</h1>
+            <p className="text-slate-600 mb-6">
+              Your email address has been verified. You can now place orders.
+            </p>
+            {isLoggedIn ? (
+              <Link
+                to="/customer-portal"
+                className="inline-block rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition"
+              >
+                Go to My Account
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className="inline-block rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition"
+              >
+                Sign In
+              </Link>
+            )}
+          </>
+        )}
+
+        {statusState === 'already' && (
+          <>
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+              <svg className="h-7 w-7 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">Already Verified</h1>
+            <p className="text-slate-600 mb-6">Your email address was already verified.</p>
             <Link
-              to="/login?mode=customer-signin"
-              className="inline-block rounded-lg bg-primary px-6 py-2.5 font-bold text-white hover:bg-red-700 transition"
+              to={isLoggedIn ? '/customer-portal' : '/'}
+              className="inline-block rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition"
+            >
+              {isLoggedIn ? 'Go to My Account' : 'Back to Store'}
+            </Link>
+          </>
+        )}
+
+        {statusState === 'error' && (
+          <>
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
+              <svg className="h-7 w-7 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">Verification Failed</h1>
+            <p className="text-slate-600 mb-6">
+              {message || 'The link may have expired. Sign in and request a new verification email.'}
+            </p>
+            <Link
+              to="/login"
+              className="inline-block rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition"
             >
               Sign In
             </Link>
-          </div>
-        )}
-
-        {status === 'error' && (
-          <div className="space-y-4">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
-              <svg className="h-7 w-7 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </div>
-            <p className="font-semibold text-red-700">{message}</p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
-              <Link
-                to="/login?mode=customer-signup"
-                className="rounded-lg border border-primary px-5 py-2 font-semibold text-primary hover:bg-red-50 transition"
-              >
-                Back to Sign Up
-              </Link>
-              <Link
-                to="/login?resend=1"
-                className="rounded-lg bg-primary px-5 py-2 font-bold text-white hover:bg-red-700 transition"
-              >
-                Resend Link
-              </Link>
-            </div>
-          </div>
+          </>
         )}
       </div>
-    </div>
+    </main>
   );
 }
 

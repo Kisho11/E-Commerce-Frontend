@@ -28,6 +28,7 @@ const Catalogue = lazy(() => import('./pages/Catalogue'));
 const Sponsor = lazy(() => import('./pages/Sponsor'));
 const Login = lazy(() => import('./pages/Login'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const ManagerActivate = lazy(() => import('./pages/ManagerActivate'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const ManagerDashboard = lazy(() => import('./pages/ManagerDashboard'));
 const CustomerPortal = lazy(() => import('./pages/CustomerPortal'));
@@ -64,6 +65,7 @@ function App() {
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Login />} />
                     <Route path="/verify-email" element={<VerifyEmail />} />
+                    <Route path="/manager-activate" element={<ManagerActivate />} />
 
                     <Route
                       path="/admin/dashboard"
