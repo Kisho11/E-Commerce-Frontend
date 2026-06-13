@@ -1,0 +1,12 @@
+# ── API ───────────────────────────────────────────────────────────────────────
+# URL of your backend server (no trailing slash)
+REACT_APP_API_URL=http://localhost:8000/api/v1
+
+# ── reCAPTCHA v2 ─────────────────────────────────────────────────────────────
+# Create a v2 "I'm not a robot" site at: https://www.google.com/recaptcha/admin/create
+# Use the SITE KEY here (secret key goes in the backend .env)
+REACT_APP_RECAPTCHA_SITE_KEY=6LeeogUtAAAAAJzmBYnQDv93gQmxK5IIyc1E3gbE
+
+# ── Google OAuth ─────────────────────────────────────────────────────────────
+# Same Client ID used in the backend — from: https://console.cloud.google.com/apis/credentials
+REACT_APP_GOOGLE_CLIENT_ID=827162933941-ch04j40p1k00q8julhdoimsr72851lk5.apps.googleusercontent.com
