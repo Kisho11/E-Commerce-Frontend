@@ -32,10 +32,10 @@ function ProductCard({ product }) {
   };
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white transition duration-300 hover:-translate-y-1 hover:shadow-xl sm:rounded-2xl">
+    <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl">
       <Link to={productUrl} className="flex flex-1 flex-col" aria-label={product.name}>
         {product.image ? (
-          <div className="flex h-24 w-full items-center justify-center bg-slate-50 p-2 sm:h-32 sm:p-3">
+          <div className="flex aspect-square w-full items-center justify-center bg-slate-50 p-2 sm:p-3 lg:p-2">
             <img
               src={product.image}
               alt={product.name}
@@ -44,19 +44,21 @@ function ProductCard({ product }) {
             />
           </div>
         ) : (
-          <div className="flex h-24 items-center justify-center bg-slate-100 text-[10px] font-medium text-slate-500 sm:h-32 sm:text-sm">No image available</div>
+          <div className="flex aspect-square items-center justify-center bg-slate-100 px-4 text-center text-xs font-medium text-slate-500 sm:text-sm">No image available</div>
         )}
-        <div className="flex flex-1 flex-col p-2 sm:p-3">
-          <h4 className="mb-2 line-clamp-2 text-[11px] font-bold leading-tight text-slate-900 sm:text-base">{product.name}</h4>
-          <div className="mb-2">
-            <span className="text-sm font-extrabold text-slate-900 sm:text-xl">{formatPriceRange(product)}</span>
+        <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-4 lg:gap-1 lg:p-2">
+          <h4 className="min-h-[2.75rem] line-clamp-2 text-sm font-bold leading-tight text-slate-900 sm:min-h-[3rem] sm:text-base lg:min-h-[2.15rem] lg:text-[12px]">
+            {product.name}
+          </h4>
+          <div>
+            <span className="text-[15px] font-extrabold text-slate-900 sm:text-xl lg:text-[15px]">{formatPriceRange(product)}</span>
           </div>
         </div>
       </Link>
-      <div className="px-2 pb-2 sm:px-3.5 sm:pb-3.5">
+      <div className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 lg:px-2 lg:pb-2">
         <button
           onClick={handleAddToCart}
-          className="w-full rounded-lg bg-slate-900 px-2 py-1.5 text-[10px] font-bold leading-none text-white transition hover:bg-red-700 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs"
+          className="w-full rounded-xl bg-slate-900 px-2 py-2.5 text-xs font-bold leading-none text-white transition hover:bg-red-700 sm:text-sm lg:py-1.5 lg:text-[10px]"
         >
           {t('product.addToCart')}
         </button>

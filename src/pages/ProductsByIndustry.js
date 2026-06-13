@@ -16,7 +16,6 @@ function ProductsByIndustry() {
   );
   const query = searchParams.get('q')?.trim() || '';
   const normalizedQuery = useMemo(() => query.toLowerCase(), [query]);
-  const hasSearchOrIndustryFilter = Boolean(query || formattedIndustry);
   const seoTitle = formattedIndustry
     ? `${formattedIndustry} Shop Fittings`
     : query
@@ -82,7 +81,7 @@ function ProductsByIndustry() {
       </div>
 
       {filteredProducts.length > 0 ? (
-        <div className="grid grid-cols-4 gap-2 sm:gap-5 xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5">
           {filteredProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}

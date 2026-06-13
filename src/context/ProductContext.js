@@ -1,6 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import initialProducts from '../data/products';
-import { normalizeProductContent } from '../utils/productContent';
 
 const ProductContext = createContext();
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -225,6 +224,7 @@ const mapProductFromApi = (product = {}) => {
   const parentCategories = categories.filter((category) => category.parent_id == null);
   const childCategories = categories.filter((category) => category.parent_id != null);
   const images = Array.isArray(product.images) ? [...product.images].sort((a, b) => a.sort_order - b.sort_order) : [];
+  const videos = Array.isArray(product.videos) ? [...product.videos].sort((a, b) => a.sort_order - b.sort_order) : [];
   const primaryImage = images.find((image) => image.is_primary) || images[0] || null;
   const galleryImages = images
     .filter((image) => !primaryImage || image.id !== primaryImage.id)
@@ -236,6 +236,10 @@ const mapProductFromApi = (product = {}) => {
     id: product.id,
     name: product.name || '',
     description: product.description || '',
+    mainNote: product.main_note || '',
+    keyFeatures: product.key_features || '',
+    whatsIncluded: product.whats_included || '',
+    importantNotes: product.important_notes || '',
     price: Number(product.price || 0),
     salePrice: product.sale_price != null ? Number(product.sale_price) : '',
     productType: product.product_type || 'simple',
@@ -245,6 +249,9 @@ const mapProductFromApi = (product = {}) => {
     image: resolveMediaUrl(primaryImage?.image_url || ''),
     galleryImages,
     imageCount: images.length,
+    video: resolveMediaUrl(videos[0]?.video_url || ''),
+    galleryVideos: videos.slice(1).map((video) => resolveMediaUrl(video.video_url)),
+    videoCount: videos.length,
     variantPricing,
     minPrice,
     maxPrice,
@@ -256,12 +263,14 @@ const mapProductFromApi = (product = {}) => {
       onHand: Number(product.stock_quantity || 0),
     },
     _apiImages: images,
+    _apiVideos: videos,
   };
 };
 
 const mergeProductMediaIntoApiShape = (product = {}, media = {}) => ({
   ...product,
   images: Array.isArray(media.images) ? media.images : product.images || [],
+  videos: Array.isArray(media.videos) ? media.videos : product.videos || [],
 });
 
 const buildOptimisticMediaShape = (media = {}) => ({
@@ -271,6 +280,13 @@ const buildOptimisticMediaShape = (media = {}) => ({
       id: `temp-image-${index}`,
       image_url: imageUrl,
       is_primary: index === 0,
+      sort_order: index,
+    })),
+  videos: [media.video, ...(media.galleryVideos || [])]
+    .filter(Boolean)
+    .map((videoUrl, index) => ({
+      id: `temp-video-${index}`,
+      video_url: videoUrl,
       sort_order: index,
     })),
 });
@@ -377,7 +393,7 @@ const dataUrlToFile = async (dataUrl, filename) => {
 const getLocalFallbackProducts = () =>
   initialProducts.map((product) => ({
     ...product,
-    additionalInformation: normalizeProductContent(product.additionalInformation),
+    additionalInformation: product.additionalInformation || '',
     inventory: normalizeInventory(product),
   }));
 
@@ -436,7 +452,7 @@ export function ProductProvider({ children }) {
 
     const loadProducts = async () => {
       try {
-        const response = await performRequest(`${API_BASE_URL}/products/?per_page=100`, {}, 'Unable to load products');
+        const response = await performRequest(`${API_BASE_URL}/products/?per_page=2000`, {}, 'Unable to load products');
         if (!response.ok) {
           throw new Error('Failed to load products');
         }
@@ -510,8 +526,11 @@ export function ProductProvider({ children }) {
 
   const syncProductMedia = useCallback(async (productId, productName, media = {}, existingProduct = null) => {
     const imageUrls = [media.image, ...(media.galleryImages || [])].filter(Boolean);
+    const videoUrls = [media.video, ...(media.galleryVideos || [])].filter(Boolean);
     const existingImages = existingProduct?._apiImages || [];
+    const existingVideos = existingProduct?._apiVideos || [];
     let nextImages = existingImages;
+    let nextVideos = existingVideos;
 
     const sameImages =
       existingImages.length === imageUrls.length &&
@@ -520,6 +539,10 @@ export function ProductProvider({ children }) {
         .map((image) => resolveMediaUrl(image.image_url))]
         .filter(Boolean)
         .every((url, index) => url === imageUrls[index]);
+
+    const sameVideos =
+      existingVideos.length === videoUrls.length &&
+      existingVideos.map((video) => resolveMediaUrl(video.video_url)).every((url, index) => url === videoUrls[index]);
 
     if (!sameImages) {
       for (const image of existingImages) {
@@ -545,15 +568,39 @@ export function ProductProvider({ children }) {
       }
     }
 
+    if (!sameVideos) {
+      for (const video of existingVideos) {
+        const deleteResponse = await performRequest(`${API_BASE_URL}/products/${productId}/videos/${video.id}`, {
+          method: 'DELETE',
+          headers: createAuthHeaders(),
+        }, 'Failed to delete existing product video');
+        await handleProtectedApiResponse(deleteResponse, 'Failed to delete existing product video');
+      }
+
+      nextVideos = [];
+      for (const [index, videoUrl] of videoUrls.entries()) {
+        const file = await dataUrlToFile(videoUrl, `${productName || 'product'}-video-${index + 1}`);
+        const formData = new FormData();
+        formData.append('file', file);
+        const uploadResponse = await performRequest(`${API_BASE_URL}/products/${productId}/videos`, {
+          method: 'POST',
+          headers: createAuthHeaders(),
+          body: formData,
+        }, `Failed to upload product video ${index + 1}`);
+        await handleProtectedApiResponse(uploadResponse, 'Failed to upload product video');
+        nextVideos.push(await uploadResponse.json());
+      }
+    }
+
     return {
       images: nextImages,
+      videos: nextVideos,
     };
   }, []);
 
   const addProduct = useCallback(async (newProduct) => {
     const productWithId = {
       ...newProduct,
-      additionalInformation: normalizeProductContent(newProduct.additionalInformation),
       inventory: normalizeInventory(newProduct),
     };
 
@@ -567,11 +614,16 @@ export function ProductProvider({ children }) {
     const payload = {
       name: productWithId.name,
       description: productWithId.description || '',
-      additional_information: productWithId.additionalInformation,
+      main_note: productWithId.mainNote || '',
+      key_features: productWithId.keyFeatures || '',
+      whats_included: productWithId.whatsIncluded || '',
+      important_notes: productWithId.importantNotes || '',
+      additional_information: productWithId.additionalInformation || '',
       price: Number(productWithId.price || 0),
       sale_price: productWithId.salePrice === '' ? null : (productWithId.salePrice != null ? Number(productWithId.salePrice) : null),
       stock_quantity: Number(productWithId.inventory?.onHand || 0),
       sku: sanitizeInventorySku(productWithId.inventory?.sku),
+      product_type: productWithId.productType || 'simple',
       industries: productWithId.industries || [],
       variant_images: productWithId.variantImages || [],
       category_ids: getCategoryIdsByNames(productWithId.categories || [], productWithId.subcategories || []),
@@ -615,7 +667,6 @@ export function ProductProvider({ children }) {
       ...existingProduct,
       ...updatedData,
     };
-    merged.additionalInformation = normalizeProductContent(merged.additionalInformation);
     merged.inventory = normalizeInventory({
       ...existingProduct,
       inventory: {
@@ -634,11 +685,16 @@ export function ProductProvider({ children }) {
     const payload = {
       name: merged.name,
       description: merged.description || '',
-      additional_information: merged.additionalInformation,
+      main_note: merged.mainNote || '',
+      key_features: merged.keyFeatures || '',
+      whats_included: merged.whatsIncluded || '',
+      important_notes: merged.importantNotes || '',
+      additional_information: merged.additionalInformation || '',
       price: Number(merged.price || 0),
       sale_price: merged.salePrice === '' ? null : (merged.salePrice != null ? Number(merged.salePrice) : null),
       stock_quantity: Number(merged.inventory?.onHand || 0),
       sku: sanitizeInventorySku(merged.inventory?.sku),
+      product_type: merged.productType || 'simple',
       industries: merged.industries || [],
       variant_images: merged.variantImages || [],
       category_ids: getCategoryIdsByNames(merged.categories || [], merged.subcategories || []),

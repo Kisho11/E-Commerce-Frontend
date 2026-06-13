@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useProducts } from '../context/ProductContext';
 import UiIcon from '../components/UiIcon';
-import ProductContentRenderer from '../components/ProductContentRenderer';
+import BackButton from '../components/BackButton';
 import Seo from '../components/Seo';
 import { getProductPriceDisplay, PRODUCT_TYPES, resolveProductType } from '../utils/productType';
 
@@ -185,6 +185,9 @@ function ProductDetail() {
         structuredData={productSchema}
       />
       <div className="pt-6">
+        <div className="shell px-2 sm:px-4">
+          <BackButton className="mb-4" />
+        </div>
         <nav aria-label="Breadcrumb" className="shell">
           <ol className="mx-auto flex max-w-7xl items-center space-x-2 px-2 sm:px-4">
             {breadcrumbs.map((crumb, idx) => (
@@ -371,9 +374,24 @@ function ProductDetail() {
               )}
             </form>
 
-            <div className="mt-10">
-                  <p className="text-base text-slate-900">{product.description}</p>
-                </div>
+            {product.mainNote && (
+              <div className="mt-10">
+                <div
+                  className="tiptap-render text-base text-slate-900"
+                  dangerouslySetInnerHTML={{ __html: product.mainNote }}
+                />
+              </div>
+            )}
+
+            {product.description && (
+              <div className="mt-6">
+                <h3 className="text-sm font-medium text-slate-900 mb-2">Description</h3>
+                <div
+                  className="tiptap-render text-base text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: product.description }}
+                />
+              </div>
+            )}
 
             {product.specs && (
               <div className="mt-10">
@@ -394,18 +412,44 @@ function ProductDetail() {
           </div>
         </div>
 
-        {product.additionalInformation?.blocks?.some((block) => {
-          if (block.type === 'image') return Boolean(block.src);
-          if (block.type === 'bullet-list' || block.type === 'number-list') return (block.items || []).some(Boolean);
-          return Boolean(block.html);
-        }) && (
-          <div className="shell mx-auto mt-12 max-w-7xl px-2 sm:px-4">
-            <div className="border-t border-slate-200 pt-8 text-left">
-              <h3 className="mb-4 text-sm font-medium text-slate-900">Additional Information</h3>
-              <div className="max-w-none">
-                <ProductContentRenderer content={product.additionalInformation} />
+        {(product.keyFeatures || product.whatsIncluded || product.importantNotes || product.additionalInformation) && (
+          <div className="shell mx-auto mt-12 max-w-7xl px-2 sm:px-4 space-y-8">
+            {product.keyFeatures && (
+              <div className="border-t border-slate-200 pt-8 text-left">
+                <h3 className="mb-4 text-sm font-medium text-slate-900">Key Features</h3>
+                <div
+                  className="tiptap-render text-sm text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: product.keyFeatures }}
+                />
               </div>
-            </div>
+            )}
+            {product.whatsIncluded && (
+              <div className="border-t border-slate-200 pt-8 text-left">
+                <h3 className="mb-4 text-sm font-medium text-slate-900">What's Included</h3>
+                <div
+                  className="tiptap-render text-sm text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: product.whatsIncluded }}
+                />
+              </div>
+            )}
+            {product.importantNotes && (
+              <div className="border-t border-slate-200 pt-8 text-left">
+                <h3 className="mb-4 text-sm font-medium text-slate-900">Important Notes</h3>
+                <div
+                  className="tiptap-render text-sm text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: product.importantNotes }}
+                />
+              </div>
+            )}
+            {product.additionalInformation && (
+              <div className="border-t border-slate-200 pt-8 text-left">
+                <h3 className="mb-4 text-sm font-medium text-slate-900">Additional Information</h3>
+                <div
+                  className="tiptap-render text-sm text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: product.additionalInformation }}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -1,15 +1,13 @@
 import React, { startTransition, useEffect, useState } from 'react';
 import { useProducts } from '../context/ProductContext';
-import ProductContentEditor from '../components/ProductContentEditor';
 import UiIcon from '../components/UiIcon';
-import { getProductPriceDisplay, resolveProductType } from '../utils/productType';
-import {
-  createDefaultProductContent,
-  normalizeProductContent,
-} from '../utils/productContent';
+import TipTapEditor from '../components/TipTapEditor';
+import { PRODUCT_TYPES, resolveProductType } from '../utils/productType';
 
 const MIN_IMAGE_COUNT = 1;
 const MAX_IMAGE_COUNT = 10;
+const MIN_VIDEO_COUNT = 1;
+const MAX_VIDEO_COUNT = 5;
 
 const createEmptyVariantValue = () => ({
   value: '',
@@ -20,9 +18,6 @@ const createEmptyVariantGroup = () => ({
   values: [createEmptyVariantValue()],
   finalized: false,
 });
-
-const hasConfiguredVariants = (variantGroups = [], variantPricing = []) =>
-  getFinalizedVariantGroups(variantGroups).length > 0 || (variantPricing || []).length > 0;
 
 const getVariantPricingKey = (attributes = {}) =>
   Object.entries(attributes)
@@ -82,7 +77,7 @@ const buildVariantGroupsFromPricing = (variantPricing = []) => {
     finalized: true,
   }));
 
-  return groups;
+  return groups.length > 0 ? groups : [createEmptyVariantGroup()];
 };
 
 const syncVariantPricingWithGroups = (variantPricing = [], variantGroups = [], basePrice = '') => {
@@ -115,6 +110,9 @@ function ProductManagement() {
   const [draggedImageIndex, setDraggedImageIndex] = useState(null);
   const [dragOverImageIndex, setDragOverImageIndex] = useState(null);
   const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [draggedVideoIndex, setDraggedVideoIndex] = useState(null);
+  const [dragOverVideoIndex, setDragOverVideoIndex] = useState(null);
+  const [isDraggingVideo, setIsDraggingVideo] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [statusPopup, setStatusPopup] = useState({ visible: false, title: '', message: '', id: null });
   const [isPreparingEdit, setIsPreparingEdit] = useState(false);
@@ -122,9 +120,15 @@ function ProductManagement() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    additionalInformation: createDefaultProductContent(),
+    mainNote: '',
+    keyFeatures: '',
+    whatsIncluded: '',
+    importantNotes: '',
+    additionalInformation: '',
     price: '',
-    variantGroups: [],
+    salePrice: '',
+    productType: PRODUCT_TYPES.VARIABLE,
+    variantGroups: [createEmptyVariantGroup()],
     variantPricing: [],
     categories: [],
     subcategories: [],
@@ -161,9 +165,15 @@ function ProductManagement() {
     setFormData({
       name: '',
       description: '',
-      additionalInformation: createDefaultProductContent(),
+      mainNote: '',
+      keyFeatures: '',
+      whatsIncluded: '',
+      importantNotes: '',
+      additionalInformation: '',
       price: '',
-      variantGroups: [],
+      salePrice: '',
+      productType: PRODUCT_TYPES.VARIABLE,
+      variantGroups: [createEmptyVariantGroup()],
       variantPricing: [],
       categories: [],
       subcategories: [],
@@ -276,6 +286,75 @@ function ProductManagement() {
     setDraggedImageIndex(index);
   };
 
+  const handleVideoFileChange = (index, file) => {
+    if (!file) return;
+    if (!file.type.startsWith('video/')) {
+      setError('Please upload video files only');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      setFormData((prev) => {
+        const nextUrls = [...prev.videoUrls];
+        nextUrls[index] = result;
+        return { ...prev, videoUrls: nextUrls };
+      });
+      setError('');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleVideoClear = (index) => {
+    setFormData((prev) => {
+      const nextUrls = [...prev.videoUrls];
+      nextUrls[index] = '';
+      return { ...prev, videoUrls: nextUrls };
+    });
+  };
+
+  const handleAddVideoSlot = () => {
+    setFormData((prev) => {
+      if (prev.videoUrls.length >= MAX_VIDEO_COUNT) return prev;
+      return { ...prev, videoUrls: [...prev.videoUrls, ''] };
+    });
+  };
+
+  const handleRemoveLastVideoSlot = () => {
+    setFormData((prev) => {
+      if (prev.videoUrls.length <= MIN_VIDEO_COUNT) return prev;
+      return { ...prev, videoUrls: prev.videoUrls.slice(0, -1) };
+    });
+  };
+
+  const handleVideoDragStart = (event, index) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(index));
+    setIsDraggingVideo(true);
+    setDraggedVideoIndex(index);
+  };
+
+  const handleVideoDrop = (event, targetIndex) => {
+    event.preventDefault();
+    const sourceIndex = draggedVideoIndex;
+    const inBounds = sourceIndex !== null && sourceIndex >= 0 && sourceIndex < formData.videoUrls.length;
+    if (inBounds && sourceIndex !== targetIndex) {
+      setFormData((prev) => {
+        const nextUrls = [...prev.videoUrls];
+        const [moved] = nextUrls.splice(sourceIndex, 1);
+        nextUrls.splice(targetIndex, 0, moved);
+        return {
+          ...prev,
+          videoUrls: nextUrls,
+        };
+      });
+    }
+    setDraggedVideoIndex(null);
+    setDragOverVideoIndex(null);
+    setIsDraggingVideo(false);
+  };
+
   const handleImageDrop = (event, targetIndex) => {
     event.preventDefault();
     const sourceIndex = draggedImageIndex;
@@ -325,6 +404,7 @@ function ProductManagement() {
 
   const handleRemoveVariantGroup = (index) => {
     setFormData((prev) => {
+      if (prev.variantGroups.length <= 1) return prev;
       return {
         ...prev,
         variantGroups: prev.variantGroups.filter((_, idx) => idx !== index),
@@ -429,7 +509,8 @@ function ProductManagement() {
     setError('');
     setSuccess('');
 
-    if (!formData.name.trim() || !formData.description.trim() || !formData.price) {
+    const requiresPrice = formData.productType !== PRODUCT_TYPES.CUSTOM;
+    if (!formData.name.trim() || !formData.mainNote || (requiresPrice && !formData.price)) {
       setError('Please fill in all required fields');
       return;
     }
@@ -457,11 +538,9 @@ function ProductManagement() {
       formData.price
     );
 
-    const productHasVariants = hasConfiguredVariants(formData.variantGroups, matrixVariantPricing);
-
-    if (productHasVariants) {
+    if (formData.productType === PRODUCT_TYPES.VARIABLE) {
       if (cleanVariantOptions.length === 0) {
-        setError('Add at least one attribute option before saving variant pricing');
+        setError('Add at least one attribute option for variable products');
         return;
       }
       const hasIncompleteRow = cleanVariantOptions.some((row) => !row.attribute || !row.value);
@@ -478,6 +557,7 @@ function ProductManagement() {
     }
 
     const mainImage = uploadedImageUrls[0];
+    const uploadedVideoUrls = formData.videoUrls.map((url) => url.trim()).filter(Boolean);
     const sizeValues = cleanVariantOptions
       .filter((row) => row.attribute.toLowerCase() === 'size')
       .map((row) => row.value);
@@ -500,9 +580,15 @@ function ProductManagement() {
     const payload = {
       name: formData.name,
       description: formData.description,
-      additionalInformation: normalizeProductContent(formData.additionalInformation),
-      price: formData.price,
-      variantPricing: productHasVariants ? matrixVariantPricing : [],
+      mainNote: formData.mainNote,
+      keyFeatures: formData.keyFeatures,
+      whatsIncluded: formData.whatsIncluded,
+      importantNotes: formData.importantNotes,
+      additionalInformation: formData.additionalInformation,
+      price: formData.productType === PRODUCT_TYPES.CUSTOM ? '' : formData.price,
+      salePrice: formData.productType === PRODUCT_TYPES.CUSTOM ? '' : formData.salePrice,
+      productType: formData.productType,
+      variantPricing: formData.productType === PRODUCT_TYPES.VARIABLE ? matrixVariantPricing : [],
       minPrice: undefined,
       maxPrice: undefined,
       sizes: uniqueSizes,
@@ -560,16 +646,25 @@ function ProductManagement() {
     const imageUrls = [product.image, ...(product.galleryImages || [])].filter(Boolean).slice(0, MAX_IMAGE_COUNT);
     const safeUrls = [...imageUrls];
     while (safeUrls.length < MIN_IMAGE_COUNT) safeUrls.push('');
+    const videoUrls = [product.video, ...(product.galleryVideos || [])].filter(Boolean).slice(0, MAX_VIDEO_COUNT);
+    const safeVideoUrls = [...videoUrls];
+    while (safeVideoUrls.length < MIN_VIDEO_COUNT) safeVideoUrls.push('');
     window.setTimeout(() => {
       startTransition(() => {
         setFormData({
           name: product.name || '',
           description: product.description || '',
-          additionalInformation: normalizeProductContent(product.additionalInformation),
+          mainNote: product.mainNote || '',
+          keyFeatures: product.keyFeatures || '',
+          whatsIncluded: product.whatsIncluded || '',
+          importantNotes: product.importantNotes || '',
+          additionalInformation: product.additionalInformation || '',
           price: product.price || '',
+          salePrice: product.salePrice || '',
+          productType: resolveProductType(product),
           variantGroups: Array.isArray(product.variantPricing) && product.variantPricing.length > 0
             ? buildVariantGroupsFromPricing(product.variantPricing)
-            : [],
+            : [createEmptyVariantGroup()],
           variantPricing: Array.isArray(product.variantPricing) ? product.variantPricing : [],
           categories: product.categories || [],
           subcategories: product.subcategories || [],
@@ -756,31 +851,69 @@ function ProductManagement() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Price £ *</label>
-              <input
-                type="number"
-                name="price"
-                value={formData.price}
-                onChange={handleInputChange}
-                placeholder="0.00"
-                step="0.01"
-                className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
-                required
-              />
-              {hasConfiguredVariants(formData.variantGroups, formData.variantPricing) && (
-                <p className="mt-2 text-sm text-slate-500">
-                  Variant combination prices will drive the storefront min-max price display.
-                </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2">Product Type *</label>
+                <div className="relative">
+                  <select
+                    name="productType"
+                    value={formData.productType}
+                    onChange={handleInputChange}
+                    className="w-full appearance-none rounded-xl border-2 border-red-200 bg-white px-4 py-3 pr-10 font-semibold text-red-700 transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-red-100"
+                    required
+                  >
+                    <option value={PRODUCT_TYPES.SIMPLE}>Simple (Direct Buy)</option>
+                    <option value={PRODUCT_TYPES.VARIABLE}>Variable (Select Options)</option>
+                    <option value={PRODUCT_TYPES.CUSTOM}>Custom (Request Quote)</option>
+                  </select>
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-red-500">
+                    <svg viewBox="0 0 20 20" className="h-4 w-4 fill-current" aria-hidden="true">
+                      <path d="M5.2 7.2a.75.75 0 0 1 1.06 0L10 10.94l3.74-3.74a.75.75 0 1 1 1.06 1.06l-4.27 4.27a.75.75 0 0 1-1.06 0L5.2 8.26a.75.75 0 0 1 0-1.06Z" />
+                    </svg>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2">
+                  Price £ {formData.productType === PRODUCT_TYPES.CUSTOM ? '(optional)' : '*'}
+                </label>
+                <input
+                  type="number"
+                  name="price"
+                  value={formData.price}
+                  onChange={handleInputChange}
+                  placeholder="0.00"
+                  step="0.01"
+                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                  required={formData.productType !== PRODUCT_TYPES.CUSTOM}
+                />
+              </div>
+              {formData.productType !== PRODUCT_TYPES.CUSTOM && (
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2">Sale Price £ (optional)</label>
+                  <input
+                    type="number"
+                    name="salePrice"
+                    value={formData.salePrice}
+                    onChange={handleInputChange}
+                    placeholder="0.00"
+                    step="0.01"
+                    className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                  />
+                </div>
               )}
             </div>
 
-            <div className="rounded-xl border-2 border-gray-200 p-4">
+            {formData.productType === PRODUCT_TYPES.VARIABLE && (
+              <div className="rounded-xl border-2 border-gray-200 p-4">
                 <div className="mb-3">
                   <h5 className="text-lg font-bold text-gray-800">Attribute Groups</h5>
                 </div>
                 <p className="mb-3 text-sm text-gray-600">
-                  Leave this section empty for a simple product. Add attributes only when the product has variants like Color or Size.
+                  Create one attribute at a time (for example: Color), then add all values (Red, Blue, Green). Repeat for Size, Material, etc.
                 </p>
                 <div className="space-y-3">
                   {formData.variantGroups.map((group, groupIndex) => (
@@ -807,7 +940,7 @@ function ProductManagement() {
                               >
                                 Edit
                               </button>
-                              {formData.variantGroups.length > 0 && (
+                              {formData.variantGroups.length > 1 && (
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveVariantGroup(groupIndex)}
@@ -823,7 +956,7 @@ function ProductManagement() {
                         <>
                           <div className="mb-2 flex items-center justify-between">
                             <p className="text-sm font-semibold text-gray-700">Attribute #{groupIndex + 1}</p>
-                            {formData.variantGroups.length > 0 && (
+                            {formData.variantGroups.length > 1 && (
                               <button
                                 type="button"
                                 onClick={() => handleRemoveVariantGroup(groupIndex)}
@@ -904,12 +1037,11 @@ function ProductManagement() {
                       onClick={handleAddVariantGroup}
                       className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white transition hover:bg-red-800"
                     >
-                      {formData.variantGroups.length > 0 ? '+ Add Attribute' : 'Add Variants'}
+                      + Add Attribute
                     </button>
                     <button
                       type="button"
                       onClick={handleOpenVariantGrid}
-                      disabled={!hasConfiguredVariants(formData.variantGroups, formData.variantPricing)}
                       className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
                     >
                       Open Variant Grid
@@ -921,6 +1053,16 @@ function ProductManagement() {
                     )}
                   </div>
                 </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Main Note *</label>
+              <TipTapEditor
+                value={formData.mainNote}
+                onChange={(val) => setFormData((prev) => ({ ...prev, mainNote: val }))}
+                placeholder="Enter the main note for this product..."
+              />
             </div>
 
             <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/60 p-4 sm:p-5">
@@ -1085,6 +1227,111 @@ function ProductManagement() {
               </p>
             </div>
 
+            <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/60 p-4 sm:p-5">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="block text-gray-700 font-semibold">Product Videos (optional)</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddVideoSlot}
+                    disabled={formData.videoUrls.length >= MAX_VIDEO_COUNT}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    + Add Video
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRemoveLastVideoSlot}
+                    disabled={formData.videoUrls.length <= MIN_VIDEO_COUNT}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Remove Last
+                  </button>
+                </div>
+              </div>
+              <ul className="flex max-w-full gap-1.5 overflow-x-auto pb-1">
+                {formData.videoUrls.map((url, idx) => (
+                  <li
+                    key={`video-slot-${idx}`}
+                    draggable
+                    onDragStart={(e) => handleVideoDragStart(e, idx)}
+                    onDragEnter={() => setDragOverVideoIndex(idx)}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(e) => handleVideoDrop(e, idx)}
+                    onDragEnd={() => {
+                      setDraggedVideoIndex(null);
+                      setDragOverVideoIndex(null);
+                      setIsDraggingVideo(false);
+                    }}
+                    className={`group relative flex h-[98px] w-[78px] shrink-0 flex-col gap-0.5 rounded-md border px-1.5 py-1.5 text-xs font-medium transition-all duration-200 ${
+                      draggedVideoIndex === idx
+                        ? 'scale-[0.99] cursor-grabbing border-red-400 bg-red-50 shadow-lg ring-2 ring-red-200 opacity-35'
+                        : dragOverVideoIndex === idx
+                          ? 'cursor-grab border-red-400 bg-red-50/80 shadow-md ring-2 ring-red-200'
+                          : 'cursor-grab border-slate-200 bg-white text-slate-800 hover:bg-slate-50'
+                    }`}
+                  >
+                    {url && (
+                      <button
+                        type="button"
+                        onClick={() => handleVideoClear(idx)}
+                        aria-label={`Remove video ${idx + 1}`}
+                        className="absolute right-1.5 top-1 text-[12px] font-bold leading-none text-slate-500 transition hover:text-red-700"
+                      >
+                        X
+                      </button>
+                    )}
+                    <span className="inline-flex w-fit cursor-grab items-center text-slate-400 active:cursor-grabbing">
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <circle cx="9" cy="12" r="1" />
+                        <circle cx="9" cy="5" r="1" />
+                        <circle cx="9" cy="19" r="1" />
+                        <circle cx="15" cy="12" r="1" />
+                        <circle cx="15" cy="5" r="1" />
+                        <circle cx="15" cy="19" r="1" />
+                      </svg>
+                    </span>
+
+                    <label
+                      htmlFor={`video-upload-${idx}`}
+                      className={`mx-auto shrink-0 ${isDraggingVideo ? 'pointer-events-none' : 'cursor-pointer'}`}
+                    >
+                      {url ? (
+                        <video
+                          src={url}
+                          className="h-11 w-11 rounded object-cover ring-1 ring-slate-200"
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        <div className="flex h-11 w-11 items-center justify-center rounded border-2 border-dashed border-slate-300 bg-slate-50 text-[10px] font-semibold text-slate-500 transition group-hover:border-red-300 group-hover:bg-red-50/40">
+                          +
+                        </div>
+                      )}
+                    </label>
+                    <input
+                      id={`video-upload-${idx}`}
+                      type="file"
+                      accept="video/*"
+                      className="hidden"
+                      onChange={(e) => handleVideoFileChange(idx, e.target.files?.[0])}
+                    />
+                    <div className="min-w-0 flex-1 text-center">
+                      <p className="truncate text-[10px] font-semibold text-slate-700">
+                        {idx === 0 ? `Video ${idx + 1} (Main)` : `Video ${idx + 1}`}
+                      </p>
+                      <p className="text-[9px] text-slate-500">{url ? 'Uploaded' : 'Upload'}</p>
+                    </div>
+                    <div className="mt-auto" />
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-slate-500">Add optional product videos and drag to reorder; first video is main.</p>
+            </div>
+
             {/* Categories */}
             <div>
               <label className="block text-gray-700 font-semibold mb-3">Select Categories *</label>
@@ -1168,7 +1415,7 @@ function ProductManagement() {
         </div>
       )}
 
-      {showAddForm && showVariantGrid && (
+      {showAddForm && showVariantGrid && formData.productType === PRODUCT_TYPES.VARIABLE && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6">
           <div className="w-full max-w-5xl rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
@@ -1267,9 +1514,16 @@ function ProductManagement() {
                       {resolveProductType(product)}
                     </td>
                     <td className="px-3 py-4 align-top">
-                      <div className="break-words">
-                        <span className="text-sm font-bold text-accent">{getProductPriceDisplay(product).text}</span>
-                      </div>
+                      {resolveProductType(product) === PRODUCT_TYPES.CUSTOM ? (
+                        <span className="text-sm font-bold text-slate-600">Custom Pricing</span>
+                      ) : (
+                        <div className="break-words">
+                          <span className="text-sm font-bold text-accent">£{product.price}</span>
+                          {product.salePrice && (
+                            <span className="ml-2 text-xs text-gray-600 line-through">£{product.salePrice}</span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-4 align-top text-sm font-semibold text-gray-800">
                       {1 + (product.galleryImages?.length || 0)}
