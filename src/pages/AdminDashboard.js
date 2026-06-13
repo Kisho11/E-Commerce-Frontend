@@ -6,6 +6,7 @@ import { useProducts } from '../context/ProductContext';
 import ProductManagement from './ProductManagement';
 import CategoryManagement from './CategoryManagement';
 import IndustryManagement from './IndustryManagement';
+import InventoryManagement from './InventoryManagement';
 import ManagerManagement from './ManagerManagement';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import UiIcon from '../components/UiIcon';
@@ -253,7 +254,7 @@ function AdminDashboard() {
       <div className="container mx-auto px-4 py-8 sm:px-8">
         {/* Tabs */}
         <div className="flex gap-4 mb-8 overflow-x-auto border-b border-gray-300 pb-4">
-          {['overview', 'products', 'categories', 'industries', 'managers', 'orders', 'customers', 'reports'].map((tab) => (
+          {['overview', 'products', 'inventory', 'categories', 'industries', 'managers', 'orders', 'customers', 'reports'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -380,6 +381,17 @@ function AdminDashboard() {
         {/* Products Tab */}
         {activeTab === 'products' && (
           <ProductManagement />
+        )}
+
+        {/* Inventory Tab */}
+        {activeTab === 'inventory' && (
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h3 className="mb-6 flex items-center gap-2 text-2xl font-bold text-primary">
+              <UiIcon name="warehouse" className="h-6 w-6" />
+              Inventory Management
+            </h3>
+            <InventoryManagement />
+          </div>
         )}
 
         {/* Categories Tab */}

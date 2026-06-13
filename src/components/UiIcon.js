@@ -56,6 +56,12 @@ const iconPaths = {
       <circle cx="4" cy="18" r="1.2" />
     </>
   ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
+    </>
+  ),
   users: (
     <>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
@@ -215,6 +221,13 @@ const iconPaths = {
     <>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
+    </>
+  ),
+  warehouse: (
+    <>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.5 12 4l9 5.5V20H3V9.5Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 20v-6h6v6" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13h18" />
     </>
   ),
   table: (

@@ -138,6 +138,9 @@ function ProductManagement() {
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
 
   const industriesOptions = [
     'Tech shops', 'DIY', 'Greengrocer', 'Pound shop', 'Pet shop', 'Vape shop',
@@ -665,6 +668,19 @@ function ProductManagement() {
       setPendingDeleteProduct(null);
     }
   };
+
+  const filteredProducts = products.filter((p) => {
+    const q = productSearch.trim().toLowerCase();
+    if (q && !p.name.toLowerCase().includes(q) && !String(p.id).includes(q)) return false;
+    if (typeFilter !== 'all' && resolveProductType(p) !== typeFilter) return false;
+    if (statusFilter !== 'all') {
+      const avail = Math.max((p.inventory?.onHand ?? 0) - (p.inventory?.reserved ?? 0), 0);
+      if (statusFilter === 'out' && avail > 0) return false;
+      if (statusFilter === 'low' && !(avail > 0 && avail <= (p.inventory?.reorderLevel ?? 0))) return false;
+      if (statusFilter === 'healthy' && avail <= (p.inventory?.reorderLevel ?? 0)) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -1431,7 +1447,58 @@ function ProductManagement() {
       {/* Products List */}
       {!showAddForm && (
         <div className="bg-white rounded-xl shadow-md p-6">
-          <h4 className="text-xl font-bold text-gray-800 mb-6">All Products ({products.length})</h4>
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <h4 className="text-xl font-bold text-gray-800">
+              All Products
+              <span className="ml-2 text-base font-normal text-gray-500">
+                ({filteredProducts.length}{filteredProducts.length !== products.length ? ` of ${products.length}` : ''})
+              </span>
+            </h4>
+          </div>
+
+          {/* Search & Filters */}
+          <div className="mb-5 flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <UiIcon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                placeholder="Search by name or ID…"
+                className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-primary focus:outline-none"
+              />
+            </div>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            >
+              <option value="all">All Types</option>
+              <option value="simple">Simple</option>
+              <option value="variable">Variable</option>
+              <option value="custom">Custom</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            >
+              <option value="all">All Status</option>
+              <option value="healthy">Healthy</option>
+              <option value="low">Low Stock</option>
+              <option value="out">Out of Stock</option>
+            </select>
+            {(productSearch || typeFilter !== 'all' || statusFilter !== 'all') && (
+              <button
+                type="button"
+                onClick={() => { setProductSearch(''); setTypeFilter('all'); setStatusFilter('all'); }}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
           <div>
             <table className="w-full table-fixed">
               <thead className="bg-gray-100">
@@ -1449,7 +1516,16 @@ function ProductManagement() {
                 </tr>
               </thead>
               <tbody>
-                {products.map((product) => (
+                {filteredProducts.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="px-4 py-10 text-center text-sm text-gray-500">
+                      {productSearch || typeFilter !== 'all' || statusFilter !== 'all'
+                        ? 'No products match your filters.'
+                        : 'No products yet.'}
+                    </td>
+                  </tr>
+                )}
+                {filteredProducts.map((product) => (
                   <tr key={product.id} className="border-b border-gray-200 hover:bg-gray-50">
                     <td className="px-3 py-4 align-top text-sm font-semibold text-gray-800">#{product.id}</td>
                     <td className="px-3 py-4 align-top text-sm font-semibold text-gray-800 break-words">{product.name}</td>
