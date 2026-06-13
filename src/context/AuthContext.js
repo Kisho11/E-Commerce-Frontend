@@ -72,16 +72,6 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = REQUEST_TIMEOUT_M
   }
 };
 
-const decodeGoogleCredential = (credential) => {
-  try {
-    const [, payload] = credential.split('.');
-    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(window.atob(base64));
-  } catch (error) {
-    return null;
-  }
-};
-
 const mapManager = (manager) => ({
   id: manager.id,
   email: manager.email,
@@ -92,11 +82,25 @@ const mapManager = (manager) => ({
   temporaryPassword: manager.temporary_password || '',
 });
 
+const mapCustomer = (customer) => ({
+  id: customer.id,
+  email: customer.email,
+  name: customer.full_name,
+  phone: customer.phone || '',
+  role: normalizeRole(customer.role),
+  isActive: customer.is_active,
+  createdAt: customer.created_at,
+  orderCount: Number(customer.order_count || 0),
+  totalSpent: Number(customer.total_spent || 0),
+  lastOrderDate: customer.last_order_date || null,
+});
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => readStorage(AUTH_SESSION_KEY, null));
   const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(readStorage(AUTH_SESSION_KEY, null)));
   const [customerUsers, setCustomerUsers] = useState(() => readStorage(CUSTOMER_USERS_KEY, []));
   const [managers, setManagers] = useState([]);
+  const [registeredCustomers, setRegisteredCustomers] = useState([]);
 
   useEffect(() => {
     if (user) {
@@ -123,6 +127,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     setIsAuthenticated(false);
     setManagers([]);
+    setRegisteredCustomers([]);
     clearAuthStorage();
   }, []);
 
@@ -203,7 +208,7 @@ export function AuthProvider({ children }) {
     return response;
   }, [refreshSession]);
 
-  const login = useCallback(async (email, password, recaptchaToken = '') => {
+  const login = useCallback(async (email, password) => {
     if (!API_BASE_URL) {
       return { success: false, error: 'Backend authentication is not configured.' };
     }
@@ -212,7 +217,6 @@ export function AuthProvider({ children }) {
       const formData = new URLSearchParams();
       formData.append('username', email.trim().toLowerCase());
       formData.append('password', password);
-      formData.append('recaptcha_token', recaptchaToken);
 
       const loginResponse = await fetchWithTimeout(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
@@ -254,6 +258,8 @@ export function AuthProvider({ children }) {
         phone: profile.phone || '',
         role: normalizeRole(profile.role),
         isActive: profile.is_active,
+        isEmailVerified: profile.is_email_verified ?? false,
+        mustResetPassword: profile.must_reset_password ?? false,
         loginTime: new Date().toISOString(),
       };
 
@@ -298,9 +304,11 @@ export function AuthProvider({ children }) {
             phone: profile.phone || '',
             role: normalizeRole(profile.role),
             isActive: profile.is_active,
+            isEmailVerified: profile.is_email_verified ?? false,
+            mustResetPassword: profile.must_reset_password ?? false,
             loginTime: user.loginTime || new Date().toISOString(),
           };
-          const hasChanged = ['id', 'email', 'name', 'phone', 'role', 'isActive'].some(
+          const hasChanged = ['id', 'email', 'name', 'phone', 'role', 'isActive', 'isEmailVerified', 'mustResetPassword'].some(
             (key) => user?.[key] !== nextSession[key]
           );
           if (hasChanged) {
@@ -321,7 +329,7 @@ export function AuthProvider({ children }) {
     };
   }, [logout, setSession, user]);
 
-  const signUpCustomer = useCallback(async ({ name, email, password, recaptchaToken }) => {
+  const signUpCustomer = useCallback(async ({ name, email, password }) => {
     const normalizedEmail = email.trim().toLowerCase();
 
     if (API_BASE_URL) {
@@ -336,7 +344,6 @@ export function AuthProvider({ children }) {
             email: normalizedEmail,
             phone: null,
             password,
-            recaptcha_token: recaptchaToken,
           }),
         });
 
@@ -348,7 +355,7 @@ export function AuthProvider({ children }) {
           };
         }
 
-        return await login(normalizedEmail, password, recaptchaToken);
+        return await login(normalizedEmail, password);
       } catch (error) {
         return {
           success: false,
@@ -385,9 +392,9 @@ export function AuthProvider({ children }) {
     return { success: true, user: customerSession };
   }, [customerUsers, login, setSession]);
 
-  const signInCustomer = useCallback(async (email, password, recaptchaToken = '') => {
+  const signInCustomer = useCallback(async (email, password) => {
     if (API_BASE_URL) {
-      const result = await login(email, password, recaptchaToken);
+      const result = await login(email, password);
       if (!result.success) {
         return result;
       }
@@ -416,7 +423,7 @@ export function AuthProvider({ children }) {
     return { success: true, user: customerSession };
   }, [customerUsers, login, setSession]);
 
-  const requestPasswordReset = useCallback(async (email, recaptchaToken = '') => {
+  const requestPasswordReset = useCallback(async (email) => {
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!API_BASE_URL) {
@@ -436,7 +443,7 @@ export function AuthProvider({ children }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email: normalizedEmail, recaptcha_token: recaptchaToken }),
+        body: JSON.stringify({ email: normalizedEmail }),
       });
 
       const data = await response.json().catch(() => null);
@@ -460,7 +467,7 @@ export function AuthProvider({ children }) {
     }
   }, [customerUsers]);
 
-  const resetPassword = useCallback(async (resetToken, newPassword, recaptchaToken = '') => {
+  const resetPassword = useCallback(async (resetToken, newPassword) => {
     if (!API_BASE_URL) {
       return { success: false, error: 'Backend password reset is not configured.' };
     }
@@ -474,7 +481,6 @@ export function AuthProvider({ children }) {
         body: JSON.stringify({
           reset_token: resetToken.trim(),
           new_password: newPassword,
-          recaptcha_token: recaptchaToken,
         }),
       });
 
@@ -498,6 +504,73 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const markEmailVerified = useCallback(() => {
+    setUser((prev) => (prev ? { ...prev, isEmailVerified: true } : prev));
+  }, []);
+
+  const activateManagerAccount = useCallback(async (token) => {
+    if (!API_BASE_URL) {
+      return { success: false, error: 'Backend authentication is not configured.' };
+    }
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/auth/manager-activate?token=${encodeURIComponent(token)}`);
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        return { success: false, error: data?.detail || 'Invalid or expired activation link' };
+      }
+      const profile = data?.user;
+      if (!profile) {
+        return { success: false, error: 'Activation succeeded but profile could not be loaded' };
+      }
+      const sessionUser = {
+        id: profile.id,
+        email: profile.email,
+        name: profile.full_name,
+        phone: profile.phone || '',
+        role: normalizeRole(profile.role),
+        isActive: profile.is_active,
+        isEmailVerified: profile.is_email_verified ?? true,
+        mustResetPassword: profile.must_reset_password ?? true,
+        loginTime: new Date().toISOString(),
+      };
+      setSession(sessionUser);
+      return { success: true, user: sessionUser };
+    } catch (error) {
+      return { success: false, error: 'Unable to reach the server' };
+    }
+  }, [setSession]);
+
+  const setManagerPassword = useCallback(async (newPassword) => {
+    try {
+      const response = await authFetch('/auth/set-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_password: newPassword }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        return { success: false, error: data?.detail || 'Failed to set password' };
+      }
+      setUser((prev) => (prev ? { ...prev, mustResetPassword: false } : prev));
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Unable to reach the server' };
+    }
+  }, [authFetch]);
+
+  const resendVerificationEmail = useCallback(async () => {
+    try {
+      const response = await authFetch('/auth/resend-verification', { method: 'POST' });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        return { success: false, error: data?.detail || 'Failed to send verification email' };
+      }
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Unable to reach the server' };
+    }
+  }, [authFetch]);
+
   const loadManagers = useCallback(async () => {
     if (!API_BASE_URL) {
       return [];
@@ -510,16 +583,33 @@ export function AuthProvider({ children }) {
     return mappedManagers;
   }, [authFetch]);
 
+  const loadCustomers = useCallback(async () => {
+    if (!API_BASE_URL) {
+      return [];
+    }
+
+    const response = await authFetch('/admin/customers?per_page=100');
+    const data = await response.json().catch(() => null);
+    const rows = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+    const mappedCustomers = rows.map(mapCustomer);
+    setRegisteredCustomers(mappedCustomers);
+    return mappedCustomers;
+  }, [authFetch]);
+
   useEffect(() => {
     if (user?.role === 'admin') {
       loadManagers().catch(() => {
         setManagers([]);
       });
+      loadCustomers().catch(() => {
+        setRegisteredCustomers([]);
+      });
       return;
     }
 
     setManagers([]);
-  }, [loadManagers, user]);
+    setRegisteredCustomers([]);
+  }, [loadCustomers, loadManagers, user]);
 
   const addManager = useCallback(async (managerData) => {
     const response = await authFetch('/admin/managers', {
@@ -531,7 +621,6 @@ export function AuthProvider({ children }) {
         email: managerData.email.trim().toLowerCase(),
         full_name: managerData.name.trim(),
         phone: managerData.phone.trim() || null,
-        password: managerData.password?.trim() || null,
       }),
     });
 
@@ -769,6 +858,7 @@ export function AuthProvider({ children }) {
   const isCustomer = useCallback(() => normalizeRole(user?.role) === 'user', [user]);
   const isAdminOrManager = useCallback(() => user?.role === 'admin' || user?.role === 'manager', [user]);
 
+
   const value = useMemo(
     () => ({
       user,
@@ -778,6 +868,10 @@ export function AuthProvider({ children }) {
       signInCustomer,
       requestPasswordReset,
       resetPassword,
+      resendVerificationEmail,
+      markEmailVerified,
+      activateManagerAccount,
+      setManagerPassword,
       authWithGoogle,
       verifyEmail,
       resendVerification,
@@ -787,7 +881,9 @@ export function AuthProvider({ children }) {
       isCustomer,
       isAdminOrManager,
       managers,
+      registeredCustomers,
       loadManagers,
+      loadCustomers,
       addManager,
       updateManager,
       deleteManager,
@@ -802,6 +898,10 @@ export function AuthProvider({ children }) {
       signInCustomer,
       requestPasswordReset,
       resetPassword,
+      resendVerificationEmail,
+      markEmailVerified,
+      activateManagerAccount,
+      setManagerPassword,
       authWithGoogle,
       verifyEmail,
       resendVerification,
@@ -811,7 +911,9 @@ export function AuthProvider({ children }) {
       isCustomer,
       isAdminOrManager,
       managers,
+      registeredCustomers,
       loadManagers,
+      loadCustomers,
       addManager,
       updateManager,
       deleteManager,

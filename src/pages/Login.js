@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import UiIcon from '../components/UiIcon';
 import Seo from '../components/Seo';
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -10,8 +9,6 @@ function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const googleBtnRef = useRef(null);
-  const recaptchaRef = useRef(null);
-  const recaptchaWidgetIdRef = useRef(null);
 
   const { login, signUpCustomer, signInCustomer, requestPasswordReset, resetPassword, authWithGoogle } = useAuth();
 
@@ -36,14 +33,12 @@ function Login() {
   const [resendMessage, setResendMessage] = useState('');
 
   const [successMessage, setSuccessMessage] = useState('');
-  const [recaptchaToken, setRecaptchaToken] = useState('');
 
   const [error, setError] = useState('');
   const [googleError, setGoogleError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
-  const recaptchaSiteKey = process.env.REACT_APP_RECAPTCHA_SITE_KEY;
   const isCustomerMode = mode === 'customer-signin' || mode === 'customer-signup';
 
   useEffect(() => {
@@ -66,19 +61,11 @@ function Login() {
     }
   }, [searchParams]);
 
-  const resetRecaptcha = () => {
-    setRecaptchaToken('');
-    if (window.grecaptcha && recaptchaWidgetIdRef.current !== null) {
-      window.grecaptcha.reset(recaptchaWidgetIdRef.current);
-    }
-  };
-
   useEffect(() => {
     setError('');
     setGoogleError('');
     setSuccessMessage('');
     setShowForgotPassword(false);
-    resetRecaptcha();
   }, [mode]);
 
   // Lock page scroll
@@ -94,49 +81,6 @@ function Login() {
   }, []);
 
   // Google identity button
-  useEffect(() => {
-    if (!recaptchaSiteKey) return;
-
-    const scriptId = 'google-recaptcha-script';
-
-    const renderRecaptcha = () => {
-      if (!window.grecaptcha || !recaptchaRef.current || recaptchaWidgetIdRef.current !== null) return;
-
-      recaptchaWidgetIdRef.current = window.grecaptcha.render(recaptchaRef.current, {
-        sitekey: recaptchaSiteKey,
-        callback: (token) => setRecaptchaToken(token),
-        'expired-callback': () => setRecaptchaToken(''),
-        'error-callback': () => {
-          setRecaptchaToken('');
-          setError('reCAPTCHA failed to load. Please refresh and try again.');
-        },
-      });
-    };
-
-    if (window.grecaptcha) {
-      renderRecaptcha();
-      return undefined;
-    }
-
-    const existing = document.getElementById(scriptId);
-    if (existing) {
-      existing.addEventListener('load', renderRecaptcha);
-      return () => existing.removeEventListener('load', renderRecaptcha);
-    }
-
-    const script = document.createElement('script');
-    script.id = scriptId;
-    script.src = 'https://www.google.com/recaptcha/api.js?render=explicit';
-    script.async = true;
-    script.defer = true;
-    script.onload = renderRecaptcha;
-    document.body.appendChild(script);
-
-    return () => {
-      script.onload = null;
-    };
-  }, [recaptchaSiteKey]);
-
   useEffect(() => {
     if (!isCustomerMode || !googleClientId) return;
 
@@ -182,32 +126,6 @@ function Login() {
     return () => { script.onload = null; };
   }, [authWithGoogle, googleClientId, isCustomerMode, mode, navigate]);
 
-  useEffect(() => {
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-    const previousBodyOverflow = document.body.style.overflow;
-
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.documentElement.style.overflow = previousHtmlOverflow;
-      document.body.style.overflow = previousBodyOverflow;
-    };
-  }, []);
-
-  const ensureCaptcha = () => {
-    if (!recaptchaSiteKey) {
-      setError('reCAPTCHA is not configured for this environment.');
-      return false;
-    }
-
-    if (!recaptchaToken) {
-      setError('Please complete the reCAPTCHA challenge.');
-      return false;
-    }
-    return true;
-  };
-
   const handleStaffSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -215,14 +133,13 @@ function Login() {
     const recaptchaToken = await getRecaptchaToken();
     setLoading(true);
     try {
-      const result = await login(email, password, recaptchaToken);
+      const result = await login(email, password);
       if (result.success) {
         navigate(result.user.role === 'admin' ? '/admin/dashboard' : result.user.role === 'manager' ? '/manager/dashboard' : '/customer-portal');
       } else {
         setError(result.error);
       }
     } finally {
-      resetRecaptcha();
       setLoading(false);
     }
   };
@@ -234,7 +151,7 @@ function Login() {
     const recaptchaToken = await getRecaptchaToken();
     setLoading(true);
     try {
-      const result = await signInCustomer(email, password, recaptchaToken);
+      const result = await signInCustomer(email, password);
       if (result.success) {
         navigate(
           result.user.role === 'admin'
@@ -247,7 +164,6 @@ function Login() {
         setError(result.error);
       }
     } finally {
-      resetRecaptcha();
       setLoading(false);
     }
   };
@@ -269,14 +185,13 @@ function Login() {
     const recaptchaToken = await getRecaptchaToken();
     setLoading(true);
     try {
-      const result = await signUpCustomer({ name, email, password, recaptchaToken });
+      const result = await signUpCustomer({ name, email, password });
       if (result.success) {
         navigate('/customer-portal');
       } else {
         setError(result.error);
       }
     } finally {
-      resetRecaptcha();
       setLoading(false);
     }
   };
@@ -292,11 +207,10 @@ function Login() {
     }
 
     if (!resetToken.trim()) {
-      const result = await requestPasswordReset(resetEmail, recaptchaToken);
+      const result = await requestPasswordReset(resetEmail);
 
       if (!result.success) {
         setError(result.error);
-        resetRecaptcha();
         return;
       }
 
@@ -306,7 +220,6 @@ function Login() {
           ? 'Reset token generated. Paste or confirm the token below and choose a new password.'
           : result.message || 'If the account exists, a reset token has been prepared.'
       );
-      resetRecaptcha();
       return;
     }
 
@@ -320,11 +233,10 @@ function Login() {
       return;
     }
 
-    const result = await resetPassword(resetToken, newResetPassword, recaptchaToken);
+    const result = await resetPassword(resetToken, newResetPassword);
 
     if (!result.success) {
       setError(result.error);
-      resetRecaptcha();
       return;
     }
 
@@ -335,7 +247,6 @@ function Login() {
     setResetConfirmPassword('');
     setShowForgotPassword(false);
     setSuccessMessage(result.message || 'Password updated. You can now sign in with your new password.');
-    resetRecaptcha();
   };
 
   const currentSubmitHandler =
@@ -384,17 +295,64 @@ function Login() {
     );
   }
 
+  const title =
+    mode === 'customer-signup'
+      ? 'Create an account'
+      : mode === 'staff-signin'
+        ? 'Staff sign in'
+        : 'Welcome back';
+
+  const subtitle =
+    mode === 'customer-signup'
+      ? 'Create your Elamshelf customer account to save carts, request quotes, and order faster.'
+      : mode === 'staff-signin'
+        ? 'Use your staff credentials to access the admin or manager workspace.'
+        : 'Sign in to continue with your account, saved products, and checkout flow.';
+
   return (
-    <div className="flex h-[100svh] items-start justify-center overflow-hidden bg-gradient-to-br from-primary to-black px-3 py-3 sm:items-center sm:px-4 sm:py-4">
+    <main className="min-h-[100svh] bg-white md:h-screen md:overflow-hidden">
       <Seo title="Account Access" description="Sign in or create your Elmshelf account." noindex />
-      <div className="flex max-h-full w-full max-w-lg flex-col justify-start sm:justify-center">
-        <div className="mb-3 text-center sm:mb-6">
-          <div className="mb-2 flex justify-center text-white sm:mb-3">
-            <UiIcon name="box" className="h-10 w-10 sm:h-12 sm:w-12" />
+      <div className="grid min-h-[100svh] md:h-screen md:grid-cols-[0.82fr_1.18fr]">
+        <section className="relative hidden bg-black md:flex md:flex-col md:justify-between md:p-5 lg:p-6">
+          <div className="h-12" />
+
+          <div className="mx-auto flex h-full w-full max-w-md items-center justify-center">
+            <div className="w-full">
+              <div className={`${mode === 'staff-signin' ? 'mx-auto max-w-xs' : 'mx-auto max-w-sm'}`}>
+                <img
+                  src="/elms.png"
+                  className="aspect-[1.08/1] w-full object-contain"
+                  alt="Elmshelf logo"
+                />
+              </div>
+
+              <div className={`mt-6 ${mode === 'staff-signin' ? 'mx-auto max-w-xs text-center' : 'max-w-sm'}`}>
+                {mode !== 'staff-signin' ? (
+                  <>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-red-300">Built For Retail</p>
+                    <h2 className="mt-3 text-2xl font-black leading-tight text-white lg:text-[2rem]">
+                      Shelving, displays, and store equipment in one place.
+                    </h2>
+                    <p className="mt-3 text-sm leading-6 text-slate-300">
+                      Create an account, save products, request quotes, and move from browsing to ordering with less friction.
+                    </p>
+                  </>
+                ) : null}
+
+                {mode !== 'staff-signin' ? (
+                  <div className="mt-5 grid gap-2 text-sm text-slate-200">
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                      Fast access to products, quotes, and account activity
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                      Designed for convenience, grocery, pharmacy, and specialist retail
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
-          <h1 className="mb-1 text-2xl font-bold text-white sm:mb-2 sm:text-4xl">Elamshelf Access</h1>
-          <p className="text-xs text-blue-100 sm:text-base">Customer and staff authentication</p>
-        </div>
+        </section>
 
         <div className="max-h-[calc(100svh-8.5rem)] overflow-y-auto rounded-2xl bg-white p-3 shadow-2xl sm:max-h-[calc(100svh-10rem)] sm:p-8">
           {mode !== 'staff-signin' ? (
@@ -622,28 +580,24 @@ function Login() {
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 sm:mt-6">
               Staff access now uses the backend JWT login flow for both admin and manager accounts.
             </div>
-          )}
 
-          {isCustomerMode && (
-            <div className="mt-3 text-center text-sm text-slate-600 sm:mt-6">
-              {mode === 'customer-signin' ? (
-                <p>
-                  New customer?{' '}
-                  <Link to="/signup" className="font-semibold text-blue-700 hover:underline">
-                    Sign up with email or Google
-                  </Link>
-                </p>
-              ) : (
-                <p>
-                  Already have an account?{' '}
-                  <Link to="/login?mode=customer-signin" className="font-semibold text-blue-700 hover:underline">
+            <div className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-[0_16px_60px_rgba(15,23,42,0.08)] sm:p-5 md:p-4 lg:p-5">
+              {mode !== 'staff-signin' ? (
+                <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+                  <button
+                    onClick={() => setMode('customer-signin')}
+                    className={`rounded-2xl px-3 py-2 text-sm font-semibold transition ${mode === 'customer-signin' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
+                  >
                     Sign in
-                  </Link>
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+                  </button>
+                  <button
+                    onClick={() => setMode('customer-signup')}
+                    className={`rounded-2xl px-3 py-2 text-sm font-semibold transition ${mode === 'customer-signup' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
+                  >
+                    Sign up
+                  </button>
+                </div>
+              ) : null}
 
         <div className="mt-3 text-center sm:mt-6">
           <Link to="/" className="font-semibold text-white transition hover:text-blue-100">
@@ -651,7 +605,7 @@ function Login() {
           </Link>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 

@@ -12,7 +12,6 @@ function ManagerManagement() {
     email: '',
     name: '',
     phone: '',
-    password: '',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -22,7 +21,6 @@ function ManagerManagement() {
       email: '',
       name: '',
       phone: '',
-      password: '',
     });
     setEditingId(null);
     setError('');
@@ -90,12 +88,8 @@ function ManagerManagement() {
         await updateManager(editingId, formData);
         setSuccess('Manager updated successfully!');
       } else {
-        const createdManager = await addManager(formData);
-        setSuccess(
-          createdManager.temporaryPassword
-            ? `Manager added successfully. Temporary password: ${createdManager.temporaryPassword}`
-            : 'Manager added successfully!'
-        );
+        await addManager(formData);
+        setSuccess(`Invite sent to ${formData.email}. They will receive an email with their activation link.`);
       }
 
       resetForm();
@@ -112,7 +106,6 @@ function ManagerManagement() {
       email: manager.email,
       name: manager.name,
       phone: manager.phone,
-      password: '',
     });
     setEditingId(manager.id);
     setShowAddForm(true);
@@ -217,25 +210,11 @@ function ManagerManagement() {
             </div>
 
             {!editingId && (
-              <div>
-                <label className="block text-gray-700 font-semibold mb-2">Temporary Password</label>
-                <input
-                  type="text"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  placeholder="Leave blank to auto-generate"
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
-                />
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                <strong>Invite email will be sent automatically</strong> — the manager will receive an activation link
+                and a temporary password. They will be required to set a new password on first login.
               </div>
             )}
-
-            <div className="bg-blue-50 border-l-4 border-primary p-4 rounded">
-              <p className="text-sm text-gray-700">
-                <strong>Note:</strong> New managers will need to use their email as username at login.
-                They can change their password after first login.
-              </p>
-            </div>
 
             {/* Form Actions */}
             <div className="flex gap-4 pt-4 border-t-2 border-gray-200">
@@ -339,11 +318,13 @@ function ManagerManagement() {
       <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-6">
         <h4 className="mb-3 flex items-center gap-2 text-lg font-bold text-amber-900">
           <UiIcon name="info" className="h-5 w-5" />
-          Manager Access Information
+          Manager Onboarding Flow
         </h4>
         <div className="space-y-2 text-sm text-amber-900">
-          <p><strong>Login:</strong> Managers authenticate through the same JWT-based staff login as admins.</p>
-          <p><strong>For New Managers:</strong> Email address becomes their login username. Use a temporary password or leave it blank to auto-generate one.</p>
+          <p><strong>Step 1:</strong> Add a manager — an invite email is sent automatically with an activation link and temporary password.</p>
+          <p><strong>Step 2:</strong> The manager clicks the link, which logs them in and prompts them to set a new password.</p>
+          <p><strong>Step 3:</strong> After setting their password, they are redirected to the manager dashboard.</p>
+          <p><strong>Login:</strong> Managers sign in via the staff login page using their email and new password.</p>
         </div>
       </div>
     </div>

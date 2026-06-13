@@ -9,6 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CartToast from './components/CartToast';
+import EmailVerificationBanner from './components/EmailVerificationBanner';
 import CookieConsentBanner from './components/CookieConsentBanner';
 import AdvertPopup from './components/AdvertPopup';
 import QuickContactActions from './components/QuickContactActions';
@@ -36,6 +37,7 @@ function CustomerLayout() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
+      <EmailVerificationBanner />
       <CartToast />
       <main className="flex-grow">
         <Outlet />

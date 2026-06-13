@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
@@ -9,6 +9,12 @@ import UiIcon from '../components/UiIcon';
 function ManagerDashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+
+  useEffect(() => {
+    if (user?.mustResetPassword) {
+      navigate('/manager-activate', { replace: true });
+    }
+  }, [user, navigate]);
   const { orders } = useOrders();
   const { products, adjustStock, getInventorySummary } = useProducts();
 

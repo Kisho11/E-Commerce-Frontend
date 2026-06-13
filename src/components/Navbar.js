@@ -35,19 +35,12 @@ function Navbar() {
   const desktopActionClass =
     'inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold transition';
 
-  const navLinks = useMemo(() => {
-    const base = [
-      { to: '/about', label: t('nav.about') },
-      { to: '/clients', label: t('nav.clients') },
-      { to: '/catalogue', label: t('nav.catalogue') },
-    ];
-
-    if (isAuthenticated && (user?.role === 'customer' || user?.role === 'user')) {
-      return [...base, { to: '/categories', label: t('categories.categories') }];
-    }
-
-    return base;
-  }, [isAuthenticated, t, user]);
+  const navLinks = useMemo(() => [
+    { to: '/about', label: t('nav.about') },
+    { to: '/clients', label: t('nav.clients') },
+    { to: '/categories', label: t('categories.categories') },
+    { to: '/catalogue', label: t('nav.catalogue') },
+  ], [t]);
 
   const searchScopes = useMemo(
     () => [
@@ -180,7 +173,7 @@ function Navbar() {
               </Link>
             ))}
 
-            <div className="relative" ref={industryMenuRef}>
+            <div className="relative z-20" ref={industryMenuRef}>
               <button
                 onClick={() => setIsIndustryOpen((prev) => !prev)}
                 className="text-[20px] font-bold text-slate-100 transition hover:text-primary"
@@ -188,7 +181,7 @@ function Navbar() {
                 {t('nav.industries')}
               </button>
               {isIndustryOpen && (
-                <div className="absolute right-0 mt-3 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                <div className="absolute right-0 z-30 mt-3 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl">
                   {industries.map((industry) => (
                     <Link
                       key={industry.key}

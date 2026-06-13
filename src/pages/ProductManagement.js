@@ -130,6 +130,7 @@ function ProductManagement() {
     subcategories: [],
     industries: [],
     imageUrls: Array(MIN_IMAGE_COUNT).fill(''),
+    imageVariantAttrs: Array(MIN_IMAGE_COUNT).fill(null).map(() => ({})),
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -168,6 +169,7 @@ function ProductManagement() {
       subcategories: [],
       industries: [],
       imageUrls: Array(MIN_IMAGE_COUNT).fill(''),
+      imageVariantAttrs: Array(MIN_IMAGE_COUNT).fill(null).map(() => ({})),
     });
     setEditingId(null);
     setShowVariantGrid(false);
@@ -239,21 +241,31 @@ function ProductManagement() {
     setFormData((prev) => {
       const nextUrls = [...prev.imageUrls];
       nextUrls[index] = '';
-      return { ...prev, imageUrls: nextUrls };
+      const nextAttrs = [...(prev.imageVariantAttrs || [])];
+      nextAttrs[index] = {};
+      return { ...prev, imageUrls: nextUrls, imageVariantAttrs: nextAttrs };
     });
   };
 
   const handleAddImageSlot = () => {
     setFormData((prev) => {
       if (prev.imageUrls.length >= MAX_IMAGE_COUNT) return prev;
-      return { ...prev, imageUrls: [...prev.imageUrls, ''] };
+      return {
+        ...prev,
+        imageUrls: [...prev.imageUrls, ''],
+        imageVariantAttrs: [...(prev.imageVariantAttrs || []), {}],
+      };
     });
   };
 
   const handleRemoveLastImageSlot = () => {
     setFormData((prev) => {
       if (prev.imageUrls.length <= MIN_IMAGE_COUNT) return prev;
-      return { ...prev, imageUrls: prev.imageUrls.slice(0, -1) };
+      return {
+        ...prev,
+        imageUrls: prev.imageUrls.slice(0, -1),
+        imageVariantAttrs: (prev.imageVariantAttrs || []).slice(0, -1),
+      };
     });
   };
 
@@ -273,15 +285,27 @@ function ProductManagement() {
         const nextUrls = [...prev.imageUrls];
         const [moved] = nextUrls.splice(sourceIndex, 1);
         nextUrls.splice(targetIndex, 0, moved);
+        const nextAttrs = [...(prev.imageVariantAttrs || [])];
+        const [movedAttrs] = nextAttrs.splice(sourceIndex, 1);
+        nextAttrs.splice(targetIndex, 0, movedAttrs);
         return {
           ...prev,
           imageUrls: nextUrls,
+          imageVariantAttrs: nextAttrs,
         };
       });
     }
     setDraggedImageIndex(null);
     setDragOverImageIndex(null);
     setIsDraggingImage(false);
+  };
+
+  const handleImageVariantAttrChange = (imageIndex, attrName, value) => {
+    setFormData((prev) => {
+      const next = [...(prev.imageVariantAttrs || [])];
+      next[imageIndex] = { ...(next[imageIndex] || {}), [attrName]: value };
+      return { ...prev, imageVariantAttrs: next };
+    });
   };
 
   const handleVariantGroupChange = (index, value) => {
@@ -463,6 +487,16 @@ function ProductManagement() {
     const uniqueSizes = [...new Set(sizeValues)];
     const uniqueColors = [...new Set(colorValues)];
 
+    const variantImages = formData.imageUrls
+      .map((url, idx) => {
+        const trimmed = url.trim();
+        const attrs = (formData.imageVariantAttrs || [])[idx] || {};
+        const assignedAttrs = Object.fromEntries(Object.entries(attrs).filter(([, v]) => v));
+        if (!trimmed || Object.keys(assignedAttrs).length === 0) return null;
+        return { attributes: assignedAttrs, imageIndex: idx, imageUrl: trimmed };
+      })
+      .filter(Boolean);
+
     const payload = {
       name: formData.name,
       description: formData.description,
@@ -479,6 +513,7 @@ function ProductManagement() {
       image: mainImage,
       galleryImages: uploadedImageUrls.slice(1),
       imageCount: uploadedImageUrls.length,
+      variantImages,
     };
 
     try {
@@ -540,6 +575,21 @@ function ProductManagement() {
           subcategories: product.subcategories || [],
           industries: product.industries || [],
           imageUrls: safeUrls,
+          imageVariantAttrs: (() => {
+            const base = Array(safeUrls.length).fill(null).map(() => ({}));
+            (product.variantImages || []).forEach((vi) => {
+              let idx = -1;
+              if (typeof vi.imageIndex === 'number' && vi.imageIndex < safeUrls.length) {
+                idx = vi.imageIndex;
+              } else {
+                idx = safeUrls.indexOf(vi.imageUrl);
+              }
+              if (idx !== -1 && vi.attributes && typeof vi.attributes === 'object') {
+                base[idx] = { ...vi.attributes };
+              }
+            });
+            return base;
+          })(),
         });
         setIsPreparingEdit(false);
       });
@@ -873,32 +923,9 @@ function ProductManagement() {
                 </div>
             </div>
 
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Description *</label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                rows="4"
-                className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Additional Information</label>
-              <ProductContentEditor
-                value={formData.additionalInformation}
-                onChange={(nextValue) => setFormData((prev) => ({ ...prev, additionalInformation: nextValue }))}
-              />
-              <p className="mt-3 text-sm text-slate-500">
-                Stored as one structured object in `additionalInformation`, which maps cleanly to a single JSON column in a backend product table.
-              </p>
-            </div>
-
             <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/60 p-4 sm:p-5">
               <div className="mb-2 flex items-center justify-between gap-3">
-                <label className="block text-gray-700 font-semibold">Product Images (default 5, max 10)</label>
+                <label className="block text-gray-700 font-semibold">Product Images (max {MAX_IMAGE_COUNT})</label>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -963,7 +990,6 @@ function ProductManagement() {
                           <circle cx="15" cy="19" r="1" />
                         </svg>
                       </span>
-
                       <label
                         htmlFor={`image-upload-${idx}`}
                         className={`mx-auto shrink-0 ${isDraggingImage ? 'pointer-events-none' : 'cursor-pointer'}`}
@@ -997,7 +1023,66 @@ function ProductManagement() {
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 text-xs text-slate-500">Upload as many images as you want (up to 10). Drag to reorder; the first image is always the main image.</p>
+              <p className="mt-2 text-xs text-slate-500">Drag to reorder; the first image is always the main image.</p>
+
+              {getFinalizedVariantGroups(formData.variantGroups).length > 0 && formData.imageUrls.some(Boolean) && (
+                <div className="mt-4 border-t border-slate-200 pt-4">
+                  <p className="mb-1 text-sm font-semibold text-slate-700">Assign images to attribute combinations</p>
+                  <p className="mb-3 text-xs text-slate-500">
+                    Pick a value for each attribute to link an image to that variant. Leave an attribute as "Any" to keep the image as a general fallback.
+                  </p>
+                  <div className="space-y-3">
+                    {formData.imageUrls.map((url, idx) =>
+                      url ? (
+                        <div key={`img-variant-${idx}`} className="flex flex-wrap items-center gap-3">
+                          <img src={url} alt={`Image ${idx + 1}`} className="h-10 w-10 shrink-0 rounded object-cover ring-1 ring-slate-200" />
+                          <span className="w-20 shrink-0 text-xs font-semibold text-slate-600">
+                            {idx === 0 ? 'Image 1 (Main)' : `Image ${idx + 1}`}
+                          </span>
+                          {getFinalizedVariantGroups(formData.variantGroups).map((group) => (
+                            <div key={group.attribute} className="flex items-center gap-1.5">
+                              <span className="text-xs text-slate-500 font-medium">{group.attribute}:</span>
+                              <select
+                                value={(formData.imageVariantAttrs || [])[idx]?.[group.attribute] || ''}
+                                onChange={(e) => handleImageVariantAttrChange(idx, group.attribute, e.target.value)}
+                                className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+                              >
+                                <option value="">— Any —</option>
+                                {group.values.map((val) => (
+                                  <option key={val} value={val}>{val}</option>
+                                ))}
+                              </select>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Description *</label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+                rows="4"
+                className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Additional Information</label>
+              <ProductContentEditor
+                value={formData.additionalInformation}
+                onChange={(nextValue) => setFormData((prev) => ({ ...prev, additionalInformation: nextValue }))}
+              />
+              <p className="mt-3 text-sm text-slate-500">
+                Stored as one structured object in `additionalInformation`, which maps cleanly to a single JSON column in a backend product table.
+              </p>
             </div>
 
             {/* Categories */}

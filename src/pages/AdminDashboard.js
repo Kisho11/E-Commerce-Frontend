@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
@@ -11,8 +11,8 @@ import UiIcon from '../components/UiIcon';
 
 function AdminDashboard() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
-  const { orders } = useOrders();
+  const { user, logout, registeredCustomers, loadCustomers, authFetch } = useAuth();
+  const { orders, loadOrders } = useOrders();
   const { products } = useProducts();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -21,6 +21,7 @@ function AdminDashboard() {
   const [customerMinOrders, setCustomerMinOrders] = useState(0);
   const [customerSortBy, setCustomerSortBy] = useState('name');
   const [customerSortDir, setCustomerSortDir] = useState('asc');
+  const [dashboardStats, setDashboardStats] = useState(null);
 
   const sortedOrders = [...orders].sort(
     (a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)
@@ -28,18 +29,27 @@ function AdminDashboard() {
   const recentOrders = sortedOrders.slice(0, 5);
   const totalRevenue = orders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
   const pendingOrders = orders.filter((order) => order.status === 'Pending').length;
-  const customerRows = useMemo(() => {
+
+  const customerLookup = useMemo(
+    () => new Map(registeredCustomers.map((customer) => [Number(customer.id), customer])),
+    [registeredCustomers]
+  );
+
+  const customerOrderStats = useMemo(() => {
     const grouped = new Map();
+
     orders.forEach((order) => {
-      const customerName = order.customer || [order.customerFirstName, order.customerLastName].filter(Boolean).join(' ') || 'Unknown Customer';
-      const key = customerName.toLowerCase();
+      const customerIdKey = Number(order.customerId || order.userId || 0);
+      const emailKey = (order.customerEmail || '').trim().toLowerCase();
+      const nameKey = (order.customer || [order.customerFirstName, order.customerLastName].filter(Boolean).join(' ') || '').trim().toLowerCase();
       const addressObj = order.shippingAddress || {};
       const address = [addressObj.address, addressObj.city, addressObj.state, addressObj.zipCode].filter(Boolean).join(', ') || 'N/A';
 
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          key,
-          name: customerName,
+      const targetKey = customerIdKey || emailKey || nameKey;
+      if (!targetKey) return;
+
+      if (!grouped.has(targetKey)) {
+        grouped.set(targetKey, {
           email: order.customerEmail || 'N/A',
           phone: order.customerPhone || 'N/A',
           address,
@@ -47,31 +57,49 @@ function AdminDashboard() {
         });
       }
 
-      const row = grouped.get(key);
+      const row = grouped.get(targetKey);
       if (row.email === 'N/A' && order.customerEmail) row.email = order.customerEmail;
       if (row.phone === 'N/A' && order.customerPhone) row.phone = order.customerPhone;
       if (row.address === 'N/A' && address !== 'N/A') row.address = address;
       row.orders.push(order);
     });
 
-    return Array.from(grouped.values()).map((customer) => {
-      const totalSpent = customer.orders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
-      const sortedCustomerOrders = [...customer.orders].sort(
+    return grouped;
+  }, [orders]);
+
+  const customerRows = useMemo(() => {
+    return registeredCustomers.map((customer) => {
+      const orderData = customerOrderStats.get(Number(customer.id)) || {
+        email: customer.email,
+        phone: customer.phone || 'N/A',
+        address: 'N/A',
+        orders: [],
+      };
+      const computedTotalSpent = orderData.orders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
+      const totalSpent = customer.totalSpent || computedTotalSpent;
+      const sortedCustomerOrders = [...orderData.orders].sort(
         (a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)
       );
       const firstOrder = sortedCustomerOrders[sortedCustomerOrders.length - 1];
       const lastOrder = sortedCustomerOrders[0];
+      const orderCount = customer.orderCount || orderData.orders.length;
 
       return {
-        ...customer,
+        key: `customer-${customer.id}`,
+        id: customer.id,
+        name: customer.name || 'Unknown Customer',
+        email: customer.email || orderData.email || 'N/A',
+        phone: customer.phone || orderData.phone || 'N/A',
+        address: orderData.address || 'N/A',
+        isActive: customer.isActive,
         totalSpent,
-        orderCount: customer.orders.length,
-        joinDate: firstOrder?.date || 'N/A',
-        lastOrderDate: lastOrder?.date || 'N/A',
+        orderCount,
+        joinDate: customer.createdAt || firstOrder?.date || 'N/A',
+        lastOrderDate: customer.lastOrderDate || lastOrder?.date || 'N/A',
         orderHistory: sortedCustomerOrders,
       };
     });
-  }, [orders]);
+  }, [customerOrderStats, registeredCustomers]);
   const filteredSortedCustomers = useMemo(() => {
     const query = customerSearch.trim().toLowerCase();
     const filtered = customerRows.filter((customer) => {
@@ -139,16 +167,51 @@ function AdminDashboard() {
     );
   };
 
-  // Mock data for statistics
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      loadCustomers().catch(() => {});
+      loadOrders().catch(() => {});
+    }
+  }, [loadCustomers, loadOrders, user]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDashboardStats = async () => {
+      if (user?.role !== 'admin') {
+        setDashboardStats(null);
+        return;
+      }
+
+      try {
+        const response = await authFetch('/admin/dashboard');
+        const data = await response.json().catch(() => null);
+        if (!cancelled) {
+          setDashboardStats(data || null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setDashboardStats(null);
+        }
+      }
+    };
+
+    loadDashboardStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, user]);
+
   const stats = {
-    availableProducts: products.filter(
+    availableProducts: dashboardStats?.available_products ?? products.filter(
       (product) => Math.max((product.inventory?.onHand ?? 0) - (product.inventory?.reserved ?? 0), 0) > 0
     ).length,
-    totalOrders: orders.length,
-    totalRevenue,
-    totalCustomers: 856,
-    pendingOrders,
-    lowStockProducts: 8,
+    totalOrders: dashboardStats?.total_orders ?? orders.length,
+    totalRevenue: dashboardStats?.total_revenue ?? totalRevenue,
+    totalCustomers: dashboardStats?.total_customers ?? registeredCustomers.length,
+    pendingOrders: dashboardStats?.pending_orders ?? pendingOrders,
+    lowStockProducts: dashboardStats?.low_stock_count ?? 0,
   };
 
   const handleLogout = () => {
@@ -291,7 +354,7 @@ function AdminDashboard() {
                     {recentOrders.map((order) => (
                       <tr key={order.id} className="border-b border-gray-200 hover:bg-gray-50">
                         <td className="px-6 py-4 font-bold text-primary">#{order.id}</td>
-                        <td className="px-6 py-4">{order.customer}</td>
+                        <td className="px-6 py-4">{customerLookup.get(Number(order.customerId || order.userId || 0))?.name || order.customer || 'Unknown Customer'}</td>
                         <td className="px-6 py-4 font-semibold">${order.amount.toFixed(2)}</td>
                         <td className="px-6 py-4">
                           <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
@@ -351,7 +414,7 @@ function AdminDashboard() {
                   {sortedOrders.map((order) => (
                     <tr key={order.id} className="border-b border-gray-200 hover:bg-gray-50">
                       <td className="px-6 py-4 font-bold text-primary">#{order.id}</td>
-                      <td className="px-6 py-4">{order.customer}</td>
+                      <td className="px-6 py-4">{customerLookup.get(Number(order.customerId || order.userId || 0))?.name || order.customer || 'Unknown Customer'}</td>
                       <td className="px-6 py-4 font-semibold">${order.amount.toFixed(2)}</td>
                       <td className="px-6 py-4">
                         <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
@@ -450,7 +513,16 @@ function AdminDashboard() {
                 <tbody>
                   {filteredSortedCustomers.map((customer) => (
                     <tr key={customer.key} className="border-b border-gray-200 hover:bg-gray-50">
-                      <td className="px-6 py-4 font-bold text-gray-800">{customer.name}</td>
+                      <td className="px-6 py-4 font-bold text-gray-800">
+                        <div className="flex items-center gap-2">
+                          <span>{customer.name}</span>
+                          {!customer.isActive ? (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              Inactive
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
                       <td className="px-6 py-4 text-gray-600">{customer.email}</td>
                       <td className="px-6 py-4 text-gray-600">{customer.address}</td>
                       <td className="px-6 py-4 font-semibold text-gray-700">{customer.orderCount}</td>
@@ -543,7 +615,7 @@ function AdminDashboard() {
               <div className="mb-5 flex items-start justify-between">
                 <div>
                   <h3 className="text-2xl font-bold text-primary">{selectedCustomer.name}</h3>
-                  <p className="text-sm text-gray-600">Full customer details and order history</p>
+                  <p className="text-sm text-gray-600">Registered customer details and order history</p>
                 </div>
                 <button
                   type="button"
@@ -558,6 +630,7 @@ function AdminDashboard() {
                 <p className="text-sm text-gray-700"><span className="font-bold">Email:</span> {selectedCustomer.email}</p>
                 <p className="text-sm text-gray-700"><span className="font-bold">Phone:</span> {selectedCustomer.phone}</p>
                 <p className="text-sm text-gray-700 sm:col-span-2"><span className="font-bold">Address:</span> {selectedCustomer.address}</p>
+                <p className="text-sm text-gray-700"><span className="font-bold">Status:</span> {selectedCustomer.isActive ? 'Active' : 'Inactive'}</p>
                 <p className="text-sm text-gray-700"><span className="font-bold">Orders:</span> {selectedCustomer.orderCount}</p>
                 <p className="text-sm text-gray-700"><span className="font-bold">Total Spent:</span> ${selectedCustomer.totalSpent.toFixed(2)}</p>
                 <p className="text-sm text-gray-700"><span className="font-bold">Join Date:</span> {selectedCustomer.joinDate}</p>
@@ -566,26 +639,30 @@ function AdminDashboard() {
 
               <h4 className="mb-3 text-lg font-bold text-gray-800">Order History</h4>
               <div className="max-h-72 overflow-auto rounded-lg border border-gray-200">
-                <table className="w-full">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Order ID</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Date</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Status</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedCustomer.orderHistory.map((order) => (
-                      <tr key={order.id} className="border-t border-gray-100">
-                        <td className="px-4 py-2 text-sm font-semibold text-primary">#{order.id}</td>
-                        <td className="px-4 py-2 text-sm text-gray-600">{order.date}</td>
-                        <td className="px-4 py-2 text-sm text-gray-700">{order.status}</td>
-                        <td className="px-4 py-2 text-sm font-semibold text-gray-800">${Number(order.amount || 0).toFixed(2)}</td>
+                {selectedCustomer.orderHistory.length > 0 ? (
+                  <table className="w-full">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Order ID</th>
+                        <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Date</th>
+                        <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Status</th>
+                        <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Amount</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {selectedCustomer.orderHistory.map((order) => (
+                        <tr key={order.id} className="border-t border-gray-100">
+                          <td className="px-4 py-2 text-sm font-semibold text-primary">#{order.id}</td>
+                          <td className="px-4 py-2 text-sm text-gray-600">{order.date}</td>
+                          <td className="px-4 py-2 text-sm text-gray-700">{order.status}</td>
+                          <td className="px-4 py-2 text-sm font-semibold text-gray-800">${Number(order.amount || 0).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="px-4 py-6 text-sm text-gray-500">This customer has not placed any orders yet.</div>
+                )}
               </div>
             </div>
           </div>

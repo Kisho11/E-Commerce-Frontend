@@ -64,6 +64,12 @@ function ProductDetail() {
   const productType = useMemo(() => resolveProductType(product), [product]);
   const priceDisplay = useMemo(() => getProductPriceDisplay(product), [product]);
   const attributeOptions = useMemo(() => deriveAttributeOptions(product), [product]);
+  const gallery = useMemo(() => {
+    if (!product) return [];
+    return product.galleryImages?.length > 0
+      ? [product.image, ...product.galleryImages].filter(Boolean)
+      : [product.image, product.image, product.image, product.image].filter(Boolean);
+  }, [product]);
 
   useEffect(() => {
     setSelectedImageIndex(0);
@@ -77,6 +83,30 @@ function ProductDetail() {
     );
     setQuantity(1);
   }, [product?.id, attributeOptions]);
+
+  useEffect(() => {
+    const variantImages = product?.variantImages;
+    if (!variantImages?.length || !Object.keys(selectedAttributes).length) return;
+    let bestIdx = -1;
+    let bestScore = 0;
+    variantImages.forEach(({ attributes, imageUrl, imageIndex }) => {
+      if (!attributes) return;
+      let score = 0;
+      Object.entries(attributes).forEach(([attr, val]) => {
+        if (selectedAttributes[attr] === val) score++;
+      });
+      if (score > 0 && score > bestScore) {
+        let idx = -1;
+        if (typeof imageIndex === 'number' && imageIndex < gallery.length) {
+          idx = imageIndex;
+        } else if (imageUrl) {
+          idx = gallery.indexOf(imageUrl);
+        }
+        if (idx !== -1) { bestScore = score; bestIdx = idx; }
+      }
+    });
+    if (bestIdx !== -1) setSelectedImageIndex(bestIdx);
+  }, [selectedAttributes, product?.variantImages, gallery]);
 
   if (!product) {
     return (
@@ -93,10 +123,6 @@ function ProductDetail() {
     );
   }
 
-  const gallery =
-    product.galleryImages?.length > 0
-      ? [product.image, ...product.galleryImages].filter(Boolean)
-      : [product.image, product.image, product.image, product.image].filter(Boolean);
   const selectedImage = gallery[selectedImageIndex] || product.image;
   const breadcrumbs = [product.categories?.[0], product.industries?.[0], product.name].filter(Boolean);
   const productSchema = {

@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useOrders } from '../context/OrderContext';
+import { useAuth } from '../context/AuthContext';
 import UiIcon from '../components/UiIcon';
 import Seo from '../components/Seo';
 
 function Checkout() {
   const navigate = useNavigate();
-  const { cartItems, getTotalPrice, clearCart } = useCart();
-  const { placeOrder } = useOrders();
+  const { cartItems, getTotalPrice, clearCart, loadCart } = useCart();
+  const { placeOrder, loadOrders } = useOrders();
+  const { user, authFetch } = useAuth();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -25,11 +27,14 @@ function Checkout() {
 
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedOrder, setPlacedOrder] = useState(null);
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const subtotal = getTotalPrice();
   const taxRate = 0.1;
   const taxAmount = subtotal * taxRate;
   const shippingFee = 0;
   const totalWithTax = subtotal + taxAmount + shippingFee;
+  const requiresBackendCheckout = Boolean(process.env.REACT_APP_API_URL);
 
   if (cartItems.length === 0 && !orderPlaced) {
     return (
@@ -47,31 +52,44 @@ function Checkout() {
     );
   }
 
+  if (user && !user.isEmailVerified) {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center sm:px-8">
+        <Seo title="Checkout" description="Complete your Elmshelf checkout securely." noindex />
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
+          <svg className="h-8 w-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">Verify Your Email</h1>
+        <p className="text-lg text-gray-600 mb-2">You need to verify your email address before placing an order.</p>
+        <p className="text-sm text-gray-500 mb-8">Check your inbox for the verification link, or go to your account to resend it.</p>
+        <Link
+          to="/customer-portal"
+          className="inline-block bg-primary text-white px-8 py-3 rounded-lg hover:bg-red-700 transition font-semibold"
+        >
+          Go to My Account
+        </Link>
+      </div>
+    );
+  }
+
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setSubmitError('');
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // Validate form
-    if (
-      !formData.firstName ||
-      !formData.email ||
-      !formData.address ||
-      !formData.cardNumber
-    ) {
-      alert('Please fill in all required fields');
-      return;
-    }
-
+  const buildOrderPayload = () => {
     const fullName = `${formData.firstName} ${formData.lastName}`.trim();
     const sanitizedCardDigits = formData.cardNumber.replace(/\D/g, '');
     const cardLast4 = sanitizedCardDigits.slice(-4);
-    const createdOrder = placeOrder({
+
+    return {
+      customerId: user?.id ?? null,
       customerFirstName: formData.firstName,
       customerLastName: formData.lastName,
       customer: fullName || formData.firstName,
@@ -106,11 +124,93 @@ function Checkout() {
         selectedColor: item.selectedColor || null,
         selectedSize: item.selectedSize || null,
       })),
-    });
+    };
+  };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitError('');
+    // Validate form
+    if (
+      !formData.firstName ||
+      !formData.email ||
+      !formData.address ||
+      !formData.cardNumber
+    ) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    if (requiresBackendCheckout && (!user || user.role !== 'user')) {
+      setSubmitError('Please sign in with a customer account before checking out.');
+      navigate('/login?mode=customer-signin');
+      return;
+    }
+
+    if (requiresBackendCheckout) {
+      setSubmitting(true);
+      try {
+        const orderPayload = buildOrderPayload();
+        const addressResponse = await authFetch('/users/me/addresses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            full_name: orderPayload.customer,
+            phone: orderPayload.customerPhone || 'N/A',
+            address_line1: orderPayload.shippingAddress.address,
+            address_line2: null,
+            city: orderPayload.shippingAddress.city || '-',
+            state: orderPayload.shippingAddress.state || '-',
+            postal_code: orderPayload.shippingAddress.zipCode || '-',
+            country: 'GB',
+            is_default: false,
+          }),
+        });
+        const addressData = await addressResponse.json().catch(() => null);
+        if (!addressResponse.ok) {
+          throw new Error(addressData?.detail || 'Unable to save your shipping address');
+        }
+
+        const orderResponse = await authFetch('/orders/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            address_id: addressData.id,
+            notes: '',
+          }),
+        });
+        const orderData = await orderResponse.json().catch(() => null);
+        if (!orderResponse.ok) {
+          throw new Error(orderData?.detail || 'Unable to place your order');
+        }
+
+        const createdOrder = placeOrder({
+          ...orderPayload,
+          id: orderData?.id,
+        });
+
+        await clearCart();
+        await loadCart().catch(() => {});
+        await loadOrders().catch(() => {});
+        setPlacedOrder(createdOrder);
+        setOrderPlaced(true);
+        return;
+      } catch (error) {
+        setSubmitError(error.message || 'Unable to place your order');
+        return;
+      } finally {
+        setSubmitting(false);
+      }
+    }
+
+    const createdOrder = placeOrder(buildOrderPayload());
     setPlacedOrder(createdOrder);
     setOrderPlaced(true);
-    clearCart();
+    await clearCart();
   };
 
   if (orderPlaced) {
@@ -163,6 +263,11 @@ function Checkout() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Checkout Form */}
         <form onSubmit={handleSubmit} className="lg:col-span-2 space-y-6">
+          {submitError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {submitError}
+            </div>
+          ) : null}
           {/* Shipping Information */}
           <div className="bg-white p-8 rounded-xl shadow-md">
             <h2 className="mb-6 flex items-center gap-2 text-2xl font-bold text-primary">
@@ -346,9 +451,10 @@ function Checkout() {
             </button>
             <button
               type="submit"
-              className="flex-1 bg-accent text-primary py-3 rounded-lg font-bold hover:bg-yellow-600 transition shadow-md hover:shadow-lg"
+              disabled={submitting}
+              className="flex-1 bg-accent text-primary py-3 rounded-lg font-bold hover:bg-yellow-600 transition shadow-md hover:shadow-lg disabled:opacity-60"
             >
-              Place Order
+              {submitting ? 'Placing Order...' : 'Place Order'}
             </button>
           </div>
         </form>
