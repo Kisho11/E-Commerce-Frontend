@@ -326,7 +326,7 @@ function Navbar() {
           <div className="hidden items-center gap-2 md:flex xl:hidden">
             <Link
               to="/cart"
-              className="inline-flex items-center justify-center rounded-lg p-2 text-white outline-none ring-0 focus:outline-none focus:ring-0"
+              className="relative inline-flex items-center justify-center rounded-lg p-2 text-white outline-none ring-0 focus:outline-none focus:ring-0"
               onClick={handleNavigate}
               aria-label="Open cart"
             >
@@ -335,6 +335,11 @@ function Navbar() {
                 <circle cx="17" cy="20" r="1.5" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h2l2.2 10.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H7" />
               </svg>
+              {cartItemCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">
+                  {cartItemCount}
+                </span>
+              )}
             </Link>
             <button
               onClick={() => {
@@ -352,7 +357,7 @@ function Navbar() {
           <div className="flex items-center gap-2 md:hidden">
             <Link
               to="/cart"
-              className="inline-flex items-center justify-center rounded-lg p-2 text-white outline-none ring-0 focus:outline-none focus:ring-0"
+              className="relative inline-flex items-center justify-center rounded-lg p-2 text-white outline-none ring-0 focus:outline-none focus:ring-0"
               onClick={handleNavigate}
               aria-label="Open cart"
             >
@@ -361,6 +366,11 @@ function Navbar() {
                 <circle cx="17" cy="20" r="1.5" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h2l2.2 10.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H7" />
               </svg>
+              {cartItemCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">
+                  {cartItemCount}
+                </span>
+              )}
             </Link>
             <button
               onClick={() => {
