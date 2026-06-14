@@ -146,12 +146,19 @@ function ProductDetail() {
         },
   };
 
-  const handleAddToCart = (event) => {
+  const [cartError, setCartError] = useState('');
+
+  const handleAddToCart = async (event) => {
     event.preventDefault();
-    addToCart(product, {
-      attributes: selectedAttributes,
-      quantity,
-    });
+    setCartError('');
+    try {
+      await addToCart(product, {
+        attributes: selectedAttributes,
+        quantity,
+      });
+    } catch (err) {
+      setCartError(err.message || 'Could not add to cart. Please try again.');
+    }
   };
 
   const normalizeQuantity = (next) => {
@@ -365,6 +372,9 @@ function ProductDetail() {
                     Checkout
                   </button>
                 </div>
+              )}
+              {cartError && (
+                <p className="mt-3 text-sm font-medium text-red-600">{cartError}</p>
               )}
             </form>
 

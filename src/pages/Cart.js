@@ -62,7 +62,7 @@ function ShoppingCart() {
                   >
                     {item.name}
                   </Link>
-                  <p className="mb-2 text-xs text-slate-600 sm:mb-3 sm:text-sm">{item.description}</p>
+                  <p className="mb-2 text-xs text-slate-600 sm:mb-3 sm:text-sm line-clamp-2" dangerouslySetInnerHTML={{ __html: item.description }} />
                   <div className="flex flex-wrap gap-2 mb-3">
                     {formatSelectedAttributes(item).map((label) => (
                       <span key={`${item.lineId}-${label}`} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 sm:px-3 sm:py-1 sm:text-xs">
