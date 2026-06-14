@@ -62,7 +62,7 @@ function Login() {
         callback: async (response) => {
           const result = await authWithGoogle(response.credential);
           if (result.success) {
-            navigate('/customer-portal');
+            navigate('/');
           } else {
             setGoogleError(result.error || 'Google authentication failed');
           }
@@ -110,7 +110,7 @@ function Login() {
     try {
       const result = await login(email, password);
       if (result.success) {
-        navigate(result.user.role === 'admin' ? '/admin/dashboard' : result.user.role === 'manager' ? '/manager/dashboard' : '/customer-portal');
+        navigate(result.user.role === 'admin' ? '/admin/dashboard' : result.user.role === 'manager' ? '/manager/dashboard' : '/');
       } else {
         setError(result.error);
       }
@@ -133,7 +133,7 @@ function Login() {
             ? '/admin/dashboard'
             : result.user.role === 'manager'
               ? '/manager/dashboard'
-              : '/customer-portal'
+              : '/'
         );
       } else {
         setError(result.error);
@@ -162,7 +162,7 @@ function Login() {
     try {
       const result = await signUpCustomer({ name, email, password });
       if (result.success) {
-        navigate('/customer-portal');
+        navigate('/');
       } else {
         setError(result.error);
       }

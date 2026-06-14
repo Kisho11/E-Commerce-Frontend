@@ -1,4 +1,8 @@
 import React, { useMemo, useState } from 'react';
+import { useOrders } from '../context/OrderContext';
+import OrderDetailsModal from '../components/OrderDetailsModal';
+import Seo from '../components/Seo';
+
 const PROFILE_KEY = 'customerProfile';
 const PAYMENT_KEY = 'customerPaymentMethods';
 const CONSENT_KEY = 'customerConsents';
@@ -47,7 +51,19 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+const STATUS_COLORS = {
+  Pending: 'bg-yellow-100 text-yellow-800',
+  Confirmed: 'bg-blue-100 text-blue-800',
+  Processing: 'bg-purple-100 text-purple-800',
+  Shipped: 'bg-indigo-100 text-indigo-800',
+  Delivered: 'bg-green-100 text-green-800',
+  Cancelled: 'bg-red-100 text-red-800',
+};
+
 function CustomerPortal() {
+  const { orders } = useOrders();
+  const [selectedOrder, setSelectedOrder] = useState(null);
+
   const [profile, setProfile] = useState(() => readLocalStorage(PROFILE_KEY, defaultProfile));
   const [paymentMethods, setPaymentMethods] = useState(() => readLocalStorage(PAYMENT_KEY, []));
   const [consents, setConsents] = useState(() => readLocalStorage(CONSENT_KEY, defaultConsents));
@@ -200,6 +216,12 @@ function CustomerPortal() {
 
   return (
     <section className="shell py-10">
+      <Seo title="My Account" description="Manage your Elmshelf account, orders, and preferences." noindex />
+
+      {selectedOrder && (
+        <OrderDetailsModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
+      )}
+
       <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Customer account</p>
         <h1 className="mt-2 text-3xl font-bold text-slate-900 sm:text-4xl">Customer Portal</h1>
@@ -207,6 +229,53 @@ function CustomerPortal() {
           Manage your personal data with GDPR-focused controls: update details, control consent, export your data,
           and delete stored data.
         </p>
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6">
+        <h2 className="text-xl font-bold text-slate-900">Order History</h2>
+        <p className="mt-1 text-sm text-slate-600">Your previous orders, most recent first.</p>
+
+        {orders.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-500">No orders placed yet.</p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="pb-3 pr-4">Order</th>
+                  <th className="pb-3 pr-4">Date</th>
+                  <th className="pb-3 pr-4">Items</th>
+                  <th className="pb-3 pr-4">Total</th>
+                  <th className="pb-3 pr-4">Status</th>
+                  <th className="pb-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {orders.map((order) => (
+                  <tr key={order.id} className="hover:bg-slate-50">
+                    <td className="py-3 pr-4 font-semibold text-slate-900">#{order.id}</td>
+                    <td className="py-3 pr-4 text-slate-600">{order.date}</td>
+                    <td className="py-3 pr-4 text-slate-600">{order.items.length} item{order.items.length !== 1 ? 's' : ''}</td>
+                    <td className="py-3 pr-4 font-semibold text-slate-900">£{Number(order.amount).toFixed(2)}</td>
+                    <td className="py-3 pr-4">
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_COLORS[order.status] || 'bg-slate-100 text-slate-700'}`}>
+                        {order.status}
+                      </span>
+                    </td>
+                    <td className="py-3 text-right">
+                      <button
+                        onClick={() => setSelectedOrder(order)}
+                        className="text-xs font-semibold text-blue-700 hover:underline"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
