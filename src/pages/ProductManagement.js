@@ -1064,60 +1064,6 @@ function ProductManagement() {
               </div>
             )}
 
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Main Note *</label>
-              <TipTapEditor
-                value={formData.mainNote}
-                onChange={(val) => setFormData((prev) => ({ ...prev, mainNote: val }))}
-                placeholder="Enter the main note for this product..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Description</label>
-              <TipTapEditor
-                value={formData.description}
-                onChange={(val) => setFormData((prev) => ({ ...prev, description: val }))}
-                placeholder="Enter a product description..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Key Features</label>
-              <TipTapEditor
-                value={formData.keyFeatures}
-                onChange={(val) => setFormData((prev) => ({ ...prev, keyFeatures: val }))}
-                placeholder="List the key features of this product..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">What's Included</label>
-              <TipTapEditor
-                value={formData.whatsIncluded}
-                onChange={(val) => setFormData((prev) => ({ ...prev, whatsIncluded: val }))}
-                placeholder="Describe what's included with this product..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Important Notes</label>
-              <TipTapEditor
-                value={formData.importantNotes}
-                onChange={(val) => setFormData((prev) => ({ ...prev, importantNotes: val }))}
-                placeholder="Any important notes or warnings..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Additional Information</label>
-              <TipTapEditor
-                value={formData.additionalInformation}
-                onChange={(val) => setFormData((prev) => ({ ...prev, additionalInformation: val }))}
-                placeholder="Any additional information about this product..."
-              />
-            </div>
-
             <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/60 p-4 sm:p-5">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <label className="block text-gray-700 font-semibold">Product Images (default 5, max 10)</label>
@@ -1242,6 +1188,60 @@ function ProductManagement() {
                 ))}
               </ul>
               <p className="mt-2 text-xs text-slate-500">Upload as many images as you want (up to 10). Drag to reorder; the first image is always the main image.</p>
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Main Note *</label>
+              <TipTapEditor
+                value={formData.mainNote}
+                onChange={(val) => setFormData((prev) => ({ ...prev, mainNote: val }))}
+                placeholder="Enter the main note for this product..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Description</label>
+              <TipTapEditor
+                value={formData.description}
+                onChange={(val) => setFormData((prev) => ({ ...prev, description: val }))}
+                placeholder="Enter a product description..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Key Features</label>
+              <TipTapEditor
+                value={formData.keyFeatures}
+                onChange={(val) => setFormData((prev) => ({ ...prev, keyFeatures: val }))}
+                placeholder="List the key features of this product..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">What's Included</label>
+              <TipTapEditor
+                value={formData.whatsIncluded}
+                onChange={(val) => setFormData((prev) => ({ ...prev, whatsIncluded: val }))}
+                placeholder="Describe what's included with this product..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Important Notes</label>
+              <TipTapEditor
+                value={formData.importantNotes}
+                onChange={(val) => setFormData((prev) => ({ ...prev, importantNotes: val }))}
+                placeholder="Any important notes or warnings..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">Additional Information</label>
+              <TipTapEditor
+                value={formData.additionalInformation}
+                onChange={(val) => setFormData((prev) => ({ ...prev, additionalInformation: val }))}
+                placeholder="Any additional information about this product..."
+              />
             </div>
 
             <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/60 p-4 sm:p-5">
