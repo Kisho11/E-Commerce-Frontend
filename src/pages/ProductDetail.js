@@ -60,6 +60,7 @@ function ProductDetail() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isHoverZoomed, setIsHoverZoomed] = useState(false);
   const [zoomOrigin, setZoomOrigin] = useState('50% 50%');
+  const [cartError, setCartError] = useState('');
 
   const productType = useMemo(() => resolveProductType(product), [product]);
   const priceDisplay = useMemo(() => getProductPriceDisplay(product), [product]);
@@ -145,8 +146,6 @@ function ProductDetail() {
           url: window.location.href,
         },
   };
-
-  const [cartError, setCartError] = useState('');
 
   const handleAddToCart = async (event) => {
     event.preventDefault();
