@@ -637,7 +637,14 @@ function ProductManagement() {
       resetForm();
       setShowAddForm(false);
     } catch (err) {
-      setError(err.message || 'Unable to save product');
+      const message = err.message || 'Unable to save product';
+      if (message.toLowerCase().includes('product with this name already exists')) {
+        const duplicateName = formData.name.trim() || 'this product';
+        window.alert(`Warning: "${duplicateName}" already exists. Please use a unique product name.`);
+        setError('');
+      } else {
+        setError(message);
+      }
     } finally {
       setIsSaving(false);
     }

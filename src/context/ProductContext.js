@@ -316,7 +316,7 @@ const handleProtectedApiResponse = async (response, fallbackMessage) => {
 
   const errorData = await response.json().catch(() => null);
   const detail = errorData?.detail || fallbackMessage;
-  const isAuthError = response.status === 401 || response.status === 403;
+  const isAuthError = response.status === 401;
   const invalidCredentials = typeof detail === 'string' && detail.toLowerCase().includes('validate credentials');
 
   if (isAuthError || invalidCredentials) {

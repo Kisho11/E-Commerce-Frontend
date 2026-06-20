@@ -103,6 +103,11 @@ function CategoryManagement() {
     event.target.value = '';
   };
 
+  const showDuplicateCategoryWarning = (name) => {
+    const duplicateName = name.trim() || 'this category or subcategory';
+    window.alert(`Warning: "${duplicateName}" already exists. Please use a unique category or subcategory name.`);
+  };
+
   const handleAddCategory = async () => {
     setError('');
     setSuccess('');
@@ -113,7 +118,7 @@ function CategoryManagement() {
     }
 
     if (normalizedNames.includes(newCategoryName.trim().toLowerCase())) {
-      setError('A category or subcategory with this name already exists');
+      showDuplicateCategoryWarning(newCategoryName);
       return;
     }
 
@@ -130,7 +135,12 @@ function CategoryManagement() {
         setNewCategoryImageName('');
       }
     } catch (err) {
-      setError(err.message || 'Unable to add category');
+      const message = err.message || 'Unable to add category';
+      if (message.toLowerCase().includes('category or subcategory with this name already exists')) {
+        showDuplicateCategoryWarning(newCategoryName);
+      } else {
+        setError(message);
+      }
     }
   };
 
@@ -154,7 +164,7 @@ function CategoryManagement() {
     });
 
     if (duplicate) {
-      setError('A category or subcategory with this name already exists');
+      showDuplicateCategoryWarning(editName);
       return;
     }
 
@@ -166,7 +176,12 @@ function CategoryManagement() {
       setEditImage('');
       setEditCategoryImageName('');
     } catch (err) {
-      setError(err.message || 'Unable to update category');
+      const message = err.message || 'Unable to update category';
+      if (message.toLowerCase().includes('category or subcategory with this name already exists')) {
+        showDuplicateCategoryWarning(editName);
+      } else {
+        setError(message);
+      }
     }
   };
 
@@ -232,7 +247,7 @@ function CategoryManagement() {
     const duplicate = normalizedNames.includes(newSubcategoryName.trim().toLowerCase());
 
     if (duplicate) {
-      setError('A category or subcategory with this name already exists');
+      showDuplicateCategoryWarning(newSubcategoryName);
       return;
     }
 
@@ -247,7 +262,12 @@ function CategoryManagement() {
         closeSubcategoryEditor();
       }
     } catch (err) {
-      setError(err.message || 'Unable to add subcategory');
+      const message = err.message || 'Unable to add subcategory';
+      if (message.toLowerCase().includes('category or subcategory with this name already exists')) {
+        showDuplicateCategoryWarning(newSubcategoryName);
+      } else {
+        setError(message);
+      }
     }
   };
 
@@ -272,7 +292,7 @@ function CategoryManagement() {
     });
 
     if (duplicate) {
-      setError('A category or subcategory with this name already exists');
+      showDuplicateCategoryWarning(editSubcategoryName);
       return;
     }
 
@@ -284,7 +304,12 @@ function CategoryManagement() {
       setSuccess(`Subcategory "${editSubcategoryName}" updated successfully!`);
       closeEditSubcategoryEditor();
     } catch (err) {
-      setError(err.message || 'Unable to update subcategory');
+      const message = err.message || 'Unable to update subcategory';
+      if (message.toLowerCase().includes('category or subcategory with this name already exists')) {
+        showDuplicateCategoryWarning(editSubcategoryName);
+      } else {
+        setError(message);
+      }
     }
   };
 

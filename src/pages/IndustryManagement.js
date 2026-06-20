@@ -28,6 +28,11 @@ function IndustryManagement() {
     setTimeout(() => { setSuccess(''); setError(''); }, 4000);
   };
 
+  const showDuplicateIndustryWarning = (name) => {
+    const duplicateName = name.trim() || 'this industry';
+    window.alert(`Warning: "${duplicateName}" already exists. Please use a unique industry name.`);
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -54,7 +59,7 @@ function IndustryManagement() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, is_active: newActive }),
       });
-      if (res.status === 409) { flash('error', 'Industry already exists'); return; }
+      if (res.status === 409) { showDuplicateIndustryWarning(name); return; }
       if (!res.ok) throw new Error();
       setNewName('');
       setNewActive(true);
@@ -88,7 +93,7 @@ function IndustryManagement() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, is_active: editActive }),
       });
-      if (res.status === 409) { flash('error', 'Industry name already in use'); return; }
+      if (res.status === 409) { showDuplicateIndustryWarning(name); return; }
       if (!res.ok) throw new Error();
       setEditingId(null);
       flash('success', 'Industry updated');

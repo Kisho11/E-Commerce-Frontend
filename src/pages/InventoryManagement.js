@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useProducts } from '../context/ProductContext';
 import UiIcon from '../components/UiIcon';
 
-const PAGE_SIZE = 25;
+const ROW_COUNT_OPTIONS = [50, 100, 200, 500, 1000, 2000];
 
 const STATUS_COLORS = {
   Healthy: 'bg-green-100 text-green-800',
@@ -24,6 +24,14 @@ const MOVEMENT_TYPES = [
   { value: 'return', label: 'Customer Return' },
   { value: 'sale', label: 'Manual Sale' },
 ];
+
+const normalizeSearchText = (value) =>
+  String(value || '')
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^\w\s#-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 function SummaryCard({ label, value, color }) {
   const colors = {
@@ -46,7 +54,7 @@ function InventoryManagement() {
   const { products } = useProducts();
 
   const productMap = useMemo(
-    () => new Map(products.map((p) => [p.id, p])),
+    () => new Map(products.flatMap((p) => [[p.id, p], [Number(p.id), p], [String(p.id), p]])),
     [products]
   );
 
@@ -59,6 +67,7 @@ function InventoryManagement() {
   // Filters
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(1);
 
   // Modals
@@ -75,6 +84,11 @@ function InventoryManagement() {
   // Settings form state
   const [settingsForm, setSettingsForm] = useState({});
   const [settingsSaving, setSettingsSaving] = useState(false);
+
+  const getInventoryProductName = useCallback(
+    (inv) => inv?.product_name || productMap.get(inv?.product_id)?.name || `Product #${inv?.product_id || '-'}`,
+    [productMap]
+  );
 
   const flash = useCallback((type, msg) => {
     if (type === 'success') { setSuccess(msg); setError(''); }
@@ -93,7 +107,14 @@ function InventoryManagement() {
       const all = [];
       let p = 1;
       while (true) {
-        const res = await authFetch(`/inventory/?page=${p}&per_page=200`);
+        const params = new URLSearchParams({
+          page: String(p),
+          per_page: '200',
+        });
+        if (statusFilter !== 'all') params.set('status', statusFilter);
+        if (search.trim()) params.set('search', search.trim());
+
+        const res = await authFetch(`/inventory/?${params.toString()}`);
         if (!res.ok) throw new Error('Failed to load inventory');
         const batch = await res.json();
         all.push(...batch);
@@ -107,31 +128,41 @@ function InventoryManagement() {
     } finally {
       setLoading(false);
     }
-  }, [authFetch, flash, loadSummary]);
+  }, [authFetch, flash, loadSummary, search, statusFilter]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const terms = normalizeSearchText(search).split(' ').filter(Boolean);
     return inventory.filter((inv) => {
       if (statusFilter !== 'all' && inv.status !== statusFilter) return false;
-      if (q) {
+      if (terms.length > 0) {
         const product = productMap.get(inv.product_id);
-        const name = (product?.name || '').toLowerCase();
-        const id = String(inv.product_id);
-        const loc = (inv.location || '').toLowerCase();
-        if (!name.includes(q) && !id.includes(q) && !loc.includes(q)) return false;
+        const productName = inv.product_name || product?.name || '';
+        const searchableText = normalizeSearchText([
+          productName,
+          inv.product_id,
+          `#${inv.product_id}`,
+          inv.location,
+          inv.supplier,
+          inv.status,
+        ].join(' '));
+        if (!terms.every((term) => searchableText.includes(term))) return false;
       }
       return true;
     });
   }, [inventory, statusFilter, search, productMap]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const pageRows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleSearchChange = (e) => { setSearch(e.target.value); setPage(1); };
   const handleStatusChange = (e) => { setStatusFilter(e.target.value); setPage(1); };
+  const handlePageSizeChange = (e) => {
+    setPageSize(Number(e.target.value));
+    setPage(1);
+  };
 
   // Adjust modal
   const handleAdjustOpen = (inv) => {
@@ -271,6 +302,18 @@ function InventoryManagement() {
           <option value="Low Stock">Low Stock</option>
           <option value="Out of Stock">Out of Stock</option>
         </select>
+        <label className="flex items-center gap-2 text-sm text-gray-600">
+          <span>Rows</span>
+          <select
+            value={pageSize}
+            onChange={handlePageSizeChange}
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            {ROW_COUNT_OPTIONS.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </label>
         <button
           onClick={loadAll}
           className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
@@ -279,7 +322,7 @@ function InventoryManagement() {
         </button>
         {!loading && (
           <span className="ml-auto text-sm text-gray-500">
-            {filtered.length}{filtered.length !== inventory.length ? ` of ${inventory.length}` : ''} records
+            Showing {pageRows.length} of {filtered.length} {search.trim() || statusFilter !== 'all' ? 'matching records' : 'records'}
           </span>
         )}
       </div>
@@ -312,13 +355,11 @@ function InventoryManagement() {
                       : 'No inventory records found.'}
                   </td>
                 </tr>
-              ) : pageRows.map((inv) => {
-                const product = productMap.get(inv.product_id);
-                return (
+              ) : pageRows.map((inv) => (
                   <tr key={inv.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <p className="text-sm font-semibold leading-tight text-gray-800">
-                        {product?.name ?? `Product #${inv.product_id}`}
+                        {getInventoryProductName(inv)}
                       </p>
                       <p className="text-xs text-gray-400">#{inv.product_id}</p>
                     </td>
@@ -358,8 +399,7 @@ function InventoryManagement() {
                       </div>
                     </td>
                   </tr>
-                );
-              })}
+                ))}
             </tbody>
           </table>
         )}
@@ -408,7 +448,7 @@ function InventoryManagement() {
             <div className="border-b border-gray-200 px-6 py-4">
               <h3 className="text-lg font-bold text-gray-800">Adjust Stock</h3>
               <p className="mt-0.5 text-sm text-gray-500">
-                {productMap.get(adjustTarget.product_id)?.name ?? `Product #${adjustTarget.product_id}`}
+                {getInventoryProductName(adjustTarget)}
               </p>
             </div>
             <form onSubmit={handleAdjustSubmit} className="space-y-4 px-6 py-5">
@@ -507,7 +547,7 @@ function InventoryManagement() {
             <div className="border-b border-gray-200 px-6 py-4">
               <h3 className="text-lg font-bold text-gray-800">Inventory Settings</h3>
               <p className="mt-0.5 text-sm text-gray-500">
-                {productMap.get(settingsTarget.product_id)?.name ?? `Product #${settingsTarget.product_id}`}
+                {getInventoryProductName(settingsTarget)}
               </p>
             </div>
             <form onSubmit={handleSettingsSave} className="space-y-4 px-6 py-5">
@@ -603,7 +643,7 @@ function InventoryManagement() {
               <div>
                 <h3 className="text-lg font-bold text-gray-800">Movement History</h3>
                 <p className="mt-0.5 text-sm text-gray-500">
-                  {productMap.get(historyTarget.product_id)?.name ?? `Product #${historyTarget.product_id}`}
+                  {getInventoryProductName(historyTarget)}
                   {' · '}On hand: <span className="font-semibold text-gray-700">{historyTarget.on_hand}</span>
                 </p>
               </div>
