@@ -17,7 +17,8 @@ const normalizeRole = (role) => {
 
 const readStorage = (key, fallback) => {
   try {
-    const raw = localStorage.getItem(key);
+    const storage = key === AUTH_SESSION_KEY ? sessionStorage : localStorage;
+    const raw = storage.getItem(key);
     return raw ? JSON.parse(raw) : fallback;
   } catch (error) {
     return fallback;
@@ -25,10 +26,12 @@ const readStorage = (key, fallback) => {
 };
 
 const writeStorage = (key, value) => {
-  localStorage.setItem(key, JSON.stringify(value));
+  const storage = key === AUTH_SESSION_KEY ? sessionStorage : localStorage;
+  storage.setItem(key, JSON.stringify(value));
 };
 
 const clearAuthStorage = () => {
+  sessionStorage.removeItem(AUTH_SESSION_KEY);
   localStorage.removeItem(AUTH_SESSION_KEY);
 };
 
