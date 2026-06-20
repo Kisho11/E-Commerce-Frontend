@@ -7,9 +7,11 @@ function CategoryManagement() {
 
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryImage, setNewCategoryImage] = useState('');
+  const [newCategoryImageName, setNewCategoryImageName] = useState('');
   const [editingCategory, setEditingCategory] = useState(null);
   const [editName, setEditName] = useState('');
   const [editImage, setEditImage] = useState('');
+  const [editCategoryImageName, setEditCategoryImageName] = useState('');
   const [addingSubcategoryFor, setAddingSubcategoryFor] = useState(null);
   const [newSubcategoryName, setNewSubcategoryName] = useState('');
   const [newSubcategoryImage, setNewSubcategoryImage] = useState('');
@@ -64,28 +66,30 @@ function CategoryManagement() {
     return items;
   }, [filteredCategories, sortOption]);
 
-  const readImageFile = (file, onLoad) => {
+  const readImageFile = (file, onLoad, onNameLoad) => {
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file');
+    const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedImageTypes.includes(file.type)) {
+      setError('Please upload a JPG, PNG, WebP, or GIF image');
       return;
     }
 
     const reader = new FileReader();
     reader.onload = () => {
       onLoad(typeof reader.result === 'string' ? reader.result : '');
+      if (onNameLoad) onNameLoad(file.name);
       setError('');
     };
     reader.readAsDataURL(file);
   };
 
   const handleNewCategoryImageChange = (event) => {
-    readImageFile(event.target.files?.[0], setNewCategoryImage);
+    readImageFile(event.target.files?.[0], setNewCategoryImage, setNewCategoryImageName);
     event.target.value = '';
   };
 
   const handleEditCategoryImageChange = (event) => {
-    readImageFile(event.target.files?.[0], setEditImage);
+    readImageFile(event.target.files?.[0], setEditImage, setEditCategoryImageName);
     event.target.value = '';
   };
 
@@ -123,6 +127,7 @@ function CategoryManagement() {
         setSuccess(`Category "${newCategoryName}" added successfully!`);
         setNewCategoryName('');
         setNewCategoryImage('');
+        setNewCategoryImageName('');
       }
     } catch (err) {
       setError(err.message || 'Unable to add category');
@@ -139,8 +144,10 @@ function CategoryManagement() {
     }
 
     const normalizedEditName = editName.trim().toLowerCase();
-    const duplicate = categories.some((category) => {
-      if (category.name !== oldName && category.name.toLowerCase() === normalizedEditName) return true;
+    const normalizedOldName = oldName.trim().toLowerCase();
+    const isRenamingCategory = normalizedEditName !== normalizedOldName;
+    const duplicate = isRenamingCategory && categories.some((category) => {
+      if (category.name.toLowerCase() === normalizedEditName) return true;
       return (category.subcategories || []).some(
         (subcategory) => subcategory.name.toLowerCase() === normalizedEditName
       );
@@ -157,6 +164,7 @@ function CategoryManagement() {
       setEditingCategory(null);
       setEditName('');
       setEditImage('');
+      setEditCategoryImageName('');
     } catch (err) {
       setError(err.message || 'Unable to update category');
     }
@@ -173,6 +181,7 @@ function CategoryManagement() {
     setEditingCategory(category.name);
     setEditName(category.name);
     setEditImage(category.image || '');
+    setEditCategoryImageName(category.image ? 'Current image' : '');
   };
 
   const openAddSubcategoryEditor = (categoryName) => {
@@ -194,6 +203,7 @@ function CategoryManagement() {
     setEditingCategory(null);
     setEditName('');
     setEditImage('');
+    setEditCategoryImageName('');
   };
 
   const closeSubcategoryEditor = () => {
@@ -356,7 +366,9 @@ function CategoryManagement() {
                   onChange={handleNewCategoryImageChange}
                   className="hidden"
                 />
-                <span className="truncate">{newCategoryImage ? 'Image selected' : 'Upload Category Image'}</span>
+                <span className="truncate">
+                  {newCategoryImageName || (newCategoryImage ? 'Image selected' : 'Upload Category Image')}
+                </span>
                 {newCategoryImage ? (
                   <span className="flex items-center gap-2 rounded-lg bg-slate-100 px-2 py-1 text-xs text-slate-600">
                     <span className="h-6 w-6 overflow-hidden rounded bg-white">
@@ -519,14 +531,21 @@ function CategoryManagement() {
                       autoFocus
                       placeholder="Category name"
                     />
-                    <label className="flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-primary hover:text-primary">
+                    <label
+                      htmlFor="edit-category-image"
+                      className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-primary hover:text-primary"
+                    >
                       <input
+                        id="edit-category-image"
                         type="file"
                         accept="image/*"
                         onChange={handleEditCategoryImageChange}
-                        className="hidden"
+                        className="sr-only"
                       />
-                      Upload Category Image
+                      <span>{editImage ? 'Change Category Image' : 'Upload Category Image'}</span>
+                      <span className="max-w-[130px] truncate text-xs font-medium text-slate-400">
+                        {editCategoryImageName || 'No image'}
+                      </span>
                     </label>
                     {editImage ? (
                       <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">

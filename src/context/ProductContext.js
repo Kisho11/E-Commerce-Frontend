@@ -965,7 +965,9 @@ export function ProductProvider({ children }) {
     const existingCategory = categories.find((c) => c.name === oldName);
     if (!existingCategory) return false;
 
-    if (hasCategoryNameConflict(payload.name, [oldName])) {
+    const isRenamingCategory = payload.name.trim().toLowerCase() !== oldName.trim().toLowerCase();
+
+    if (isRenamingCategory && hasCategoryNameConflict(payload.name, [oldName])) {
       throw new Error('A category or subcategory with this name already exists');
     }
 
@@ -978,30 +980,43 @@ export function ProductProvider({ children }) {
 
     if (API_BASE_URL) {
       const imageIsDataUrl = payload.image.startsWith('data:');
-      const updateResponse = await fetch(`${API_BASE_URL}/categories/${existingCategory.id}`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...createAuthHeaders(),
-        },
-        body: JSON.stringify({
-          name: payload.name,
-          image_url: imageIsDataUrl ? undefined : (payload.image || existingCategory.image || null),
-        }),
-      });
+      const categoryPayload = {};
+      if (isRenamingCategory) categoryPayload.name = payload.name;
 
-      await handleProtectedApiResponse(updateResponse, 'Failed to update category in the backend');
+      if (!imageIsDataUrl && payload.image && payload.image !== existingCategory.image) {
+        categoryPayload.image_url = payload.image;
+      }
 
-      const updatedCategory = await updateResponse.json();
+      let updatedCategory = {
+        ...existingCategory,
+        image_url: existingCategory.image,
+        children: existingCategory.subcategories || [],
+      };
+
+      if (Object.keys(categoryPayload).length > 0) {
+        const updateResponse = await fetch(`${API_BASE_URL}/categories/${existingCategory.id}`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            ...createAuthHeaders(),
+          },
+          body: JSON.stringify(categoryPayload),
+        });
+
+        await handleProtectedApiResponse(updateResponse, 'Failed to update category in the backend');
+        updatedCategory = await updateResponse.json();
+      }
+
       let imageUrl = updatedCategory.image_url || payload.image || existingCategory.image || '';
 
       if (imageIsDataUrl) {
         const file = await dataUrlToFile(payload.image, updatedCategory.slug || updatedCategory.name || 'category');
         const formData = new FormData();
         formData.append('file', file);
+        const uploadCategoryId = updatedCategory.id || existingCategory.id;
 
-        const uploadResponse = await fetch(`${API_BASE_URL}/categories/${existingCategory.id}/image`, {
+        const uploadResponse = await fetch(`${API_BASE_URL}/categories/${uploadCategoryId}/image`, {
           method: 'POST',
           credentials: 'include',
           headers: createAuthHeaders(),
