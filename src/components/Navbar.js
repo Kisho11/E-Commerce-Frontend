@@ -285,7 +285,7 @@ function Navbar() {
                     to="/customer-portal"
                     className={`${desktopActionClass} bg-primary text-white hover:bg-red-700`}
                   >
-                    {t('nav.myAccount')}
+                    {user?.name?.split(' ')[0] || t('nav.myAccount')}
                   </Link>
                 ) : (
                   <Link
@@ -487,7 +487,7 @@ function Navbar() {
                         className="block rounded-lg bg-primary px-3 py-2 text-center text-sm font-semibold text-white"
                         onClick={handleNavigate}
                       >
-                        {t('nav.myAccount')}
+                        {user?.name?.split(' ')[0] || t('nav.myAccount')}
                       </Link>
                     ) : (
                       <Link
