@@ -122,7 +122,7 @@ const mapOrderFromApi = (order = {}) => {
           quantity: item.quantity,
           price: Number(item.unit_price || 0),
           total: Number(item.total_price || 0),
-          name: item.product?.name || '',
+          name: item.product_name || item.product?.name || `Product #${item.product_id}`,
         }))
       : [],
     status: typeof order.status === 'string' ? order.status.charAt(0).toUpperCase() + order.status.slice(1) : 'Pending',

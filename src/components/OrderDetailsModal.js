@@ -26,11 +26,11 @@ function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
   if (!order) return null;
 
   return (
-    <div className="order-print-overlay fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center">
-      <div className="order-print-panel w-full max-w-4xl rounded-xl bg-white p-6 shadow-2xl">
-        <div className="mb-5 flex items-start justify-between gap-3 border-b border-gray-200 pb-4">
+    <div className="order-print-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
+      <div className="order-print-panel flex h-[82svh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 sm:px-5">
           <div>
-            <h3 className={`text-2xl font-bold ${accentClass}`}>Order #{order.id}</h3>
+            <h3 className={`text-xl font-bold ${accentClass}`}>Order #{order.id}</h3>
             <p className="text-sm text-gray-600">Placed: {formatDateTime(order)}</p>
           </div>
           <div className="no-print flex gap-2">
@@ -49,42 +49,43 @@ function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <section className="rounded-lg border border-gray-200 p-4">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Order Meta</p>
-            <p><strong>Status:</strong> {order.status}</p>
-            <p><strong>Date:</strong> {order.date || '-'}</p>
-            <p><strong>Time:</strong> {order.orderTime || '-'}</p>
-            <p><strong>Created At:</strong> {order.createdAt || '-'}</p>
-            <p><strong>Source:</strong> {order.source || '-'}</p>
-          </section>
+        <div className="overflow-y-scroll px-4 py-4 text-sm sm:px-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <section className="rounded-lg border border-gray-200 p-3">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Order Meta</p>
+              <p><strong>Status:</strong> {order.status}</p>
+              <p><strong>Date:</strong> {order.date || '-'}</p>
+              <p><strong>Time:</strong> {order.orderTime || '-'}</p>
+              <p><strong>Created At:</strong> {order.createdAt || '-'}</p>
+              <p><strong>Source:</strong> {order.source || '-'}</p>
+            </section>
 
-          <section className="rounded-lg border border-gray-200 p-4">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Customer</p>
-            <p><strong>Name:</strong> {order.customer || '-'}</p>
-            <p><strong>First Name:</strong> {order.customerFirstName || '-'}</p>
-            <p><strong>Last Name:</strong> {order.customerLastName || '-'}</p>
-            <p><strong>Email:</strong> {order.customerEmail || '-'}</p>
-            <p><strong>Phone:</strong> {order.customerPhone || '-'}</p>
-          </section>
+            <section className="rounded-lg border border-gray-200 p-3">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Customer</p>
+              <p><strong>Name:</strong> {order.customer || '-'}</p>
+              <p><strong>First Name:</strong> {order.customerFirstName || '-'}</p>
+              <p><strong>Last Name:</strong> {order.customerLastName || '-'}</p>
+              <p><strong>Email:</strong> {order.customerEmail || '-'}</p>
+              <p><strong>Phone:</strong> {order.customerPhone || '-'}</p>
+            </section>
 
-          <section className="rounded-lg border border-gray-200 p-4">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Shipping</p>
-            <p><strong>Address:</strong> {order.shippingAddress?.address || '-'}</p>
-            <p><strong>City:</strong> {order.shippingAddress?.city || '-'}</p>
-            <p><strong>State:</strong> {order.shippingAddress?.state || '-'}</p>
-            <p><strong>ZIP:</strong> {order.shippingAddress?.zipCode || '-'}</p>
-          </section>
+            <section className="rounded-lg border border-gray-200 p-3">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Shipping</p>
+              <p><strong>Address:</strong> {order.shippingAddress?.address || '-'}</p>
+              <p><strong>City:</strong> {order.shippingAddress?.city || '-'}</p>
+              <p><strong>State:</strong> {order.shippingAddress?.state || '-'}</p>
+              <p><strong>ZIP:</strong> {order.shippingAddress?.zipCode || '-'}</p>
+            </section>
 
-          <section className="rounded-lg border border-gray-200 p-4">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Payment</p>
-            <p><strong>Method:</strong> {order.payment?.method || '-'}</p>
-            <p><strong>Card Last 4:</strong> {order.payment?.cardLast4 ? `**** ${order.payment.cardLast4}` : '-'}</p>
-            <p><strong>Expiry:</strong> {order.payment?.expiryDate || '-'}</p>
-          </section>
-        </div>
+            <section className="rounded-lg border border-gray-200 p-3">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Payment</p>
+              <p><strong>Method:</strong> {order.payment?.method || '-'}</p>
+              <p><strong>Card Last 4:</strong> {order.payment?.cardLast4 ? `**** ${order.payment.cardLast4}` : '-'}</p>
+              <p><strong>Expiry:</strong> {order.payment?.expiryDate || '-'}</p>
+            </section>
+          </div>
 
-        <section className="mt-4 rounded-lg border border-gray-200 p-4">
+        <section className="mt-3 rounded-lg border border-gray-200 p-3">
           <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Pricing</p>
           <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
             <p><strong>Subtotal:</strong> {formatCurrency(order.pricing?.subtotal)}</p>
@@ -95,7 +96,7 @@ function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
           </div>
         </section>
 
-        <section className="mt-4 rounded-lg border border-gray-200 p-4">
+        <section className="mt-3 rounded-lg border border-gray-200 p-3">
           <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Items</p>
           {order.items?.length ? (
             <div className="overflow-x-auto">
@@ -129,12 +130,13 @@ function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
           )}
         </section>
 
-        <details className="mt-4 rounded-lg border border-gray-200 p-4">
-          <summary className="cursor-pointer text-sm font-bold text-gray-700">Raw Order Payload</summary>
-          <pre className="mt-3 overflow-x-auto rounded bg-gray-50 p-3 text-xs text-gray-700">
-            {JSON.stringify(order, null, 2)}
-          </pre>
-        </details>
+          <details className="mt-3 rounded-lg border border-gray-200 p-3">
+            <summary className="cursor-pointer text-sm font-bold text-gray-700">Raw Order Payload</summary>
+            <pre className="mt-3 max-h-64 overflow-auto rounded bg-gray-50 p-3 text-xs text-gray-700">
+              {JSON.stringify(order, null, 2)}
+            </pre>
+          </details>
+        </div>
       </div>
     </div>
   );

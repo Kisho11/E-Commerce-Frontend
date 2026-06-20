@@ -625,14 +625,14 @@ function AdminDashboard() {
 
         <OrderDetailsModal order={selectedOrder} onClose={() => setSelectedOrder(null)} accentClass="text-primary" />
         {selectedCustomer && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedCustomer(null)}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4" onClick={() => setSelectedCustomer(null)}>
             <div
-              className="w-full max-w-4xl rounded-xl bg-white p-6 shadow-xl"
+              className="flex h-[82svh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="mb-5 flex items-start justify-between">
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 sm:px-5">
                 <div>
-                  <h3 className="text-2xl font-bold text-primary">{selectedCustomer.name}</h3>
+                  <h3 className="text-xl font-bold text-primary">{selectedCustomer.name}</h3>
                   <p className="text-sm text-gray-600">Registered customer details and order history</p>
                 </div>
                 <button
@@ -644,43 +644,45 @@ function AdminDashboard() {
                 </button>
               </div>
 
-              <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <p className="text-sm text-gray-700"><span className="font-bold">Email:</span> {selectedCustomer.email}</p>
-                <p className="text-sm text-gray-700"><span className="font-bold">Phone:</span> {selectedCustomer.phone}</p>
-                <p className="text-sm text-gray-700 sm:col-span-2"><span className="font-bold">Address:</span> {selectedCustomer.address}</p>
-                <p className="text-sm text-gray-700"><span className="font-bold">Status:</span> {selectedCustomer.isActive ? 'Active' : 'Inactive'}</p>
-                <p className="text-sm text-gray-700"><span className="font-bold">Orders:</span> {selectedCustomer.orderCount}</p>
-                <p className="text-sm text-gray-700"><span className="font-bold">Total Spent:</span> ${selectedCustomer.totalSpent.toFixed(2)}</p>
-                <p className="text-sm text-gray-700"><span className="font-bold">Join Date:</span> {selectedCustomer.joinDate}</p>
-                <p className="text-sm text-gray-700"><span className="font-bold">Last Order:</span> {selectedCustomer.lastOrderDate}</p>
-              </div>
+              <div className="overflow-y-scroll px-4 py-4 sm:px-5">
+                <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <p className="text-sm text-gray-700"><span className="font-bold">Email:</span> {selectedCustomer.email}</p>
+                  <p className="text-sm text-gray-700"><span className="font-bold">Phone:</span> {selectedCustomer.phone}</p>
+                  <p className="text-sm text-gray-700 sm:col-span-2"><span className="font-bold">Address:</span> {selectedCustomer.address}</p>
+                  <p className="text-sm text-gray-700"><span className="font-bold">Status:</span> {selectedCustomer.isActive ? 'Active' : 'Inactive'}</p>
+                  <p className="text-sm text-gray-700"><span className="font-bold">Orders:</span> {selectedCustomer.orderCount}</p>
+                  <p className="text-sm text-gray-700"><span className="font-bold">Total Spent:</span> ${selectedCustomer.totalSpent.toFixed(2)}</p>
+                  <p className="text-sm text-gray-700"><span className="font-bold">Join Date:</span> {selectedCustomer.joinDate}</p>
+                  <p className="text-sm text-gray-700"><span className="font-bold">Last Order:</span> {selectedCustomer.lastOrderDate}</p>
+                </div>
 
-              <h4 className="mb-3 text-lg font-bold text-gray-800">Order History</h4>
-              <div className="max-h-72 overflow-auto rounded-lg border border-gray-200">
-                {selectedCustomer.orderHistory.length > 0 ? (
-                  <table className="w-full">
-                    <thead className="bg-gray-100">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Order ID</th>
-                        <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Date</th>
-                        <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Status</th>
-                        <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedCustomer.orderHistory.map((order) => (
-                        <tr key={order.id} className="border-t border-gray-100">
-                          <td className="px-4 py-2 text-sm font-semibold text-primary">#{order.id}</td>
-                          <td className="px-4 py-2 text-sm text-gray-600">{order.date}</td>
-                          <td className="px-4 py-2 text-sm text-gray-700">{order.status}</td>
-                          <td className="px-4 py-2 text-sm font-semibold text-gray-800">${Number(order.amount || 0).toFixed(2)}</td>
+                <h4 className="mb-3 text-lg font-bold text-gray-800">Order History</h4>
+                <div className="overflow-auto rounded-lg border border-gray-200">
+                  {selectedCustomer.orderHistory.length > 0 ? (
+                    <table className="w-full">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Order ID</th>
+                          <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Date</th>
+                          <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Status</th>
+                          <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Amount</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="px-4 py-6 text-sm text-gray-500">This customer has not placed any orders yet.</div>
-                )}
+                      </thead>
+                      <tbody>
+                        {selectedCustomer.orderHistory.map((order) => (
+                          <tr key={order.id} className="border-t border-gray-100">
+                            <td className="px-4 py-2 text-sm font-semibold text-primary">#{order.id}</td>
+                            <td className="px-4 py-2 text-sm text-gray-600">{order.date}</td>
+                            <td className="px-4 py-2 text-sm text-gray-700">{order.status}</td>
+                            <td className="px-4 py-2 text-sm font-semibold text-gray-800">${Number(order.amount || 0).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="px-4 py-6 text-sm text-gray-500">This customer has not placed any orders yet.</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
