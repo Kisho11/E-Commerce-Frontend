@@ -27,6 +27,7 @@ const Reviews = lazy(() => import('./pages/Reviews'));
 const Catalogue = lazy(() => import('./pages/Catalogue'));
 const Sponsor = lazy(() => import('./pages/Sponsor'));
 const Login = lazy(() => import('./pages/Login'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const ManagerActivate = lazy(() => import('./pages/ManagerActivate'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -64,6 +65,7 @@ function App() {
                   <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Login />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/verify-email" element={<VerifyEmail />} />
                     <Route path="/manager-activate" element={<ManagerActivate />} />
 

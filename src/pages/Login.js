@@ -10,7 +10,7 @@ function Login() {
   const [searchParams] = useSearchParams();
   const googleBtnRef = useRef(null);
 
-  const { login, signUpCustomer, signInCustomer, requestPasswordReset, resetPassword, authWithGoogle } = useAuth();
+  const { login, signUpCustomer, signInCustomer, requestPasswordReset, authWithGoogle } = useAuth();
 
   const [mode, setMode] = useState('customer-signin');
   const [name, setName] = useState('');
@@ -19,9 +19,6 @@ function Login() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
-  const [resetToken, setResetToken] = useState('');
-  const [newResetPassword, setNewResetPassword] = useState('');
-  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
   const [error, setError] = useState('');
@@ -181,47 +178,13 @@ function Login() {
       return;
     }
 
-    if (!resetToken.trim()) {
-      const result = await requestPasswordReset(resetEmail);
-
-      if (!result.success) {
-        setError(result.error);
-        return;
-      }
-
-      setResetToken(result.resetToken || '');
-      setSuccessMessage(
-        result.resetToken
-          ? 'Reset token generated. Paste or confirm the token below and choose a new password.'
-          : result.message || 'If the account exists, a reset token has been prepared.'
-      );
-      return;
-    }
-
-    if (newResetPassword.length < MIN_PASSWORD_LENGTH) {
-      setError(`New password must be at least ${MIN_PASSWORD_LENGTH} characters long.`);
-      return;
-    }
-
-    if (newResetPassword !== resetConfirmPassword) {
-      setError('New passwords do not match.');
-      return;
-    }
-
-    const result = await resetPassword(resetToken, newResetPassword);
-
+    const result = await requestPasswordReset(resetEmail);
     if (!result.success) {
       setError(result.error);
       return;
     }
 
-    setEmail(resetEmail.trim().toLowerCase());
-    setPassword('');
-    setResetToken('');
-    setNewResetPassword('');
-    setResetConfirmPassword('');
-    setShowForgotPassword(false);
-    setSuccessMessage(result.message || 'Password updated. You can now sign in with your new password.');
+    setSuccessMessage('Check your email — we sent you a password reset link.');
   };
 
   const currentSubmitHandler =
@@ -400,53 +363,24 @@ function Login() {
                     <p className="text-sm font-semibold text-slate-900">
                       {mode === 'staff-signin' ? 'Reset staff password' : 'Reset account password'}
                     </p>
-                    <div className="grid gap-2.5 sm:grid-cols-2">
-                      <input
-                        type="email"
-                        value={resetEmail}
-                        onChange={(e) => setResetEmail(e.target.value)}
-                        className="w-full rounded-xl bg-white px-3 py-2.5 text-sm text-slate-900 outline outline-1 -outline-offset-1 outline-slate-300 transition focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600"
-                        placeholder="Account email"
-                        required
-                      />
-                      <input
-                        type="text"
-                        value={resetToken}
-                        onChange={(e) => setResetToken(e.target.value)}
-                        className="w-full rounded-xl bg-white px-3 py-2.5 text-sm text-slate-900 outline outline-1 -outline-offset-1 outline-slate-300 transition focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600"
-                        placeholder="Reset token"
-                      />
-                      <input
-                        type="password"
-                        value={newResetPassword}
-                        onChange={(e) => setNewResetPassword(e.target.value)}
-                        className="w-full rounded-xl bg-white px-3 py-2.5 text-sm text-slate-900 outline outline-1 -outline-offset-1 outline-slate-300 transition focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600"
-                        placeholder="New password"
-                        minLength={MIN_PASSWORD_LENGTH}
-                        required={Boolean(resetToken.trim())}
-                      />
-                      <input
-                        type="password"
-                        value={resetConfirmPassword}
-                        onChange={(e) => setResetConfirmPassword(e.target.value)}
-                        className="w-full rounded-xl bg-white px-3 py-2.5 text-sm text-slate-900 outline outline-1 -outline-offset-1 outline-slate-300 transition focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600"
-                        placeholder="Confirm new password"
-                        minLength={MIN_PASSWORD_LENGTH}
-                        required={Boolean(resetToken.trim())}
-                      />
-                    </div>
+                    <input
+                      type="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      className="w-full rounded-xl bg-white px-3 py-2.5 text-sm text-slate-900 outline outline-1 -outline-offset-1 outline-slate-300 transition focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600"
+                      placeholder="Account email"
+                      required
+                    />
                     <button
                       type="button"
                       onClick={handleForgotPassword}
                       className="w-full rounded-xl border border-primary bg-white py-2.5 text-sm font-semibold text-primary transition hover:bg-red-50"
                     >
-                      {resetToken.trim() ? 'Update Password' : 'Generate Reset Token'}
+                      Send Reset Link
                     </button>
-                    {!resetToken.trim() && (
-                      <p className="text-xs text-slate-500">
-                        Password reset requests are accepted, but token delivery is not shown in the browser.
-                      </p>
-                    )}
+                    <p className="text-xs text-slate-500">
+                      We'll email you a link to set a new password.
+                    </p>
                   </div>
                 )}
 

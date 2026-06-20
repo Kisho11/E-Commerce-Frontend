@@ -490,17 +490,30 @@ export function AuthProvider({ children }) {
         };
       }
 
-      return {
-        success: true,
-        message: data?.message || 'Password updated successfully.',
-      };
+      const profile = data?.user;
+      if (profile) {
+        const sessionUser = {
+          id: profile.id,
+          email: profile.email,
+          name: profile.full_name,
+          phone: profile.phone || '',
+          role: normalizeRole(profile.role),
+          isActive: profile.is_active,
+          isEmailVerified: profile.is_email_verified ?? true,
+          loginTime: new Date().toISOString(),
+        };
+        setSession(sessionUser);
+        return { success: true, user: sessionUser };
+      }
+
+      return { success: true };
     } catch (error) {
       return {
         success: false,
         error: 'Unable to reach the backend password reset service',
       };
     }
-  }, []);
+  }, [setSession]);
 
   const markEmailVerified = useCallback(() => {
     setUser((prev) => (prev ? { ...prev, isEmailVerified: true } : prev));
