@@ -103,7 +103,7 @@ const syncVariantPricingWithGroups = (variantPricing = [], variantGroups = [], b
 };
 
 function ProductManagement() {
-  const { products, categories, categoryNames, addProduct, updateProduct, deleteProduct } = useProducts();
+  const { products, categories, categoryNames, addProduct, updateProduct, deleteProduct, loadAllProducts } = useProducts();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showVariantGrid, setShowVariantGrid] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -136,6 +136,10 @@ function ProductManagement() {
     imageSlots: Array.from({ length: MIN_IMAGE_COUNT }, () => ({ url: '', variantTag: '' })),
     videoUrls: Array(MIN_VIDEO_COUNT).fill(''),
   });
+
+  useEffect(() => {
+    loadAllProducts();
+  }, [loadAllProducts]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [productSearch, setProductSearch] = useState('');

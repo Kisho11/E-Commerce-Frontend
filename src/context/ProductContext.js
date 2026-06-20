@@ -401,6 +401,8 @@ const getLocalFallbackProducts = () =>
 export function ProductProvider({ children }) {
   const [products, setProducts] = useState(() => (API_BASE_URL ? [] : getLocalFallbackProducts()));
   const [categories, setCategories] = useState(initialCategories);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productsError, setProductsError] = useState('');
 
   const refreshCategoriesFromApi = useCallback(async () => {
     if (!API_BASE_URL) return null;
@@ -443,40 +445,98 @@ export function ProductProvider({ children }) {
     };
   }, []);
 
-  useEffect(() => {
+  const loadAllProducts = useCallback(async () => {
     if (!API_BASE_URL) {
-      setProducts(getLocalFallbackProducts());
-      return;
+      const localProducts = getLocalFallbackProducts();
+      setProducts(localProducts);
+      return localProducts;
     }
 
-    let isMounted = true;
-
-    const loadProducts = async () => {
-      try {
-        const response = await performRequest(`${API_BASE_URL}/products/?per_page=2000`, {}, 'Unable to load products');
-        if (!response.ok) {
-          throw new Error('Failed to load products');
-        }
-
-        const data = await response.json();
-        const items = Array.isArray(data?.items) ? data.items : [];
-        if (!isMounted) return;
-        setProducts(items.map(mapProductFromApi));
-      } catch (error) {
-        console.error('Unable to load backend products:', error);
-        if (!isMounted) return;
-        setProducts([]);
+    setProductsLoading(true);
+    setProductsError('');
+    try {
+      const response = await performRequest(`${API_BASE_URL}/products/?per_page=2000`, {}, 'Unable to load products');
+      if (!response.ok) {
+        throw new Error('Failed to load products');
       }
-    };
 
-    loadProducts();
-
-    return () => {
-      isMounted = false;
-    };
+      const data = await response.json();
+      const items = Array.isArray(data?.items) ? data.items.map(mapProductFromApi) : [];
+      setProducts(items);
+      return items;
+    } catch (error) {
+      console.error('Unable to load backend products:', error);
+      setProductsError(error.message || 'Unable to load products');
+      setProducts([]);
+      return [];
+    } finally {
+      setProductsLoading(false);
+    }
   }, []);
 
   const categoryNames = useMemo(() => categories.map((c) => c.name), [categories]);
+
+  const fetchProductsPage = useCallback(async ({
+    page = 1,
+    perPage = 36,
+    categoryId = null,
+    search = '',
+    sortBy = 'created_at',
+    sortOrder = 'desc',
+  } = {}) => {
+    if (!API_BASE_URL) {
+      let localItems = getLocalFallbackProducts();
+      if (categoryId) {
+        const targetCategory = categories
+          .flatMap((category) => [category, ...(category.subcategories || [])])
+          .find((category) => Number(category.id) === Number(categoryId));
+        if (targetCategory) {
+          localItems = localItems.filter((product) =>
+            product.categories?.includes(targetCategory.name) || product.subcategories?.includes(targetCategory.name)
+          );
+        }
+      }
+      if (search.trim()) {
+        const term = search.trim().toLowerCase();
+        localItems = localItems.filter((product) =>
+          [product.name, product.description, ...(product.categories || []), ...(product.subcategories || []), ...(product.industries || [])]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(term)
+        );
+      }
+      const start = (page - 1) * perPage;
+      return {
+        items: localItems.slice(start, start + perPage),
+        total: localItems.length,
+        page,
+        pages: Math.max(1, Math.ceil(localItems.length / perPage)),
+      };
+    }
+
+    const params = new URLSearchParams({
+      page: String(page),
+      per_page: String(perPage),
+      sort_by: sortBy,
+      sort_order: sortOrder,
+    });
+    if (categoryId) params.set('category_id', String(categoryId));
+    if (search.trim()) params.set('search', search.trim());
+
+    const response = await performRequest(`${API_BASE_URL}/products/?${params.toString()}`, {}, 'Unable to load products');
+    if (!response.ok) {
+      await handleProtectedApiResponse(response, 'Unable to load products');
+    }
+    const data = await response.json();
+    return {
+      items: (Array.isArray(data?.items) ? data.items : []).map(mapProductFromApi),
+      total: Number(data?.total || 0),
+      page: Number(data?.page || page),
+      pages: Number(data?.pages || 1),
+    };
+  }, [categories]);
+
   const categoryAndSubcategoryNames = useMemo(
     () =>
       categories.flatMap((category) => [
@@ -1284,8 +1344,12 @@ export function ProductProvider({ children }) {
   const value = useMemo(
     () => ({
       products,
+      productsLoading,
+      productsError,
       categories,
       categoryNames,
+      fetchProductsPage,
+      loadAllProducts,
       addProduct,
       updateProduct,
       deleteProduct,
@@ -1303,8 +1367,12 @@ export function ProductProvider({ children }) {
     }),
     [
       products,
+      productsLoading,
+      productsError,
       categories,
       categoryNames,
+      fetchProductsPage,
+      loadAllProducts,
       addProduct,
       updateProduct,
       deleteProduct,

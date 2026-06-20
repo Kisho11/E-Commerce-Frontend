@@ -52,7 +52,7 @@ function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
-  const { products } = useProducts();
+  const { products, loadAllProducts } = useProducts();
   const product = products.find((p) => p.id === parseInt(id, 10));
 
   const [selectedAttributes, setSelectedAttributes] = useState({});
@@ -65,6 +65,12 @@ function ProductDetail() {
   const productType = useMemo(() => resolveProductType(product), [product]);
   const priceDisplay = useMemo(() => getProductPriceDisplay(product), [product]);
   const attributeOptions = useMemo(() => deriveAttributeOptions(product), [product]);
+
+  useEffect(() => {
+    if (!product) {
+      loadAllProducts();
+    }
+  }, [loadAllProducts, product]);
 
   useEffect(() => {
     setSelectedImageIndex(0);

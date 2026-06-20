@@ -101,6 +101,7 @@ function App() {
                       <Route path="/catalogue" element={<Catalogue />} />
                       <Route path="/sponsor" element={<Sponsor />} />
                       <Route path="/categories" element={<CategoriesPage />} />
+                      <Route path="/categories/:categorySlug" element={<CategoriesPage />} />
                       <Route
                         path="/customer-portal"
                         element={

@@ -16,7 +16,11 @@ function ManagerDashboard() {
     }
   }, [user, navigate]);
   const { orders } = useOrders();
-  const { products, adjustStock, getInventorySummary } = useProducts();
+  const { products, adjustStock, getInventorySummary, loadAllProducts } = useProducts();
+
+  useEffect(() => {
+    loadAllProducts();
+  }, [loadAllProducts]);
 
   const [activeTab, setActiveTab] = useState('orders');
   const [selectedOrder, setSelectedOrder] = useState(null);

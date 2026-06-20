@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useProducts } from '../context/ProductContext';
+import { categoryPath } from '../utils/categoryRoutes';
 
 function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -61,11 +62,10 @@ function Navbar() {
     }
 
     const params = new URLSearchParams();
-    params.set('category', searchScope);
     if (trimmedQuery) {
       params.set('search', trimmedQuery);
     }
-    navigate(`/categories?${params.toString()}`);
+    navigate(`${categoryPath(searchScope)}${params.toString() ? `?${params.toString()}` : ''}`);
     handleNavigate();
   };
 
@@ -75,7 +75,7 @@ function Navbar() {
     if (value === 'all') {
       navigate('/categories');
     } else {
-      navigate(`/categories?category=${encodeURIComponent(value)}`);
+      navigate(categoryPath(value));
     }
   };
 

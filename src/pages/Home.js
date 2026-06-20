@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import Slider from '../components/Slider';
-import Categories from '../components/Categories';
+import CategoryLanding from '../components/CategoryLanding';
 import Seo from '../components/Seo';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -39,7 +39,7 @@ function Home() {
       </section>
 
       <section className="mt-10">
-        <Categories />
+        <CategoryLanding />
       </section>
 
       <section className="shell mt-6">

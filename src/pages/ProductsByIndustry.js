@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import Seo from '../components/Seo';
@@ -9,7 +9,11 @@ function ProductsByIndustry() {
   const { industry } = useParams();
   const [searchParams] = useSearchParams();
   const { t } = useLanguage();
-  const { products } = useProducts();
+  const { products, loadAllProducts } = useProducts();
+
+  useEffect(() => {
+    loadAllProducts();
+  }, [loadAllProducts]);
   const formattedIndustry = useMemo(
     () => (industry ? decodeURIComponent(industry).replace(/-/g, ' ') : null),
     [industry]

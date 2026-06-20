@@ -15,7 +15,7 @@ function AdminDashboard() {
   const navigate = useNavigate();
   const { user, logout, registeredCustomers, loadCustomers, authFetch } = useAuth();
   const { orders, loadOrders } = useOrders();
-  const { products } = useProducts();
+  const { products, loadAllProducts } = useProducts();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -171,10 +171,11 @@ function AdminDashboard() {
 
   useEffect(() => {
     if (user?.role === 'admin') {
+      loadAllProducts();
       loadCustomers().catch(() => {});
       loadOrders().catch(() => {});
     }
-  }, [loadCustomers, loadOrders, user]);
+  }, [loadAllProducts, loadCustomers, loadOrders, user]);
 
   useEffect(() => {
     let cancelled = false;
