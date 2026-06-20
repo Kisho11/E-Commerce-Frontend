@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 
 function AdvertPopup() {
@@ -14,21 +15,21 @@ function AdvertPopup() {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4">
-      <div className="md:grid md:grid-cols-2 max-w-4xl overflow-hidden rounded-xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4">
+      <div className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl md:grid md:grid-cols-[0.9fr_1.1fr]">
         <img
           src="/sales.webp"
           alt="Retail shelving advert"
-          className="hidden w-full max-w-lg rounded-l-xl object-cover md:block"
+          className="hidden h-full min-h-[280px] w-full object-cover md:block"
         />
-        <div className="relative flex items-center justify-center">
+        <div className="relative">
           <button
             type="button"
             onClick={handleClose}
-            className="absolute right-6 top-6 rounded-full bg-slate-200 p-2.5 transition hover:bg-slate-300"
+            className="absolute right-3 top-3 rounded-full bg-slate-100 p-2 transition hover:bg-slate-200"
             aria-label={t('advert.close')}
           >
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg width="13" height="13" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path
                 d="M13 2 2 13M2 2l11 11"
                 stroke="#1F2937"
@@ -40,23 +41,24 @@ function AdvertPopup() {
             </svg>
           </button>
 
-          <div className="px-6 py-20 text-center md:px-10">
+          <div className="px-5 py-8 pr-12 text-left sm:px-6 md:px-7 md:py-9 md:pr-10">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">{t('advert.badge')}</p>
-            <h1 className="mt-3 text-3xl font-bold text-slate-900">
+            <h2 className="mt-2 text-2xl font-bold leading-tight text-slate-900 md:text-3xl">
               <span className="text-primary">{t('advert.titleAccent')}</span> {t('advert.title')}
-            </h1>
-            <p className="mt-4 text-slate-600">{t('advert.desc')}</p>
-            <a
-              href="/catalogue"
-              className="mt-4 inline-block rounded-lg bg-primary px-14 py-3 text-sm font-semibold text-white transition hover:bg-red-700"
-            >
-              {t('advert.primaryCta')}
-            </a>
-            <div>
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">{t('advert.desc')}</p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Link
+                to="/catalogue"
+                onClick={handleClose}
+                className="inline-flex justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+              >
+                {t('advert.primaryCta')}
+              </Link>
               <button
                 type="button"
                 onClick={handleClose}
-                className="mt-4 px-8 py-3 text-sm font-medium text-slate-900 transition hover:text-primary"
+                className="inline-flex justify-center px-3 py-2 text-sm font-medium text-slate-700 transition hover:text-primary"
               >
                 {t('advert.secondaryCta')}
               </button>
