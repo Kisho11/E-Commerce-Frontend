@@ -434,26 +434,6 @@ function Login() {
                 </div>
               )}
 
-              {isCustomerMode && (
-                <div className="mt-4 text-center text-sm text-slate-600">
-                  {mode === 'customer-signin' ? (
-                    <p>
-                      New customer?{' '}
-                      <Link to="/signup" className="font-medium text-blue-700 hover:underline">
-                        Create your account
-                      </Link>
-                    </p>
-                  ) : (
-                    <p>
-                      Already have an account?{' '}
-                      <Link to="/login?mode=customer-signin" className="font-medium text-blue-700 hover:underline">
-                        Login here
-                      </Link>
-                    </p>
-                  )}
-                </div>
-              )}
-
               <div className="mt-4 text-center text-sm text-slate-600">
                 <Link to="/" className="font-medium text-slate-700 transition hover:text-blue-700">
                   Back to Store

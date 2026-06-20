@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useOrders } from '../context/OrderContext';
+import { useAuth } from '../context/AuthContext';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import Seo from '../components/Seo';
 
@@ -8,11 +9,7 @@ const PAYMENT_KEY = 'customerPaymentMethods';
 const CONSENT_KEY = 'customerConsents';
 const AUDIT_KEY = 'customerDataAuditLog';
 
-const defaultProfile = {
-  fullName: '',
-  email: '',
-  phone: '',
-};
+const defaultProfile = { fullName: '', email: '', phone: '' };
 
 const defaultPayment = {
   type: 'Card',
@@ -30,11 +27,14 @@ const defaultConsents = {
   updatedAt: null,
 };
 
+const emptyProfileErrors = { fullName: '', email: '', phone: '' };
+const emptyPaymentErrors = { cardHolder: '', cardNumber: '', expiry: '', billingZip: '' };
+
 function readLocalStorage(key, fallback) {
   try {
     const data = localStorage.getItem(key);
     return data ? JSON.parse(data) : fallback;
-  } catch (error) {
+  } catch {
     return fallback;
   }
 }
@@ -51,6 +51,99 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function luhnCheck(num) {
+  let sum = 0;
+  let isEven = false;
+  for (let i = num.length - 1; i >= 0; i--) {
+    let digit = parseInt(num[i], 10);
+    if (isEven) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    isEven = !isEven;
+  }
+  return sum % 10 === 0;
+}
+
+function validateProfileField(name, value) {
+  const v = (value || '').trim();
+  switch (name) {
+    case 'fullName':
+      if (!v) return 'Full name is required.';
+      if (v.length < 2) return 'Full name must be at least 2 characters.';
+      if (!/^[a-zA-Z\s'\-]+$/.test(v)) return 'Only letters, spaces, hyphens, or apostrophes allowed.';
+      return '';
+    case 'email':
+      if (!v) return 'Email is required.';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'Enter a valid email address.';
+      return '';
+    case 'phone': {
+      if (!v) return 'Phone number is required.';
+      const digits = v.replace(/\D/g, '');
+      if (digits.length < 7 || digits.length > 15) return 'Enter a valid phone number (7–15 digits).';
+      return '';
+    }
+    default:
+      return '';
+  }
+}
+
+function validatePaymentField(name, value, isEditingCard) {
+  const v = (value || '').trim();
+  switch (name) {
+    case 'cardHolder':
+      if (!v) return 'Card holder name is required.';
+      if (v.length < 2) return 'Card holder name must be at least 2 characters.';
+      return '';
+    case 'cardNumber': {
+      if (isEditingCard && !v) return '';
+      const digits = v.replace(/\D/g, '');
+      if (!digits) return 'Card number is required.';
+      if (digits.length < 13 || digits.length > 19) return 'Enter a valid card number (13–19 digits).';
+      if (!luhnCheck(digits)) return 'Card number is invalid.';
+      return '';
+    }
+    case 'expiry': {
+      if (!v) return 'Expiry date is required.';
+      if (!/^\d{2}\/\d{2}$/.test(v)) return 'Enter expiry as MM/YY.';
+      const [mm, yy] = v.split('/').map(Number);
+      if (mm < 1 || mm > 12) return 'Month must be 01–12.';
+      const now = new Date();
+      const expDate = new Date(2000 + yy, mm);
+      if (expDate <= now) return 'This card has expired.';
+      return '';
+    }
+    case 'billingZip':
+      if (!v) return 'Billing ZIP / postal code is required.';
+      if (!/^[a-zA-Z0-9\s\-]{3,10}$/.test(v)) return 'Enter a valid ZIP / postal code (3–10 characters).';
+      return '';
+    default:
+      return '';
+  }
+}
+
+function validateAllProfile(profile) {
+  const errors = {
+    fullName: validateProfileField('fullName', profile.fullName),
+    email: validateProfileField('email', profile.email),
+    phone: validateProfileField('phone', profile.phone),
+  };
+  const valid = Object.values(errors).every((e) => !e);
+  return { errors, valid };
+}
+
+function validateAllPayment(form, isEditingCard) {
+  const errors = {
+    cardHolder: validatePaymentField('cardHolder', form.cardHolder, isEditingCard),
+    cardNumber: validatePaymentField('cardNumber', form.cardNumber, isEditingCard),
+    expiry: validatePaymentField('expiry', form.expiry, isEditingCard),
+    billingZip: validatePaymentField('billingZip', form.billingZip, isEditingCard),
+  };
+  const valid = Object.values(errors).every((e) => !e);
+  return { errors, valid };
+}
+
 const STATUS_COLORS = {
   Pending: 'bg-yellow-100 text-yellow-800',
   Confirmed: 'bg-blue-100 text-blue-800',
@@ -60,17 +153,43 @@ const STATUS_COLORS = {
   Cancelled: 'bg-red-100 text-red-800',
 };
 
+function FieldError({ msg }) {
+  if (!msg) return null;
+  return <p className="mt-1 text-xs font-medium text-red-600">{msg}</p>;
+}
+
+function inputCls(hasError) {
+  return `w-full rounded-lg border px-3 py-2 focus:outline-none transition ${
+    hasError
+      ? 'border-red-400 bg-red-50 focus:border-red-500'
+      : 'border-slate-300 focus:border-blue-500'
+  }`;
+}
+
 function CustomerPortal() {
+  const { user } = useAuth();
   const { orders } = useOrders();
   const [selectedOrder, setSelectedOrder] = useState(null);
 
-  const [profile, setProfile] = useState(() => readLocalStorage(PROFILE_KEY, defaultProfile));
+  const [profile, setProfile] = useState(() => {
+    const stored = readLocalStorage(PROFILE_KEY, null);
+    if (stored && (stored.fullName || stored.email)) return stored;
+    return {
+      fullName: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+    };
+  });
+
   const [paymentMethods, setPaymentMethods] = useState(() => readLocalStorage(PAYMENT_KEY, []));
   const [consents, setConsents] = useState(() => readLocalStorage(CONSENT_KEY, defaultConsents));
   const [auditLog, setAuditLog] = useState(() => readLocalStorage(AUDIT_KEY, []));
 
   const [paymentForm, setPaymentForm] = useState(defaultPayment);
   const [editingId, setEditingId] = useState(null);
+
+  const [profileErrors, setProfileErrors] = useState(emptyProfileErrors);
+  const [paymentErrors, setPaymentErrors] = useState(emptyPaymentErrors);
 
   const [profileMessage, setProfileMessage] = useState('');
   const [paymentMessage, setPaymentMessage] = useState('');
@@ -88,8 +207,18 @@ function CustomerPortal() {
     writeLocalStorage(AUDIT_KEY, next);
   };
 
+  const handleProfileChange = (e) => {
+    const { name, value } = e.target;
+    setProfile((prev) => ({ ...prev, [name]: value }));
+    setProfileErrors((prev) => ({ ...prev, [name]: validateProfileField(name, value) }));
+  };
+
   const saveProfile = (e) => {
     e.preventDefault();
+    const { errors, valid } = validateAllProfile(profile);
+    setProfileErrors(errors);
+    if (!valid) return;
+
     const payload = { ...profile, updatedAt: nowIso() };
     setProfile(payload);
     writeLocalStorage(PROFILE_KEY, payload);
@@ -98,25 +227,52 @@ function CustomerPortal() {
     setTimeout(() => setProfileMessage(''), 2500);
   };
 
+  const handleCardNumberChange = (e) => {
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 19);
+    const formatted = raw.match(/.{1,4}/g)?.join(' ') || '';
+    setPaymentForm((prev) => ({ ...prev, cardNumber: formatted }));
+    setPaymentErrors((prev) => ({
+      ...prev,
+      cardNumber: validatePaymentField('cardNumber', formatted, isEditing),
+    }));
+  };
+
+  const handleExpiryChange = (e) => {
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 4);
+    const formatted = raw.length >= 3 ? `${raw.slice(0, 2)}/${raw.slice(2)}` : raw;
+    setPaymentForm((prev) => ({ ...prev, expiry: formatted }));
+    setPaymentErrors((prev) => ({
+      ...prev,
+      expiry: validatePaymentField('expiry', formatted, isEditing),
+    }));
+  };
+
+  const handlePaymentChange = (e) => {
+    const { name, value } = e.target;
+    setPaymentForm((prev) => ({ ...prev, [name]: value }));
+    if (name !== 'type') {
+      setPaymentErrors((prev) => ({
+        ...prev,
+        [name]: validatePaymentField(name, value, isEditing),
+      }));
+    }
+  };
+
   const savePaymentMethod = (e) => {
     e.preventDefault();
+    const { errors, valid } = validateAllPayment(paymentForm, isEditing);
+    setPaymentErrors(errors);
+    if (!valid) return;
 
     const digits = (paymentForm.cardNumber || '').replace(/\D/g, '');
-    if (digits.length < 12) {
-      setPaymentMessage('Enter a valid card number before saving.');
-      setTimeout(() => setPaymentMessage(''), 2500);
-      return;
-    }
-
-    // GDPR minimization: only last4 and masked number are stored.
     const methodPayload = {
       id: editingId || Date.now(),
       type: paymentForm.type,
-      cardHolder: paymentForm.cardHolder,
+      cardHolder: paymentForm.cardHolder.trim(),
       last4: digits.slice(-4),
       maskedNumber: maskCard(digits.slice(-4)),
       expiry: paymentForm.expiry,
-      billingZip: paymentForm.billingZip,
+      billingZip: paymentForm.billingZip.trim(),
       updatedAt: nowIso(),
     };
 
@@ -127,6 +283,7 @@ function CustomerPortal() {
     setPaymentMethods(nextMethods);
     writeLocalStorage(PAYMENT_KEY, nextMethods);
     setPaymentForm(defaultPayment);
+    setPaymentErrors(emptyPaymentErrors);
     setEditingId(null);
     addAudit(isEditing ? 'payment_updated' : 'payment_added', `${methodPayload.type} ending ${methodPayload.last4}`);
 
@@ -136,6 +293,7 @@ function CustomerPortal() {
 
   const startEditPaymentMethod = (method) => {
     setEditingId(method.id);
+    setPaymentErrors(emptyPaymentErrors);
     setPaymentForm({
       type: method.type || 'Card',
       cardHolder: method.cardHolder || '',
@@ -152,6 +310,7 @@ function CustomerPortal() {
     if (editingId === id) {
       setEditingId(null);
       setPaymentForm(defaultPayment);
+      setPaymentErrors(emptyPaymentErrors);
     }
     addAudit('payment_removed', `Payment id ${id} removed`);
     setPaymentMessage('Payment method removed.');
@@ -168,14 +327,7 @@ function CustomerPortal() {
   };
 
   const exportData = () => {
-    const dataPackage = {
-      exportedAt: nowIso(),
-      profile,
-      paymentMethods,
-      consents,
-      auditLog,
-    };
-
+    const dataPackage = { exportedAt: nowIso(), profile, paymentMethods, consents, auditLog };
     const blob = new Blob([JSON.stringify(dataPackage, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -183,7 +335,6 @@ function CustomerPortal() {
     link.download = `customer-data-export-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
-
     addAudit('data_exported', 'User exported personal data');
     setPrivacyMessage('Your data export has been downloaded.');
     setTimeout(() => setPrivacyMessage(''), 3000);
@@ -206,6 +357,8 @@ function CustomerPortal() {
     setConsents(defaultConsents);
     setAuditLog([]);
     setPaymentForm(defaultPayment);
+    setPaymentErrors(emptyPaymentErrors);
+    setProfileErrors(emptyProfileErrors);
     setEditingId(null);
     setConfirmDelete(false);
     setDeleteText('');
@@ -231,6 +384,7 @@ function CustomerPortal() {
         </p>
       </div>
 
+      {/* Order History */}
       <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6">
         <h2 className="text-xl font-bold text-slate-900">Order History</h2>
         <p className="mt-1 text-sm text-slate-600">Your previous orders, most recent first.</p>
@@ -255,7 +409,9 @@ function CustomerPortal() {
                   <tr key={order.id} className="hover:bg-slate-50">
                     <td className="py-3 pr-4 font-semibold text-slate-900">#{order.id}</td>
                     <td className="py-3 pr-4 text-slate-600">{order.date}</td>
-                    <td className="py-3 pr-4 text-slate-600">{order.items.length} item{order.items.length !== 1 ? 's' : ''}</td>
+                    <td className="py-3 pr-4 text-slate-600">
+                      {order.items.length} item{order.items.length !== 1 ? 's' : ''}
+                    </td>
                     <td className="py-3 pr-4 font-semibold text-slate-900">£{Number(order.amount).toFixed(2)}</td>
                     <td className="py-3 pr-4">
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_COLORS[order.status] || 'bg-slate-100 text-slate-700'}`}>
@@ -279,45 +435,55 @@ function CustomerPortal() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Personal details */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
           <h2 className="text-xl font-bold text-slate-900">Personal details</h2>
           <p className="mt-2 text-sm text-slate-600">Keep your name and contact details accurate.</p>
 
-          <form className="mt-5 space-y-4" onSubmit={saveProfile}>
+          <form className="mt-5 space-y-4" onSubmit={saveProfile} noValidate>
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">Full name</label>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">
+                Full name <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
+                name="fullName"
                 value={profile.fullName}
-                onChange={(e) => setProfile((prev) => ({ ...prev, fullName: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                onChange={handleProfileChange}
+                className={inputCls(!!profileErrors.fullName)}
                 placeholder="John Doe"
-                required
               />
+              <FieldError msg={profileErrors.fullName} />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">Email</label>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">
+                Email <span className="text-red-500">*</span>
+              </label>
               <input
                 type="email"
+                name="email"
                 value={profile.email}
-                onChange={(e) => setProfile((prev) => ({ ...prev, email: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                onChange={handleProfileChange}
+                className={inputCls(!!profileErrors.email)}
                 placeholder="john@example.com"
-                required
               />
+              <FieldError msg={profileErrors.email} />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">Phone</label>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">
+                Phone <span className="text-red-500">*</span>
+              </label>
               <input
                 type="tel"
+                name="phone"
                 value={profile.phone}
-                onChange={(e) => setProfile((prev) => ({ ...prev, phone: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                onChange={handleProfileChange}
+                className={inputCls(!!profileErrors.phone)}
                 placeholder="+1 555 000 1234"
-                required
               />
+              <FieldError msg={profileErrors.phone} />
             </div>
 
             <button
@@ -328,21 +494,25 @@ function CustomerPortal() {
             </button>
 
             {profileMessage && (
-              <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">{profileMessage}</p>
+              <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                {profileMessage}
+              </p>
             )}
           </form>
         </div>
 
+        {/* Payment methods */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6">
           <h2 className="text-xl font-bold text-slate-900">Payment methods</h2>
           <p className="mt-2 text-sm text-slate-600">Only masked card details are stored (last 4 digits).</p>
 
-          <form className="mt-5 space-y-4" onSubmit={savePaymentMethod}>
+          <form className="mt-5 space-y-4" onSubmit={savePaymentMethod} noValidate>
             <div>
               <label className="mb-1 block text-sm font-semibold text-slate-700">Method type</label>
               <select
+                name="type"
                 value={paymentForm.type}
-                onChange={(e) => setPaymentForm((prev) => ({ ...prev, type: e.target.value }))}
+                onChange={handlePaymentChange}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
               >
                 <option>Card</option>
@@ -352,52 +522,69 @@ function CustomerPortal() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">Card holder name</label>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">
+                Card holder name <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
+                name="cardHolder"
                 value={paymentForm.cardHolder}
-                onChange={(e) => setPaymentForm((prev) => ({ ...prev, cardHolder: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                onChange={handlePaymentChange}
+                className={inputCls(!!paymentErrors.cardHolder)}
                 placeholder="John Doe"
-                required
               />
+              <FieldError msg={paymentErrors.cardHolder} />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">Card number</label>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">
+                Card number <span className="text-red-500">*</span>
+                {isEditing && <span className="ml-1 text-xs font-normal text-slate-500">(re-enter to update)</span>}
+              </label>
               <input
                 type="text"
+                name="cardNumber"
                 value={paymentForm.cardNumber}
-                onChange={(e) => setPaymentForm((prev) => ({ ...prev, cardNumber: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                onChange={handleCardNumberChange}
+                className={inputCls(!!paymentErrors.cardNumber)}
                 placeholder={isEditing ? 'Re-enter card number' : '4111 1111 1111 1111'}
-                required
+                inputMode="numeric"
+                maxLength={23}
               />
+              <FieldError msg={paymentErrors.cardNumber} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-sm font-semibold text-slate-700">Expiry</label>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">
+                  Expiry <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
+                  name="expiry"
                   value={paymentForm.expiry}
-                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, expiry: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                  onChange={handleExpiryChange}
+                  className={inputCls(!!paymentErrors.expiry)}
                   placeholder="MM/YY"
-                  required
+                  inputMode="numeric"
+                  maxLength={5}
                 />
+                <FieldError msg={paymentErrors.expiry} />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-semibold text-slate-700">Billing ZIP</label>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">
+                  Billing ZIP <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
+                  name="billingZip"
                   value={paymentForm.billingZip}
-                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, billingZip: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                  onChange={handlePaymentChange}
+                  className={inputCls(!!paymentErrors.billingZip)}
                   placeholder="10001"
-                  required
                 />
+                <FieldError msg={paymentErrors.billingZip} />
               </div>
             </div>
 
@@ -414,6 +601,7 @@ function CustomerPortal() {
                   onClick={() => {
                     setEditingId(null);
                     setPaymentForm(defaultPayment);
+                    setPaymentErrors(emptyPaymentErrors);
                   }}
                   className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700"
                 >
@@ -423,12 +611,15 @@ function CustomerPortal() {
             </div>
 
             {paymentMessage && (
-              <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">{paymentMessage}</p>
+              <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                {paymentMessage}
+              </p>
             )}
           </form>
         </div>
       </div>
 
+      {/* Consent preferences */}
       <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
         <h3 className="text-lg font-bold text-slate-900">Consent preferences</h3>
         <p className="mt-1 text-sm text-slate-600">
@@ -482,10 +673,13 @@ function CustomerPortal() {
         </div>
 
         {consentMessage && (
-          <p className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">{consentMessage}</p>
+          <p className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+            {consentMessage}
+          </p>
         )}
       </div>
 
+      {/* Saved payment methods */}
       <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
         <h3 className="text-lg font-bold text-slate-900">Saved methods</h3>
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -494,7 +688,9 @@ function CustomerPortal() {
               <div key={method.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-bold text-slate-900">{method.type}</p>
                 <p className="mt-1 text-sm text-slate-600">{method.cardHolder}</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">{method.maskedNumber || maskCard(method.last4)}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-700">
+                  {method.maskedNumber || maskCard(method.last4)}
+                </p>
                 <p className="mt-1 text-xs text-slate-500">Exp: {method.expiry} | ZIP: {method.billingZip}</p>
                 <div className="mt-3 flex gap-2">
                   <button
@@ -518,17 +714,24 @@ function CustomerPortal() {
         </div>
       </div>
 
+      {/* Privacy & data rights */}
       <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
-        <h3 className="text-lg font-bold text-slate-900">Privacy & data rights</h3>
+        <h3 className="text-lg font-bold text-slate-900">Privacy &amp; data rights</h3>
         <p className="mt-2 text-sm text-slate-600">
           You can export your data (right of access/portability) and delete stored account data (right to erasure).
         </p>
 
         <div className="mt-4 flex flex-wrap gap-3">
-          <button onClick={exportData} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-red-700">
+          <button
+            onClick={exportData}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
+          >
             Export my data
           </button>
-          <a href="mailto:privacy@elamshelf.com" className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">
+          <a
+            href="mailto:privacy@elamshelf.com"
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+          >
             Contact privacy team
           </a>
         </div>
@@ -540,7 +743,12 @@ function CustomerPortal() {
           </p>
           <div className="mt-3 space-y-3">
             <label className="flex items-center gap-2 text-sm text-red-700">
-              <input type="checkbox" checked={confirmDelete} onChange={(e) => setConfirmDelete(e.target.checked)} className="h-4 w-4" />
+              <input
+                type="checkbox"
+                checked={confirmDelete}
+                onChange={(e) => setConfirmDelete(e.target.checked)}
+                className="h-4 w-4"
+              />
               I understand this action cannot be undone.
             </label>
             <input
@@ -550,17 +758,23 @@ function CustomerPortal() {
               placeholder="Type DELETE to confirm"
               className="w-full rounded-lg border border-red-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
             />
-            <button onClick={deleteAllData} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-500">
+            <button
+              onClick={deleteAllData}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-500"
+            >
               Delete all my data
             </button>
           </div>
         </div>
 
         {privacyMessage && (
-          <p className="mt-3 rounded-md bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">{privacyMessage}</p>
+          <p className="mt-3 rounded-md bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">
+            {privacyMessage}
+          </p>
         )}
       </div>
 
+      {/* Recent privacy activity */}
       <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
         <h3 className="text-lg font-bold text-slate-900">Recent privacy activity</h3>
         {auditLog.length > 0 ? (
