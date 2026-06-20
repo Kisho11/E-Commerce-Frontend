@@ -17,6 +17,7 @@ function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -42,6 +43,7 @@ function Login() {
     setGoogleError('');
     setSuccessMessage('');
     setShowForgotPassword(false);
+    setShowPassword(false);
   }, [mode]);
 
   useEffect(() => {
@@ -314,7 +316,7 @@ function Login() {
                   </div>
                 )}
 
-                <div className={mode === 'customer-signup' ? 'grid gap-3 sm:grid-cols-2' : 'space-y-3'}>
+                <div className="space-y-3">
                   <div>
                     <label className="mb-1.5 inline-block text-sm font-medium text-slate-900">Email</label>
                     <input
@@ -330,7 +332,7 @@ function Login() {
                   <div>
                     <label className="mb-1.5 inline-block text-sm font-medium text-slate-900">Password</label>
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
@@ -342,7 +344,16 @@ function Login() {
                 </div>
 
                 {mode !== 'customer-signup' && (
-                  <div className="-mt-1 text-right">
+                  <div className="-mt-1 flex items-center justify-between gap-3">
+                    <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={showPassword}
+                        onChange={(e) => setShowPassword(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+                      />
+                      Show password
+                    </label>
                     <button
                       type="button"
                       onClick={() => {
@@ -388,7 +399,7 @@ function Login() {
                   <div>
                     <label className="mb-1.5 inline-block text-sm font-medium text-slate-900">Confirm Password</label>
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="••••••••"
@@ -397,6 +408,18 @@ function Login() {
                       required
                     />
                   </div>
+                )}
+
+                {mode === 'customer-signup' && (
+                  <label className="-mt-1 inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={showPassword}
+                      onChange={(e) => setShowPassword(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-600"
+                    />
+                    Show passwords
+                  </label>
                 )}
 
                 <button
