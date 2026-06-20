@@ -218,8 +218,9 @@ function AdminDashboard() {
   };
 
   const handleLogout = () => {
+    if (!window.confirm('Are you sure you want to logout?')) return;
     logout();
-    navigate('/login?mode=staff-signin');
+    navigate('/');
   };
 
   return (

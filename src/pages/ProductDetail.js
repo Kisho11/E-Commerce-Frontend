@@ -65,6 +65,24 @@ function ProductDetail() {
   const productType = useMemo(() => resolveProductType(product), [product]);
   const priceDisplay = useMemo(() => getProductPriceDisplay(product), [product]);
   const attributeOptions = useMemo(() => deriveAttributeOptions(product), [product]);
+  const stockInfo = useMemo(() => {
+    if (!product || productType === PRODUCT_TYPES.CUSTOM) {
+      return { onHand: null, reserved: 0, available: null, isOutOfStock: false, isLowStock: false };
+    }
+
+    const onHand = Number(product.inventory?.onHand ?? 0);
+    const reserved = Number(product.inventory?.reserved ?? 0);
+    const reorderLevel = Number(product.inventory?.reorderLevel ?? 0);
+    const available = Math.max(onHand - reserved, 0);
+
+    return {
+      onHand,
+      reserved,
+      available,
+      isOutOfStock: available <= 0,
+      isLowStock: available > 0 && available <= reorderLevel,
+    };
+  }, [product, productType]);
 
   useEffect(() => {
     if (!product) {
@@ -141,20 +159,23 @@ function ProductDetail() {
       ? {
           '@type': 'Offer',
           priceCurrency: 'GBP',
-          availability: 'https://schema.org/InStock',
+          availability: stockInfo.isOutOfStock ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
           url: window.location.href,
         }
       : {
           '@type': 'Offer',
           priceCurrency: 'GBP',
           price: String(priceDisplay.numericPrice ?? product.salePrice ?? product.price ?? ''),
-          availability: 'https://schema.org/InStock',
+          availability: stockInfo.isOutOfStock ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
           url: window.location.href,
         },
   };
 
   const addSelectedProductToCart = async () => {
     setCartError('');
+    if (stockInfo.isOutOfStock) {
+      throw new Error('This product is currently out of stock.');
+    }
     await addToCart(product, {
       attributes: selectedAttributes,
       quantity,
@@ -182,7 +203,8 @@ function ProductDetail() {
   const normalizeQuantity = (next) => {
     const parsed = Number(next);
     if (!Number.isFinite(parsed)) return 1;
-    return Math.min(50, Math.max(1, parsed));
+    const maxQuantity = stockInfo.available == null ? 50 : Math.min(50, Math.max(1, stockInfo.available));
+    return Math.min(maxQuantity, Math.max(1, parsed));
   };
 
   const handleImageMouseMove = (event) => {
@@ -300,6 +322,25 @@ function ProductDetail() {
                   </button>
                 </div>
 
+            {productType !== PRODUCT_TYPES.CUSTOM && (
+              <div className={`mt-5 rounded-xl border px-4 py-3 ${
+                stockInfo.isOutOfStock
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : stockInfo.isLowStock
+                    ? 'border-amber-200 bg-amber-50 text-amber-700'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              }`}>
+                <p className="text-sm font-bold">
+                  {stockInfo.isOutOfStock ? 'Out of stock' : stockInfo.isLowStock ? 'Low stock' : 'In stock'}
+                </p>
+                <p className="mt-1 text-sm">
+                  {stockInfo.isOutOfStock
+                    ? 'This item is currently unavailable.'
+                    : `${stockInfo.available} available for order.`}
+                </p>
+              </div>
+            )}
+
             <form className="mt-8" onSubmit={handleAddToCart}>
               {productType === PRODUCT_TYPES.VARIABLE && attributeOptions.length > 0 && (
                 <div className="space-y-6">
@@ -342,6 +383,7 @@ function ProductDetail() {
                   <div className="inline-flex items-center rounded-lg border border-slate-300">
                     <button
                       onClick={() => setQuantity((prev) => normalizeQuantity(prev - 1))}
+                      disabled={stockInfo.isOutOfStock}
                       className="px-3 py-2 text-slate-700"
                       type="button"
                     >
@@ -350,14 +392,16 @@ function ProductDetail() {
                     <input
                       type="number"
                       min="1"
-                      max="50"
+                      max={stockInfo.available == null ? 50 : Math.min(50, Math.max(1, stockInfo.available))}
                       value={quantity}
                       onChange={(e) => setQuantity(normalizeQuantity(e.target.value))}
-                      className="w-16 border-x border-slate-300 px-2 py-2 text-center focus:outline-none"
+                      disabled={stockInfo.isOutOfStock}
+                      className="w-16 border-x border-slate-300 px-2 py-2 text-center focus:outline-none disabled:bg-slate-100 disabled:text-slate-400"
                     />
                     <button
                       onClick={() => setQuantity((prev) => normalizeQuantity(prev + 1))}
-                      className="px-3 py-2 text-slate-700"
+                      disabled={stockInfo.isOutOfStock || (stockInfo.available != null && quantity >= stockInfo.available)}
+                      className="px-3 py-2 text-slate-700 disabled:text-slate-300"
                       type="button"
                     >
                       +
@@ -378,14 +422,16 @@ function ProductDetail() {
                 <div className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
                     type="submit"
-                    className="flex w-full items-center justify-center rounded-md border border-transparent bg-primary px-8 py-3 text-base font-medium text-white hover:bg-red-700"
+                    disabled={stockInfo.isOutOfStock}
+                    className="flex w-full items-center justify-center rounded-md border border-transparent bg-primary px-8 py-3 text-base font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
-                    Add to cart
+                    {stockInfo.isOutOfStock ? 'Out of stock' : 'Add to cart'}
                   </button>
                   <button
                     type="button"
                     onClick={handleCheckout}
-                    className="flex w-full items-center justify-center rounded-md border border-green-700 bg-green-600 px-8 py-3 text-base font-medium text-white hover:bg-green-700"
+                    disabled={stockInfo.isOutOfStock}
+                    className="flex w-full items-center justify-center rounded-md border border-green-700 bg-green-600 px-8 py-3 text-base font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300"
                   >
                     Checkout
                   </button>

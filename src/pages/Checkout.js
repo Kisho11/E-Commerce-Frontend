@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useOrders } from '../context/OrderContext';
@@ -49,10 +49,10 @@ function Checkout() {
       lastName: savedName.lastName,
       email: savedProfile.email || user?.email || '',
       phone: savedProfile.phone || user?.phone || '',
-      address: '',
-      city: '',
-      state: '',
-      zipCode: savedPayment?.billingZip || '',
+      address: savedProfile.address || '',
+      city: savedProfile.city || '',
+      state: savedProfile.state || '',
+      zipCode: savedProfile.zipCode || savedPayment?.billingZip || '',
       cardNumber: getSavedPaymentCardNumber(savedPayment),
       expiryDate: savedPayment?.expiry || '',
       cvv: '',
@@ -69,6 +69,47 @@ function Checkout() {
   const shippingFee = 0;
   const totalWithTax = subtotal + taxAmount + shippingFee;
   const requiresBackendCheckout = Boolean(process.env.REACT_APP_API_URL);
+
+  useEffect(() => {
+    if (requiresBackendCheckout && !user && cartItems.length > 0) {
+      navigate('/login?mode=customer-signin&redirect=%2Fcheckout', { replace: true });
+    }
+  }, [cartItems.length, navigate, requiresBackendCheckout, user]);
+
+  useEffect(() => {
+    if (!requiresBackendCheckout || !user) return;
+
+    let cancelled = false;
+    const loadSavedAddress = async () => {
+      try {
+        const response = await authFetch('/users/me/addresses');
+        const addresses = await response.json().catch(() => []);
+        if (!response.ok || !Array.isArray(addresses) || addresses.length === 0 || cancelled) return;
+
+        const savedAddress = addresses.find((address) => address.is_default) || addresses[addresses.length - 1];
+        setFormData((prev) => ({
+          ...prev,
+          address: prev.address || savedAddress.address_line1 || '',
+          city: prev.city || savedAddress.city || '',
+          state: prev.state || savedAddress.state || '',
+          zipCode: prev.zipCode || savedAddress.postal_code || '',
+          phone: prev.phone || savedAddress.phone || '',
+        }));
+      } catch {
+        // Checkout can still continue with manually entered address details.
+      }
+    };
+
+    loadSavedAddress();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, requiresBackendCheckout, user]);
+
+  if (requiresBackendCheckout && !user && cartItems.length > 0) {
+    return null;
+  }
 
   if (cartItems.length === 0 && !orderPlaced) {
     return (
@@ -227,6 +268,19 @@ function Checkout() {
           id: orderData?.id,
         });
 
+        const savedProfile = readLocalStorage(PROFILE_KEY, {});
+        localStorage.setItem(PROFILE_KEY, JSON.stringify({
+          ...savedProfile,
+          fullName: orderPayload.customer,
+          email: orderPayload.customerEmail,
+          phone: orderPayload.customerPhone,
+          address: orderPayload.shippingAddress.address,
+          city: orderPayload.shippingAddress.city,
+          state: orderPayload.shippingAddress.state,
+          zipCode: orderPayload.shippingAddress.zipCode,
+          updatedAt: new Date().toISOString(),
+        }));
+
         await clearCart();
         await loadCart().catch(() => {});
         await loadOrders().catch(() => {});
@@ -242,6 +296,19 @@ function Checkout() {
     }
 
     const createdOrder = placeOrder(buildOrderPayload());
+    const orderPayload = buildOrderPayload();
+    const savedProfile = readLocalStorage(PROFILE_KEY, {});
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({
+      ...savedProfile,
+      fullName: orderPayload.customer,
+      email: orderPayload.customerEmail,
+      phone: orderPayload.customerPhone,
+      address: orderPayload.shippingAddress.address,
+      city: orderPayload.shippingAddress.city,
+      state: orderPayload.shippingAddress.state,
+      zipCode: orderPayload.shippingAddress.zipCode,
+      updatedAt: new Date().toISOString(),
+    }));
     setPlacedOrder(createdOrder);
     setOrderPlaced(true);
     await clearCart();

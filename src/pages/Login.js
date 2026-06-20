@@ -28,6 +28,10 @@ function Login() {
 
   const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
   const isCustomerMode = mode === 'customer-signin' || mode === 'customer-signup';
+  const redirectTarget = (() => {
+    const target = searchParams.get('redirect');
+    return target && target.startsWith('/') && !target.startsWith('//') ? target : '';
+  })();
 
   useEffect(() => {
     const requestedMode = searchParams.get('mode');
@@ -61,7 +65,7 @@ function Login() {
         callback: async (response) => {
           const result = await authWithGoogle(response.credential);
           if (result.success) {
-            navigate('/');
+            navigate(redirectTarget || '/');
           } else {
             setGoogleError(result.error || 'Google authentication failed');
           }
@@ -98,7 +102,7 @@ function Login() {
     return () => {
       script.onload = null;
     };
-  }, [authWithGoogle, googleClientId, isCustomerMode, mode, navigate]);
+  }, [authWithGoogle, googleClientId, isCustomerMode, mode, navigate, redirectTarget]);
 
   const handleStaffSubmit = async (e) => {
     e.preventDefault();
@@ -132,7 +136,7 @@ function Login() {
             ? '/admin/dashboard'
             : result.user.role === 'manager'
               ? '/manager/dashboard'
-              : '/'
+              : (redirectTarget || '/')
         );
       } else {
         setError(result.error);
@@ -161,7 +165,7 @@ function Login() {
     try {
       const result = await signUpCustomer({ name, email, password });
       if (result.success) {
-        navigate('/');
+        navigate(redirectTarget || '/');
       } else {
         setError(result.error);
       }

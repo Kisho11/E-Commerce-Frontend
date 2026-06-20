@@ -1,9 +1,24 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 const API_ORIGIN = API_BASE_URL ? new URL(API_BASE_URL).origin : '';
+const GUEST_CART_KEY = 'guestCartItems';
+
+const readGuestCartItems = () => {
+  try {
+    const stored = localStorage.getItem(GUEST_CART_KEY);
+    const parsed = stored ? JSON.parse(stored) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeGuestCartItems = (items) => {
+  localStorage.setItem(GUEST_CART_KEY, JSON.stringify(items));
+};
 
 const normalizeAttributes = (attributes = {}) =>
   Object.fromEntries(
@@ -55,15 +70,17 @@ const mapBackendCartItem = (item = {}) => {
 
 export function CartProvider({ children }) {
   const { user, authFetch } = useAuth();
-  const [cartItems, setCartItems] = useState([]);
+  const [cartItems, setCartItems] = useState(() => readGuestCartItems());
   const [cartToast, setCartToast] = useState({ visible: false, message: '', id: null });
+  const mergedGuestCartForUserRef = useRef(null);
 
   const isBackendCartUser = Boolean(API_BASE_URL && user && user.role === 'user');
 
   const loadCart = useCallback(async () => {
     if (!isBackendCartUser) {
-      setCartItems([]);
-      return [];
+      const guestItems = readGuestCartItems();
+      setCartItems(guestItems);
+      return guestItems;
     }
 
     const response = await authFetch('/cart/');
@@ -78,12 +95,32 @@ export function CartProvider({ children }) {
 
     const syncCart = async () => {
       if (!isBackendCartUser) {
-        setCartItems([]);
+        setCartItems(readGuestCartItems());
         return;
       }
 
       try {
-        const items = await loadCart();
+        const guestItems = readGuestCartItems();
+        let items = await loadCart();
+
+        if (guestItems.length > 0 && mergedGuestCartForUserRef.current !== user?.id) {
+          for (const item of guestItems) {
+            await authFetch('/cart/items', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                product_id: item.id,
+                quantity: Math.max(1, Number(item.quantity) || 1),
+              }),
+            });
+          }
+          localStorage.removeItem(GUEST_CART_KEY);
+          mergedGuestCartForUserRef.current = user?.id || 'customer';
+          items = await loadCart();
+        }
+
         if (!cancelled) {
           setCartItems(items);
         }
@@ -99,7 +136,7 @@ export function CartProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [isBackendCartUser, loadCart]);
+  }, [authFetch, isBackendCartUser, loadCart, user?.id]);
 
   const addToCart = useCallback(async (product, options = {}) => {
     const selectedAttributes = normalizeAttributes(options.attributes || {});
@@ -129,26 +166,30 @@ export function CartProvider({ children }) {
     } else {
       setCartItems((prevItems) => {
         const existingItem = prevItems.find((item) => item.lineId === lineId);
+        let nextItems;
 
         if (existingItem) {
-          return prevItems.map((item) =>
+          nextItems = prevItems.map((item) =>
             item.lineId === lineId
               ? { ...item, quantity: item.quantity + selectedQuantity }
               : item
           );
+        } else {
+          nextItems = [
+            ...prevItems,
+            {
+              ...product,
+              lineId,
+              selectedAttributes,
+              selectedColor,
+              selectedSize,
+              quantity: selectedQuantity,
+            },
+          ];
         }
 
-        return [
-          ...prevItems,
-          {
-            ...product,
-            lineId,
-            selectedAttributes,
-            selectedColor,
-            selectedSize,
-            quantity: selectedQuantity,
-          },
-        ];
+        writeGuestCartItems(nextItems);
+        return nextItems;
       });
     }
 
@@ -181,7 +222,11 @@ export function CartProvider({ children }) {
       return;
     }
 
-    setCartItems((prevItems) => prevItems.filter((item) => item.lineId !== lineId));
+    setCartItems((prevItems) => {
+      const nextItems = prevItems.filter((item) => item.lineId !== lineId);
+      writeGuestCartItems(nextItems);
+      return nextItems;
+    });
   }, [authFetch, cartItems, isBackendCartUser]);
 
   const updateQuantity = useCallback(
@@ -211,9 +256,11 @@ export function CartProvider({ children }) {
         return;
       }
 
-      setCartItems((prevItems) =>
-        prevItems.map((item) => (item.lineId === lineId ? { ...item, quantity } : item))
-      );
+      setCartItems((prevItems) => {
+        const nextItems = prevItems.map((item) => (item.lineId === lineId ? { ...item, quantity } : item));
+        writeGuestCartItems(nextItems);
+        return nextItems;
+      });
     },
     [authFetch, cartItems, isBackendCartUser, removeFromCart]
   );
@@ -244,6 +291,9 @@ export function CartProvider({ children }) {
       }
     }
     setCartItems([]);
+    if (!isBackendCartUser) {
+      localStorage.removeItem(GUEST_CART_KEY);
+    }
   }, [authFetch, isBackendCartUser]);
 
   const hideCartToast = useCallback(() => setCartToast((prev) => ({ ...prev, visible: false })), []);

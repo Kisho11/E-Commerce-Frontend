@@ -9,7 +9,7 @@ const PAYMENT_KEY = 'customerPaymentMethods';
 const CONSENT_KEY = 'customerConsents';
 const AUDIT_KEY = 'customerDataAuditLog';
 
-const defaultProfile = { fullName: '', email: '', phone: '' };
+const defaultProfile = { fullName: '', email: '', phone: '', address: '', city: '', state: '', zipCode: '' };
 
 const defaultPayment = {
   type: 'Card',
@@ -27,7 +27,7 @@ const defaultConsents = {
   updatedAt: null,
 };
 
-const emptyProfileErrors = { fullName: '', email: '', phone: '' };
+const emptyProfileErrors = { fullName: '', email: '', phone: '', address: '', city: '', state: '', zipCode: '' };
 const emptyPaymentErrors = { cardHolder: '', cardNumber: '', expiry: '', billingZip: '' };
 
 function readLocalStorage(key, fallback) {
@@ -175,6 +175,7 @@ function CustomerPortal() {
     const stored = readLocalStorage(PROFILE_KEY, null);
     if (stored && (stored.fullName || stored.email)) return stored;
     return {
+      ...defaultProfile,
       fullName: user?.name || '',
       email: user?.email || '',
       phone: user?.phone || '',
@@ -482,6 +483,60 @@ function CustomerPortal() {
                 placeholder="+1 555 000 1234"
               />
               <FieldError msg={profileErrors.phone} />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">Address</label>
+              <input
+                type="text"
+                name="address"
+                value={profile.address || ''}
+                onChange={handleProfileChange}
+                className={inputCls(!!profileErrors.address)}
+                placeholder="Street address"
+              />
+              <FieldError msg={profileErrors.address} />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">City</label>
+                <input
+                  type="text"
+                  name="city"
+                  value={profile.city || ''}
+                  onChange={handleProfileChange}
+                  className={inputCls(!!profileErrors.city)}
+                  placeholder="City"
+                />
+                <FieldError msg={profileErrors.city} />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">State</label>
+                <input
+                  type="text"
+                  name="state"
+                  value={profile.state || ''}
+                  onChange={handleProfileChange}
+                  className={inputCls(!!profileErrors.state)}
+                  placeholder="State"
+                />
+                <FieldError msg={profileErrors.state} />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">ZIP Code</label>
+                <input
+                  type="text"
+                  name="zipCode"
+                  value={profile.zipCode || ''}
+                  onChange={handleProfileChange}
+                  className={inputCls(!!profileErrors.zipCode)}
+                  placeholder="ZIP / postal"
+                />
+                <FieldError msg={profileErrors.zipCode} />
+              </div>
             </div>
 
             <button

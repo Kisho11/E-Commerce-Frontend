@@ -80,8 +80,10 @@ function Navbar() {
   };
 
   const handleLogout = () => {
+    if (!window.confirm('Are you sure you want to logout?')) return;
     logout();
     handleNavigate();
+    navigate('/');
   };
 
   const handleLogoClick = (event) => {
