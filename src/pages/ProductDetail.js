@@ -147,16 +147,29 @@ function ProductDetail() {
         },
   };
 
+  const addSelectedProductToCart = async () => {
+    setCartError('');
+    await addToCart(product, {
+      attributes: selectedAttributes,
+      quantity,
+    });
+  };
+
   const handleAddToCart = async (event) => {
     event.preventDefault();
-    setCartError('');
     try {
-      await addToCart(product, {
-        attributes: selectedAttributes,
-        quantity,
-      });
+      await addSelectedProductToCart();
     } catch (err) {
       setCartError(err.message || 'Could not add to cart. Please try again.');
+    }
+  };
+
+  const handleCheckout = async () => {
+    try {
+      await addSelectedProductToCart();
+      navigate('/checkout');
+    } catch (err) {
+      setCartError(err.message || 'Could not start checkout. Please try again.');
     }
   };
 
@@ -365,7 +378,7 @@ function ProductDetail() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => navigate('/checkout')}
+                    onClick={handleCheckout}
                     className="flex w-full items-center justify-center rounded-md border border-green-700 bg-green-600 px-8 py-3 text-base font-medium text-white hover:bg-green-700"
                   >
                     Checkout

@@ -6,23 +6,57 @@ import { useAuth } from '../context/AuthContext';
 import UiIcon from '../components/UiIcon';
 import Seo from '../components/Seo';
 
+const PROFILE_KEY = 'customerProfile';
+const PAYMENT_KEY = 'customerPaymentMethods';
+
+function readLocalStorage(key, fallback) {
+  try {
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function splitFullName(fullName = '') {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: '', lastName: '' };
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  };
+}
+
+function getSavedPaymentCardNumber(paymentMethod = null) {
+  if (!paymentMethod) return '';
+  return paymentMethod.maskedNumber || (paymentMethod.last4 ? `**** **** **** ${paymentMethod.last4}` : '');
+}
+
 function Checkout() {
   const navigate = useNavigate();
   const { cartItems, getTotalPrice, clearCart, loadCart } = useCart();
   const { placeOrder, loadOrders } = useOrders();
   const { user, authFetch } = useAuth();
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    address: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    cardNumber: '',
-    expiryDate: '',
-    cvv: '',
+  const [formData, setFormData] = useState(() => {
+    const savedProfile = readLocalStorage(PROFILE_KEY, {});
+    const savedPayments = readLocalStorage(PAYMENT_KEY, []);
+    const savedPayment = Array.isArray(savedPayments) ? savedPayments[0] : null;
+    const savedName = splitFullName(savedProfile.fullName || user?.name || '');
+
+    return {
+      firstName: savedName.firstName,
+      lastName: savedName.lastName,
+      email: savedProfile.email || user?.email || '',
+      phone: savedProfile.phone || user?.phone || '',
+      address: '',
+      city: '',
+      state: '',
+      zipCode: savedPayment?.billingZip || '',
+      cardNumber: getSavedPaymentCardNumber(savedPayment),
+      expiryDate: savedPayment?.expiry || '',
+      cvv: '',
+    };
   });
 
   const [orderPlaced, setOrderPlaced] = useState(false);
