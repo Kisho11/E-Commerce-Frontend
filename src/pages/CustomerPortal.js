@@ -191,8 +191,6 @@ function CustomerPortal() {
   const [profileErrors, setProfileErrors] = useState(emptyProfileErrors);
   const [paymentErrors, setPaymentErrors] = useState(emptyPaymentErrors);
 
-  const [profileMessage, setProfileMessage] = useState('');
-  const [paymentMessage, setPaymentMessage] = useState('');
   const [consentMessage, setConsentMessage] = useState('');
   const [privacyMessage, setPrivacyMessage] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -223,8 +221,7 @@ function CustomerPortal() {
     setProfile(payload);
     writeLocalStorage(PROFILE_KEY, payload);
     addAudit('profile_updated', 'Personal details changed');
-    setProfileMessage('Personal details updated successfully.');
-    setTimeout(() => setProfileMessage(''), 2500);
+    window.alert('Personal details updated successfully.');
   };
 
   const handleCardNumberChange = (e) => {
@@ -287,8 +284,7 @@ function CustomerPortal() {
     setEditingId(null);
     addAudit(isEditing ? 'payment_updated' : 'payment_added', `${methodPayload.type} ending ${methodPayload.last4}`);
 
-    setPaymentMessage(isEditing ? 'Payment method updated and saved.' : 'Payment method saved.');
-    setTimeout(() => setPaymentMessage(''), 2500);
+    window.alert(isEditing ? 'Payment method updated and saved.' : 'Payment method saved.');
   };
 
   const startEditPaymentMethod = (method) => {
@@ -304,6 +300,9 @@ function CustomerPortal() {
   };
 
   const deletePaymentMethod = (id) => {
+    const confirmed = window.confirm('Are you sure you want to delete these card details?');
+    if (!confirmed) return;
+
     const nextMethods = paymentMethods.filter((item) => item.id !== id);
     setPaymentMethods(nextMethods);
     writeLocalStorage(PAYMENT_KEY, nextMethods);
@@ -313,8 +312,7 @@ function CustomerPortal() {
       setPaymentErrors(emptyPaymentErrors);
     }
     addAudit('payment_removed', `Payment id ${id} removed`);
-    setPaymentMessage('Payment method removed.');
-    setTimeout(() => setPaymentMessage(''), 2500);
+    window.alert('Payment method removed.');
   };
 
   const saveConsents = () => {
@@ -493,11 +491,6 @@ function CustomerPortal() {
               Save personal updates
             </button>
 
-            {profileMessage && (
-              <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
-                {profileMessage}
-              </p>
-            )}
           </form>
         </div>
 
@@ -610,12 +603,42 @@ function CustomerPortal() {
               )}
             </div>
 
-            {paymentMessage && (
-              <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
-                {paymentMessage}
-              </p>
-            )}
           </form>
+        </div>
+      </div>
+
+      {/* Saved payment methods */}
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
+        <h3 className="text-lg font-bold text-slate-900">Saved methods</h3>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          {paymentMethods.length > 0 ? (
+            paymentMethods.map((method) => (
+              <div key={method.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-bold text-slate-900">{method.type}</p>
+                <p className="mt-1 text-sm text-slate-600">{method.cardHolder}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-700">
+                  {method.maskedNumber || maskCard(method.last4)}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">Exp: {method.expiry} | ZIP: {method.billingZip}</p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => startEditPaymentMethod(method)}
+                    className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white"
+                  >
+                    Update
+                  </button>
+                  <button
+                    onClick={() => deletePaymentMethod(method.id)}
+                    className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-slate-600">No payment methods saved yet.</p>
+          )}
         </div>
       </div>
 
@@ -677,41 +700,6 @@ function CustomerPortal() {
             {consentMessage}
           </p>
         )}
-      </div>
-
-      {/* Saved payment methods */}
-      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
-        <h3 className="text-lg font-bold text-slate-900">Saved methods</h3>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          {paymentMethods.length > 0 ? (
-            paymentMethods.map((method) => (
-              <div key={method.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-bold text-slate-900">{method.type}</p>
-                <p className="mt-1 text-sm text-slate-600">{method.cardHolder}</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">
-                  {method.maskedNumber || maskCard(method.last4)}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">Exp: {method.expiry} | ZIP: {method.billingZip}</p>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => startEditPaymentMethod(method)}
-                    className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-bold text-white"
-                  >
-                    Update
-                  </button>
-                  <button
-                    onClick={() => deletePaymentMethod(method.id)}
-                    className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-slate-600">No payment methods saved yet.</p>
-          )}
-        </div>
       </div>
 
       {/* Privacy & data rights */}
