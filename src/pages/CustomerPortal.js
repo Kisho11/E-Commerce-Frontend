@@ -72,7 +72,7 @@ function validateProfileField(name, value) {
     case 'fullName':
       if (!v) return 'Full name is required.';
       if (v.length < 2) return 'Full name must be at least 2 characters.';
-      if (!/^[a-zA-Z\s'\-]+$/.test(v)) return 'Only letters, spaces, hyphens, or apostrophes allowed.';
+      if (!/^[a-zA-Z\s'-]+$/.test(v)) return 'Only letters, spaces, hyphens, or apostrophes allowed.';
       return '';
     case 'email':
       if (!v) return 'Email is required.';
@@ -116,7 +116,7 @@ function validatePaymentField(name, value, isEditingCard) {
     }
     case 'billingZip':
       if (!v) return 'Billing ZIP / postal code is required.';
-      if (!/^[a-zA-Z0-9\s\-]{3,10}$/.test(v)) return 'Enter a valid ZIP / postal code (3–10 characters).';
+      if (!/^[a-zA-Z0-9\s-]{3,10}$/.test(v)) return 'Enter a valid ZIP / postal code (3–10 characters).';
       return '';
     default:
       return '';

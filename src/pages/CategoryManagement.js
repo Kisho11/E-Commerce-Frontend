@@ -21,7 +21,14 @@ function CategoryManagement() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const normalizedNames = useMemo(() => categories.map((category) => category.name.toLowerCase()), [categories]);
+  const normalizedNames = useMemo(
+    () =>
+      categories.flatMap((category) => [
+        category.name.toLowerCase(),
+        ...(category.subcategories || []).map((subcategory) => subcategory.name.toLowerCase()),
+      ]),
+    [categories]
+  );
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredCategories = useMemo(() => {
     if (!normalizedSearch) return categories;
@@ -92,7 +99,7 @@ function CategoryManagement() {
     event.target.value = '';
   };
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     setError('');
     setSuccess('');
 
@@ -102,23 +109,27 @@ function CategoryManagement() {
     }
 
     if (normalizedNames.includes(newCategoryName.trim().toLowerCase())) {
-      setError('Category already exists');
+      setError('A category or subcategory with this name already exists');
       return;
     }
 
-    const result = addCategory({
-      name: newCategoryName,
-      image: newCategoryImage,
-    });
+    try {
+      const result = await addCategory({
+        name: newCategoryName,
+        image: newCategoryImage,
+      });
 
-    if (result) {
-      setSuccess(`Category "${newCategoryName}" added successfully!`);
-      setNewCategoryName('');
-      setNewCategoryImage('');
+      if (result) {
+        setSuccess(`Category "${newCategoryName}" added successfully!`);
+        setNewCategoryName('');
+        setNewCategoryImage('');
+      }
+    } catch (err) {
+      setError(err.message || 'Unable to add category');
     }
   };
 
-  const handleUpdateCategory = (oldName) => {
+  const handleUpdateCategory = async (oldName) => {
     setError('');
     setSuccess('');
 
@@ -127,20 +138,28 @@ function CategoryManagement() {
       return;
     }
 
-    const duplicate = categories.some(
-      (category) => category.name.toLowerCase() === editName.trim().toLowerCase() && category.name !== oldName
-    );
+    const normalizedEditName = editName.trim().toLowerCase();
+    const duplicate = categories.some((category) => {
+      if (category.name !== oldName && category.name.toLowerCase() === normalizedEditName) return true;
+      return (category.subcategories || []).some(
+        (subcategory) => subcategory.name.toLowerCase() === normalizedEditName
+      );
+    });
 
     if (duplicate) {
-      setError('Category already exists');
+      setError('A category or subcategory with this name already exists');
       return;
     }
 
-    updateCategory(oldName, { name: editName, image: editImage });
-    setSuccess(`Category updated to "${editName}"!`);
-    setEditingCategory(null);
-    setEditName('');
-    setEditImage('');
+    try {
+      await updateCategory(oldName, { name: editName, image: editImage });
+      setSuccess(`Category updated to "${editName}"!`);
+      setEditingCategory(null);
+      setEditName('');
+      setEditImage('');
+    } catch (err) {
+      setError(err.message || 'Unable to update category');
+    }
   };
 
   const handleDeleteCategory = (categoryName) => {
@@ -200,13 +219,10 @@ function CategoryManagement() {
       return;
     }
 
-    const parentCategory = categories.find((category) => category.name === addingSubcategoryFor);
-    const duplicate = (parentCategory?.subcategories || []).some(
-      (subcategory) => subcategory.name.toLowerCase() === newSubcategoryName.trim().toLowerCase()
-    );
+    const duplicate = normalizedNames.includes(newSubcategoryName.trim().toLowerCase());
 
     if (duplicate) {
-      setError('Subcategory already exists in this category');
+      setError('A category or subcategory with this name already exists');
       return;
     }
 
@@ -235,15 +251,18 @@ function CategoryManagement() {
       return;
     }
 
-    const parentCategory = categories.find((category) => category.name === editingSubcategory.parentName);
-    const duplicate = (parentCategory?.subcategories || []).some(
-      (subcategory) =>
-        subcategory.name.toLowerCase() === editSubcategoryName.trim().toLowerCase() &&
-        subcategory.name !== editingSubcategory.name
-    );
+    const normalizedEditSubcategoryName = editSubcategoryName.trim().toLowerCase();
+    const duplicate = categories.some((category) => {
+      if (category.name.toLowerCase() === normalizedEditSubcategoryName) return true;
+      return (category.subcategories || []).some(
+        (subcategory) =>
+          subcategory.name.toLowerCase() === normalizedEditSubcategoryName &&
+          subcategory.name !== editingSubcategory.name
+      );
+    });
 
     if (duplicate) {
-      setError('Subcategory already exists in this category');
+      setError('A category or subcategory with this name already exists');
       return;
     }
 

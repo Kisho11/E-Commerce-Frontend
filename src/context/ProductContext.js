@@ -477,6 +477,35 @@ export function ProductProvider({ children }) {
   }, []);
 
   const categoryNames = useMemo(() => categories.map((c) => c.name), [categories]);
+  const categoryAndSubcategoryNames = useMemo(
+    () =>
+      categories.flatMap((category) => [
+        category.name,
+        ...(category.subcategories || []).map((subcategory) => subcategory.name),
+      ]),
+    [categories]
+  );
+
+  const hasCategoryNameConflict = useCallback(
+    (name, excludedNames = []) => {
+      const normalizedName = `${name || ''}`.trim().toLowerCase();
+      const excluded = excludedNames.map((item) => `${item || ''}`.trim().toLowerCase());
+      return categoryAndSubcategoryNames.some(
+        (item) => item.trim().toLowerCase() === normalizedName && !excluded.includes(item.trim().toLowerCase())
+      );
+    },
+    [categoryAndSubcategoryNames]
+  );
+
+  const hasProductNameConflict = useCallback(
+    (name, excludeId = null) => {
+      const normalizedName = `${name || ''}`.trim().toLowerCase();
+      return products.some(
+        (product) => product.id !== excludeId && product.name.trim().toLowerCase() === normalizedName
+      );
+    },
+    [products]
+  );
 
   const getCategoryIdsByNames = useCallback((categoryNamesToMatch = [], subcategoryNamesToMatch = []) => {
     const parentIds = categories
@@ -604,8 +633,17 @@ export function ProductProvider({ children }) {
   const addProduct = useCallback(async (newProduct) => {
     const productWithId = {
       ...newProduct,
+      name: `${newProduct.name || ''}`.trim(),
       inventory: normalizeInventory(newProduct),
     };
+
+    if (!productWithId.name) {
+      throw new Error('Product name is required');
+    }
+
+    if (hasProductNameConflict(productWithId.name)) {
+      throw new Error('A product with this name already exists');
+    }
 
     if (!API_BASE_URL) {
       const nextId = Math.max(...products.map((p) => p.id), 0) + 1;
@@ -659,7 +697,7 @@ export function ProductProvider({ children }) {
       });
 
     return optimisticProduct;
-  }, [buildVariantGroupsPayload, getCategoryIdsByNames, products, syncProductMedia]);
+  }, [buildVariantGroupsPayload, getCategoryIdsByNames, hasProductNameConflict, products, syncProductMedia]);
 
   const updateProduct = useCallback(async (productId, updatedData) => {
     const existingProduct = products.find((product) => product.id === productId);
@@ -668,7 +706,16 @@ export function ProductProvider({ children }) {
     const merged = {
       ...existingProduct,
       ...updatedData,
+      name: `${updatedData.name ?? existingProduct.name}`.trim(),
     };
+
+    if (!merged.name) {
+      throw new Error('Product name is required');
+    }
+
+    if (hasProductNameConflict(merged.name, productId)) {
+      throw new Error('A product with this name already exists');
+    }
     merged.inventory = normalizeInventory({
       ...existingProduct,
       inventory: {
@@ -729,7 +776,7 @@ export function ProductProvider({ children }) {
       });
 
     return optimisticProduct;
-  }, [buildVariantGroupsPayload, getCategoryIdsByNames, products, syncProductMedia]);
+  }, [buildVariantGroupsPayload, getCategoryIdsByNames, hasProductNameConflict, products, syncProductMedia]);
 
   const deleteProduct = useCallback(async (productId) => {
     if (API_BASE_URL) {
@@ -764,8 +811,9 @@ export function ProductProvider({ children }) {
 
     if (!payload.name) return false;
 
-    const exists = categories.some((c) => c.name.toLowerCase() === payload.name.toLowerCase());
-    if (exists) return false;
+    if (hasCategoryNameConflict(payload.name)) {
+      throw new Error('A category or subcategory with this name already exists');
+    }
 
     if (!API_BASE_URL) {
       setCategories((prev) => [...prev, payload]);
@@ -818,7 +866,7 @@ export function ProductProvider({ children }) {
         children: createdCategory.children || [],
       })
     );
-  }, [categories, refreshCategoriesFromApi]);
+  }, [hasCategoryNameConflict, refreshCategoriesFromApi]);
 
   const deleteCategory = useCallback(async (categoryName) => {
     const existingCategory = categories.find((c) => c.name === categoryName);
@@ -856,6 +904,10 @@ export function ProductProvider({ children }) {
 
     const existingCategory = categories.find((c) => c.name === oldName);
     if (!existingCategory) return false;
+
+    if (hasCategoryNameConflict(payload.name, [oldName])) {
+      throw new Error('A category or subcategory with this name already exists');
+    }
 
     let nextCategory = {
       ...existingCategory,
@@ -940,7 +992,7 @@ export function ProductProvider({ children }) {
       );
     }
     return nextCategory;
-  }, [categories, refreshCategoriesFromApi]);
+  }, [categories, hasCategoryNameConflict, refreshCategoriesFromApi]);
 
   const addSubcategory = useCallback(async (parentCategoryName, subcategoryData) => {
     const parentCategory = categories.find((c) => c.name === parentCategoryName);
@@ -953,10 +1005,9 @@ export function ProductProvider({ children }) {
 
     if (!payload.name) return false;
 
-    const exists = (parentCategory.subcategories || []).some(
-      (item) => item.name.toLowerCase() === payload.name.toLowerCase()
-    );
-    if (exists) return false;
+    if (hasCategoryNameConflict(payload.name)) {
+      throw new Error('A category or subcategory with this name already exists');
+    }
 
     let nextSubcategory = {
       id: Date.now(),
@@ -1026,7 +1077,7 @@ export function ProductProvider({ children }) {
     }
 
     return nextSubcategory;
-  }, [categories, refreshCategoriesFromApi]);
+  }, [categories, hasCategoryNameConflict, refreshCategoriesFromApi]);
 
   const updateSubcategory = useCallback(async (parentCategoryName, oldSubcategoryName, subcategoryData) => {
     const parentCategory = categories.find((c) => c.name === parentCategoryName);
@@ -1037,6 +1088,10 @@ export function ProductProvider({ children }) {
       typeof subcategoryData === 'string'
         ? { name: subcategoryData.trim(), image: '' }
         : { name: subcategoryData.name?.trim() || oldSubcategoryName, image: subcategoryData.image?.trim() || '' };
+
+    if (hasCategoryNameConflict(payload.name, [oldSubcategoryName])) {
+      throw new Error('A category or subcategory with this name already exists');
+    }
 
     let nextSubcategory = {
       ...existingSubcategory,
@@ -1117,7 +1172,7 @@ export function ProductProvider({ children }) {
     }
 
     return nextSubcategory;
-  }, [categories, refreshCategoriesFromApi]);
+  }, [categories, hasCategoryNameConflict, refreshCategoriesFromApi]);
 
   const deleteSubcategory = useCallback(async (parentCategoryName, subcategoryName) => {
     const parentCategory = categories.find((c) => c.name === parentCategoryName);
