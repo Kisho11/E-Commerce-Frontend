@@ -54,6 +54,7 @@ function ProductDetail() {
   const { addToCart } = useCart();
   const { products, loadAllProducts } = useProducts();
   const product = products.find((p) => p.id === parseInt(id, 10));
+  const [resolvedProductId, setResolvedProductId] = useState(null);
 
   const [selectedAttributes, setSelectedAttributes] = useState({});
   const [quantity, setQuantity] = useState(1);
@@ -85,10 +86,23 @@ function ProductDetail() {
   }, [product, productType]);
 
   useEffect(() => {
-    if (!product) {
-      loadAllProducts();
+    let isActive = true;
+
+    if (product) {
+      setResolvedProductId(id);
+      return () => {
+        isActive = false;
+      };
     }
-  }, [loadAllProducts, product]);
+
+    loadAllProducts().finally(() => {
+      if (isActive) setResolvedProductId(id);
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [id, loadAllProducts, product]);
 
   useEffect(() => {
     setSelectedImageIndex(0);
@@ -122,6 +136,15 @@ function ProductDetail() {
       }
     }
   }, [selectedAttributes, product?.imageVariantTags, product?.image, product?.galleryImages]);
+
+  if (!product && resolvedProductId !== id) {
+    return (
+      <div className="shell flex min-h-[50vh] flex-col items-center justify-center py-16" role="status" aria-live="polite">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-primary" aria-hidden="true" />
+        <p className="mt-4 text-sm font-medium text-slate-600">Loading product details...</p>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
