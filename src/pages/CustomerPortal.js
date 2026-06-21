@@ -9,6 +9,8 @@ const PAYMENT_KEY = 'customerPaymentMethods';
 const CONSENT_KEY = 'customerConsents';
 const AUDIT_KEY = 'customerDataAuditLog';
 
+const getUserStorageKey = (key, userId) => `${key}:${userId || 'guest'}`;
+
 const defaultProfile = { fullName: '', email: '', phone: '', address: '', city: '', state: '', zipCode: '' };
 
 const defaultPayment = {
@@ -196,9 +198,13 @@ function CustomerPortal() {
   const { user, authFetch } = useAuth();
   const { orders } = useOrders();
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const profileStorageKey = getUserStorageKey(PROFILE_KEY, user?.id);
+  const paymentStorageKey = getUserStorageKey(PAYMENT_KEY, user?.id);
+  const consentStorageKey = getUserStorageKey(CONSENT_KEY, user?.id);
+  const auditStorageKey = getUserStorageKey(AUDIT_KEY, user?.id);
 
   const [profile, setProfile] = useState(() => {
-    const stored = readLocalStorage(PROFILE_KEY, {});
+    const stored = readLocalStorage(profileStorageKey, {});
     return {
       ...defaultProfile,
       ...stored,
@@ -208,9 +214,9 @@ function CustomerPortal() {
     };
   });
 
-  const [paymentMethods, setPaymentMethods] = useState(() => readLocalStorage(PAYMENT_KEY, []));
-  const [consents, setConsents] = useState(() => readLocalStorage(CONSENT_KEY, defaultConsents));
-  const [auditLog, setAuditLog] = useState(() => readLocalStorage(AUDIT_KEY, []));
+  const [paymentMethods, setPaymentMethods] = useState(() => readLocalStorage(paymentStorageKey, []));
+  const [consents, setConsents] = useState(() => readLocalStorage(consentStorageKey, defaultConsents));
+  const [auditLog, setAuditLog] = useState(() => readLocalStorage(auditStorageKey, []));
 
   const [paymentForm, setPaymentForm] = useState(defaultPayment);
   const [editingId, setEditingId] = useState(null);
@@ -224,6 +230,24 @@ function CustomerPortal() {
   const [deleteText, setDeleteText] = useState('');
 
   const isEditing = useMemo(() => editingId !== null, [editingId]);
+
+  useEffect(() => {
+    const stored = readLocalStorage(profileStorageKey, {});
+    setProfile({
+      ...defaultProfile,
+      ...stored,
+      fullName: stored.fullName || user?.name || '',
+      email: stored.email || user?.email || '',
+      phone: stored.phone || user?.phone || '',
+    });
+    setPaymentMethods(readLocalStorage(paymentStorageKey, []));
+    setConsents(readLocalStorage(consentStorageKey, defaultConsents));
+    setAuditLog(readLocalStorage(auditStorageKey, []));
+    setPaymentForm(defaultPayment);
+    setPaymentErrors(emptyPaymentErrors);
+    setProfileErrors(emptyProfileErrors);
+    setEditingId(null);
+  }, [auditStorageKey, consentStorageKey, paymentStorageKey, profileStorageKey, user?.email, user?.name, user?.phone]);
 
   useEffect(() => {
     if (!process.env.REACT_APP_API_URL || !user) return undefined;
@@ -269,7 +293,7 @@ function CustomerPortal() {
     const entry = { id: Date.now(), action, detail, at: nowIso() };
     const next = [entry, ...auditLog].slice(0, 20);
     setAuditLog(next);
-    writeLocalStorage(AUDIT_KEY, next);
+    writeLocalStorage(auditStorageKey, next);
   };
 
   const handleProfileChange = (e) => {
@@ -286,7 +310,7 @@ function CustomerPortal() {
 
     const payload = { ...profile, updatedAt: nowIso() };
     setProfile(payload);
-    writeLocalStorage(PROFILE_KEY, payload);
+    writeLocalStorage(profileStorageKey, payload);
     addAudit('profile_updated', 'Personal details changed');
     window.alert('Personal details updated successfully.');
   };
@@ -345,7 +369,7 @@ function CustomerPortal() {
       : [...paymentMethods, methodPayload];
 
     setPaymentMethods(nextMethods);
-    writeLocalStorage(PAYMENT_KEY, nextMethods);
+    writeLocalStorage(paymentStorageKey, nextMethods);
     setPaymentForm(defaultPayment);
     setPaymentErrors(emptyPaymentErrors);
     setEditingId(null);
@@ -372,7 +396,7 @@ function CustomerPortal() {
 
     const nextMethods = paymentMethods.filter((item) => item.id !== id);
     setPaymentMethods(nextMethods);
-    writeLocalStorage(PAYMENT_KEY, nextMethods);
+    writeLocalStorage(paymentStorageKey, nextMethods);
     if (editingId === id) {
       setEditingId(null);
       setPaymentForm(defaultPayment);
@@ -385,7 +409,7 @@ function CustomerPortal() {
   const saveConsents = () => {
     const payload = { ...consents, essentialProcessing: true, updatedAt: nowIso() };
     setConsents(payload);
-    writeLocalStorage(CONSENT_KEY, payload);
+    writeLocalStorage(consentStorageKey, payload);
     addAudit('consent_updated', 'Consent preferences changed');
     setConsentMessage('Consent preferences saved.');
     setTimeout(() => setConsentMessage(''), 2500);
@@ -412,10 +436,10 @@ function CustomerPortal() {
       return;
     }
 
-    localStorage.removeItem(PROFILE_KEY);
-    localStorage.removeItem(PAYMENT_KEY);
-    localStorage.removeItem(CONSENT_KEY);
-    localStorage.removeItem(AUDIT_KEY);
+    localStorage.removeItem(profileStorageKey);
+    localStorage.removeItem(paymentStorageKey);
+    localStorage.removeItem(consentStorageKey);
+    localStorage.removeItem(auditStorageKey);
 
     setProfile(defaultProfile);
     setPaymentMethods([]);

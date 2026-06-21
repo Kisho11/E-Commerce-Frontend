@@ -8,6 +8,7 @@ import Seo from '../components/Seo';
 
 const PROFILE_KEY = 'customerProfile';
 const PAYMENT_KEY = 'customerPaymentMethods';
+const getUserStorageKey = (key, userId) => `${key}:${userId || 'guest'}`;
 
 function readLocalStorage(key, fallback) {
   try {
@@ -145,9 +146,11 @@ function Checkout() {
   const { getSelectedCartItems, getSelectedTotalPrice, removeFromCart, loadCart } = useCart();
   const { placeOrder, loadOrders } = useOrders();
   const { user, authFetch } = useAuth();
+  const profileStorageKey = getUserStorageKey(PROFILE_KEY, user?.id);
+  const paymentStorageKey = getUserStorageKey(PAYMENT_KEY, user?.id);
   const [formData, setFormData] = useState(() => {
-    const savedProfile = readLocalStorage(PROFILE_KEY, {});
-    const savedPayments = readLocalStorage(PAYMENT_KEY, []);
+    const savedProfile = readLocalStorage(profileStorageKey, {});
+    const savedPayments = readLocalStorage(paymentStorageKey, []);
     const savedPayment = Array.isArray(savedPayments) ? savedPayments[0] : null;
     const savedName = splitFullName(savedProfile.fullName || user?.name || '');
 
@@ -406,8 +409,8 @@ function Checkout() {
           id: orderData?.id,
         });
 
-        const savedProfile = readLocalStorage(PROFILE_KEY, {});
-        localStorage.setItem(PROFILE_KEY, JSON.stringify({
+        const savedProfile = readLocalStorage(profileStorageKey, {});
+        localStorage.setItem(profileStorageKey, JSON.stringify({
           ...savedProfile,
           fullName: orderPayload.customer,
           email: orderPayload.customerEmail,
@@ -434,8 +437,8 @@ function Checkout() {
 
     const createdOrder = placeOrder(buildOrderPayload());
     const orderPayload = buildOrderPayload();
-    const savedProfile = readLocalStorage(PROFILE_KEY, {});
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({
+    const savedProfile = readLocalStorage(profileStorageKey, {});
+    localStorage.setItem(profileStorageKey, JSON.stringify({
       ...savedProfile,
       fullName: orderPayload.customer,
       email: orderPayload.customerEmail,
