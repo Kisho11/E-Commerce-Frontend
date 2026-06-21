@@ -1,5 +1,6 @@
 import React, { startTransition, useEffect, useMemo, useState } from 'react';
 import { useProducts } from '../context/ProductContext';
+import { useAuth } from '../context/AuthContext';
 import UiIcon from '../components/UiIcon';
 import TipTapEditor from '../components/TipTapEditor';
 import { PRODUCT_TYPES, resolveProductType } from '../utils/productType';
@@ -8,6 +9,28 @@ const MIN_IMAGE_COUNT = 1;
 const MAX_IMAGE_COUNT = 10;
 const MIN_VIDEO_COUNT = 1;
 const MAX_VIDEO_COUNT = 5;
+const AI_CONTENT_FIELDS = [
+  { key: 'mainNote', label: 'Main Note', placeholder: 'Enter the main note for this product...', required: true },
+  { key: 'description', label: 'Description', placeholder: 'Enter a product description...' },
+  { key: 'keyFeatures', label: 'Key Features', placeholder: 'List the key features of this product...' },
+  { key: 'whatsIncluded', label: "What's Included", placeholder: "Describe what's included with this product..." },
+  { key: 'importantNotes', label: 'Important Notes', placeholder: 'Any important notes or warnings...' },
+  { key: 'additionalInformation', label: 'Additional Information', placeholder: 'Any additional information about this product...' },
+];
+const AI_ALLOWED_HTML_TAGS = new Set(['P', 'UL', 'OL', 'LI', 'STRONG', 'BR']);
+
+const sanitizeGeneratedHtml = (html) => {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  template.content.querySelectorAll('*').forEach((element) => {
+    if (!AI_ALLOWED_HTML_TAGS.has(element.tagName)) {
+      element.replaceWith(...element.childNodes);
+      return;
+    }
+    [...element.attributes].forEach((attribute) => element.removeAttribute(attribute.name));
+  });
+  return template.innerHTML;
+};
 
 const createEmptyVariantValue = () => ({
   value: '',
@@ -104,6 +127,7 @@ const syncVariantPricingWithGroups = (variantPricing = [], variantGroups = [], b
 
 function ProductManagement() {
   const { products, categories, categoryNames, addProduct, updateProduct, deleteProduct, loadAllProducts } = useProducts();
+  const { authFetch } = useAuth();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showVariantGrid, setShowVariantGrid] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -114,6 +138,8 @@ function ProductManagement() {
   const [dragOverVideoIndex, setDragOverVideoIndex] = useState(null);
   const [isDraggingVideo, setIsDraggingVideo] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [aiGeneratingFields, setAiGeneratingFields] = useState([]);
+  const [aiInstructions, setAiInstructions] = useState('');
   const [statusPopup, setStatusPopup] = useState({ visible: false, title: '', message: '', id: null });
   const [isPreparingEdit, setIsPreparingEdit] = useState(false);
   const [pendingDeleteProduct, setPendingDeleteProduct] = useState(null);
@@ -204,6 +230,57 @@ function ProductManagement() {
     setSuccess('');
     setIsPreparingEdit(false);
     setStatusPopup((prev) => ({ ...prev, visible: false }));
+  };
+
+  const generateAiContent = async (targetFields) => {
+    if (!formData.name.trim()) {
+      setError('Enter a product name before generating AI content.');
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    setAiGeneratingFields(targetFields);
+    try {
+      const response = await authFetch('/ai/product-content/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_fields: targetFields,
+          instructions: aiInstructions,
+          product: {
+            name: formData.name,
+            productType: formData.productType,
+            price: formData.price,
+            salePrice: formData.salePrice,
+            categories: formData.categories,
+            subcategories: formData.subcategories,
+            industries: formData.industries,
+            variantGroups: getFinalizedVariantGroups(formData.variantGroups),
+            existingContent: Object.fromEntries(
+              AI_CONTENT_FIELDS.map(({ key }) => [key, formData[key] || ''])
+            ),
+          },
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.detail || 'Unable to generate product content.');
+
+      setFormData((previous) => {
+        const next = { ...previous };
+        targetFields.forEach((field) => {
+          if (typeof data?.content?.[field] === 'string' && data.content[field].trim()) {
+            next[field] = sanitizeGeneratedHtml(data.content[field]);
+          }
+        });
+        return next;
+      });
+      setSuccess(targetFields.length === AI_CONTENT_FIELDS.length ? 'All product content generated. Review it before saving.' : 'Content generated. Review it before saving.');
+    } catch (generationError) {
+      setError(generationError.message || 'Unable to generate product content.');
+    } finally {
+      setAiGeneratingFields([]);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -1201,59 +1278,54 @@ function ProductManagement() {
               <p className="mt-2 text-xs text-slate-500">Upload as many images as you want (up to 10). Drag to reorder; the first image is always the main image.</p>
             </div>
 
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Main Note *</label>
-              <TipTapEditor
-                value={formData.mainNote}
-                onChange={(val) => setFormData((prev) => ({ ...prev, mainNote: val }))}
-                placeholder="Enter the main note for this product..."
+            <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-violet-950">AI Content Generation</h3>
+                  <p className="mt-1 text-xs text-violet-800">Generate drafts from the product details, then review and save them.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => generateAiContent(AI_CONTENT_FIELDS.map(({ key }) => key))}
+                  disabled={aiGeneratingFields.length > 0}
+                  className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {aiGeneratingFields.length === AI_CONTENT_FIELDS.length ? 'Generating all…' : '✨ Generate all content'}
+                </button>
+              </div>
+              <input
+                type="text"
+                value={aiInstructions}
+                onChange={(event) => setAiInstructions(event.target.value)}
+                maxLength={1000}
+                placeholder="Optional AI instructions, e.g. professional UK retail tone"
+                className="mt-3 w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-violet-500"
               />
             </div>
 
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Description</label>
-              <TipTapEditor
-                value={formData.description}
-                onChange={(val) => setFormData((prev) => ({ ...prev, description: val }))}
-                placeholder="Enter a product description..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Key Features</label>
-              <TipTapEditor
-                value={formData.keyFeatures}
-                onChange={(val) => setFormData((prev) => ({ ...prev, keyFeatures: val }))}
-                placeholder="List the key features of this product..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">What's Included</label>
-              <TipTapEditor
-                value={formData.whatsIncluded}
-                onChange={(val) => setFormData((prev) => ({ ...prev, whatsIncluded: val }))}
-                placeholder="Describe what's included with this product..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Important Notes</label>
-              <TipTapEditor
-                value={formData.importantNotes}
-                onChange={(val) => setFormData((prev) => ({ ...prev, importantNotes: val }))}
-                placeholder="Any important notes or warnings..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-2">Additional Information</label>
-              <TipTapEditor
-                value={formData.additionalInformation}
-                onChange={(val) => setFormData((prev) => ({ ...prev, additionalInformation: val }))}
-                placeholder="Any additional information about this product..."
-              />
-            </div>
+            {AI_CONTENT_FIELDS.map(({ key, label, placeholder, required }) => {
+              const isGenerating = aiGeneratingFields.includes(key);
+              return (
+                <div key={key}>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <label className="block font-semibold text-gray-700">{label}{required ? ' *' : ''}</label>
+                    <button
+                      type="button"
+                      onClick={() => generateAiContent([key])}
+                      disabled={aiGeneratingFields.length > 0}
+                      className="rounded-md border border-violet-300 bg-white px-3 py-1.5 text-xs font-bold text-violet-700 transition hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isGenerating ? `Generating ${label}…` : formData[key] ? `✨ Regenerate ${label}` : `✨ Generate ${label}`}
+                    </button>
+                  </div>
+                  <TipTapEditor
+                    value={formData[key]}
+                    onChange={(value) => setFormData((previous) => ({ ...previous, [key]: value }))}
+                    placeholder={placeholder}
+                  />
+                </div>
+              );
+            })}
 
             <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/60 p-4 sm:p-5">
               <div className="mb-2 flex items-center justify-between gap-3">
