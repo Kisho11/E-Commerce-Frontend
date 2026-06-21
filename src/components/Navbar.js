@@ -99,6 +99,14 @@ function Navbar() {
 
       const currentScrollY = window.scrollY;
       const isMobileViewport = window.innerWidth < 768;
+      const usesCollapsedNavigation = window.innerWidth < 1280;
+
+      if (usesCollapsedNavigation && isMobileMenuOpen) {
+        setIsMobileMenuOpen(false);
+        setIsMobileNavHidden(isMobileViewport && currentScrollY > 32);
+        lastScrollYRef.current = currentScrollY;
+        return;
+      }
 
       if (!isMobileViewport || isMobileMenuOpen) {
         setIsMobileNavHidden(false);
