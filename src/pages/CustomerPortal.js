@@ -84,6 +84,24 @@ function validateProfileField(name, value) {
       if (digits.length < 7 || digits.length > 15) return 'Enter a valid phone number (7–15 digits).';
       return '';
     }
+    case 'address':
+      if (!v) return 'Street address is required.';
+      if (v.length < 5 || v.length > 120) return 'Enter a street address between 5 and 120 characters.';
+      return '';
+    case 'city':
+      if (!v) return 'City is required.';
+      if (v.length < 2 || v.length > 60) return 'Enter a city between 2 and 60 characters.';
+      if (!/^[a-zA-Z\s.'-]+$/.test(v)) return 'City can contain only letters, spaces, hyphens, apostrophes, and periods.';
+      return '';
+    case 'state':
+      if (!v) return 'State / county is required.';
+      if (v.length < 2 || v.length > 60) return 'Enter a state or county between 2 and 60 characters.';
+      if (!/^[a-zA-Z\s.'-]+$/.test(v)) return 'State / county can contain only letters, spaces, hyphens, apostrophes, and periods.';
+      return '';
+    case 'zipCode':
+      if (!v) return 'ZIP / postal code is required.';
+      if (!/^[a-zA-Z0-9][a-zA-Z0-9\s-]{1,9}$/.test(v)) return 'Enter a valid ZIP / postal code.';
+      return '';
     default:
       return '';
   }
@@ -132,6 +150,10 @@ function validateAllProfile(profile) {
     fullName: validateProfileField('fullName', profile.fullName),
     email: validateProfileField('email', profile.email),
     phone: validateProfileField('phone', profile.phone),
+    address: validateProfileField('address', profile.address),
+    city: validateProfileField('city', profile.city),
+    state: validateProfileField('state', profile.state),
+    zipCode: validateProfileField('zipCode', profile.zipCode),
   };
   const valid = Object.values(errors).every((e) => !e);
   return { errors, valid };
@@ -455,6 +477,8 @@ function CustomerPortal() {
                 onChange={handleProfileChange}
                 className={inputCls(!!profileErrors.fullName)}
                 placeholder="John Doe"
+                aria-invalid={Boolean(profileErrors.fullName)}
+                required
               />
               <FieldError msg={profileErrors.fullName} />
             </div>
@@ -470,6 +494,8 @@ function CustomerPortal() {
                 onChange={handleProfileChange}
                 className={inputCls(!!profileErrors.email)}
                 placeholder="john@example.com"
+                aria-invalid={Boolean(profileErrors.email)}
+                required
               />
               <FieldError msg={profileErrors.email} />
             </div>
@@ -485,12 +511,16 @@ function CustomerPortal() {
                 onChange={handleProfileChange}
                 className={inputCls(!!profileErrors.phone)}
                 placeholder="+1 555 000 1234"
+                aria-invalid={Boolean(profileErrors.phone)}
+                required
               />
               <FieldError msg={profileErrors.phone} />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">Address</label>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">
+                Address <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 name="address"
@@ -498,13 +528,17 @@ function CustomerPortal() {
                 onChange={handleProfileChange}
                 className={inputCls(!!profileErrors.address)}
                 placeholder="Street address"
+                aria-invalid={Boolean(profileErrors.address)}
+                required
               />
               <FieldError msg={profileErrors.address} />
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
-                <label className="mb-1 block text-sm font-semibold text-slate-700">City</label>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">
+                  City <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   name="city"
@@ -512,12 +546,16 @@ function CustomerPortal() {
                   onChange={handleProfileChange}
                   className={inputCls(!!profileErrors.city)}
                   placeholder="City"
+                  aria-invalid={Boolean(profileErrors.city)}
+                  required
                 />
                 <FieldError msg={profileErrors.city} />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-semibold text-slate-700">State</label>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">
+                  State <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   name="state"
@@ -525,12 +563,16 @@ function CustomerPortal() {
                   onChange={handleProfileChange}
                   className={inputCls(!!profileErrors.state)}
                   placeholder="State"
+                  aria-invalid={Boolean(profileErrors.state)}
+                  required
                 />
                 <FieldError msg={profileErrors.state} />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-semibold text-slate-700">ZIP Code</label>
+                <label className="mb-1 block text-sm font-semibold text-slate-700">
+                  ZIP Code <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   name="zipCode"
@@ -538,6 +580,8 @@ function CustomerPortal() {
                   onChange={handleProfileChange}
                   className={inputCls(!!profileErrors.zipCode)}
                   placeholder="ZIP / postal"
+                  aria-invalid={Boolean(profileErrors.zipCode)}
+                  required
                 />
                 <FieldError msg={profileErrors.zipCode} />
               </div>

@@ -34,6 +34,7 @@ function getSavedPaymentCardNumber(paymentMethod = null) {
 }
 
 const emptyPaymentErrors = { cardNumber: '', expiryDate: '', cvv: '' };
+const emptyShippingErrors = { firstName: '', lastName: '', email: '', phone: '', address: '', city: '', state: '', zipCode: '' };
 
 function luhnCheck(cardNumber) {
   let sum = 0;
@@ -93,6 +94,52 @@ function PaymentFieldError({ message }) {
   return message ? <p className="mt-1 text-sm font-medium text-red-600" role="alert">{message}</p> : null;
 }
 
+function validateCheckoutShippingField(name, value) {
+  const trimmedValue = (value || '').trim();
+  switch (name) {
+    case 'firstName':
+    case 'lastName':
+      if (!trimmedValue) return `${name === 'firstName' ? 'First' : 'Last'} name is required.`;
+      if (trimmedValue.length < 2 || !/^[a-zA-Z\s'-]+$/.test(trimmedValue)) return 'Enter a valid name.';
+      return '';
+    case 'email':
+      if (!trimmedValue) return 'Email is required.';
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedValue) ? '' : 'Enter a valid email address.';
+    case 'phone': {
+      if (!trimmedValue) return '';
+      const digits = trimmedValue.replace(/\D/g, '');
+      return digits.length >= 7 && digits.length <= 15 ? '' : 'Enter a valid phone number (7–15 digits).';
+    }
+    case 'address':
+      if (!trimmedValue) return 'Street address is required.';
+      return trimmedValue.length >= 5 && trimmedValue.length <= 120 ? '' : 'Enter a street address between 5 and 120 characters.';
+    case 'city':
+      if (!trimmedValue) return 'City is required.';
+      return trimmedValue.length >= 2 && /^[a-zA-Z\s.'-]+$/.test(trimmedValue) ? '' : 'Enter a valid city.';
+    case 'state':
+      if (!trimmedValue) return '';
+      return trimmedValue.length <= 60 && /^[a-zA-Z\s.'-]+$/.test(trimmedValue) ? '' : 'Enter a valid state or county.';
+    case 'zipCode':
+      if (!trimmedValue) return 'ZIP / postal code is required.';
+      return /^[a-zA-Z0-9][a-zA-Z0-9\s-]{1,9}$/.test(trimmedValue) ? '' : 'Enter a valid ZIP / postal code.';
+    default:
+      return '';
+  }
+}
+
+function validateCheckoutShipping(shipping) {
+  const errors = Object.fromEntries(
+    Object.keys(emptyShippingErrors).map((field) => [field, validateCheckoutShippingField(field, shipping[field])])
+  );
+  return { errors, valid: Object.values(errors).every((error) => !error) };
+}
+
+function shippingInputClass(hasError) {
+  return `w-full rounded-lg border-2 px-4 py-3 focus:outline-none ${
+    hasError ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-300 focus:border-primary'
+  }`;
+}
+
 function Checkout() {
   const navigate = useNavigate();
   const { getSelectedCartItems, getSelectedTotalPrice, removeFromCart, loadCart } = useCart();
@@ -124,6 +171,7 @@ function Checkout() {
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [paymentErrors, setPaymentErrors] = useState(emptyPaymentErrors);
+  const [shippingErrors, setShippingErrors] = useState(emptyShippingErrors);
   const checkoutItems = getSelectedCartItems();
   const subtotal = getSelectedTotalPrice();
   const taxRate = 0.1;
@@ -218,6 +266,9 @@ function Checkout() {
       ...prev,
       [name]: value,
     }));
+    if (Object.hasOwn(emptyShippingErrors, name)) {
+      setShippingErrors((prev) => ({ ...prev, [name]: validateCheckoutShippingField(name, value) }));
+    }
   };
 
   const handleCardNumberChange = (e) => {
@@ -296,19 +347,11 @@ function Checkout() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError('');
+    const shippingValidation = validateCheckoutShipping(formData);
+    setShippingErrors(shippingValidation.errors);
     const paymentValidation = validateCheckoutPayment(formData);
     setPaymentErrors(paymentValidation.errors);
-    if (!paymentValidation.valid) return;
-    // Validate form
-    if (
-      !formData.firstName ||
-      !formData.email ||
-      !formData.address ||
-      !formData.cardNumber
-    ) {
-      alert('Please fill in all required fields');
-      return;
-    }
+    if (!shippingValidation.valid || !paymentValidation.valid) return;
 
     if (requiresBackendCheckout && (!user || user.role !== 'user')) {
       setSubmitError('Please sign in with a customer account before checking out.');
@@ -459,7 +502,7 @@ function Checkout() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Checkout Form */}
-        <form onSubmit={handleSubmit} className="lg:col-span-2 space-y-6">
+        <form onSubmit={handleSubmit} className="lg:col-span-2 space-y-6" noValidate>
           {submitError ? (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {submitError}
@@ -482,9 +525,11 @@ function Checkout() {
                   name="firstName"
                   value={formData.firstName}
                   onChange={handleChange}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                  className={shippingInputClass(shippingErrors.firstName)}
+                  aria-invalid={Boolean(shippingErrors.firstName)}
                   required
                 />
+                <PaymentFieldError message={shippingErrors.firstName} />
               </div>
               <div>
                 <label className="block text-gray-700 font-semibold mb-2">
@@ -495,9 +540,11 @@ function Checkout() {
                   name="lastName"
                   value={formData.lastName}
                   onChange={handleChange}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                  className={shippingInputClass(shippingErrors.lastName)}
+                  aria-invalid={Boolean(shippingErrors.lastName)}
                   required
                 />
+                <PaymentFieldError message={shippingErrors.lastName} />
               </div>
             </div>
 
@@ -511,9 +558,11 @@ function Checkout() {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                  className={shippingInputClass(shippingErrors.email)}
+                  aria-invalid={Boolean(shippingErrors.email)}
                   required
                 />
+                <PaymentFieldError message={shippingErrors.email} />
               </div>
               <div>
                 <label className="block text-gray-700 font-semibold mb-2">
@@ -524,8 +573,11 @@ function Checkout() {
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                  className={shippingInputClass(shippingErrors.phone)}
+                  inputMode="tel"
+                  aria-invalid={Boolean(shippingErrors.phone)}
                 />
+                <PaymentFieldError message={shippingErrors.phone} />
               </div>
             </div>
 
@@ -535,50 +587,60 @@ function Checkout() {
               </label>
               <input
                 type="text"
-                name="address"
-                value={formData.address}
-                onChange={handleChange}
-                className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
-                required
-              />
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  className={shippingInputClass(shippingErrors.address)}
+                  aria-invalid={Boolean(shippingErrors.address)}
+                  required
+                />
+                <PaymentFieldError message={shippingErrors.address} />
             </div>
 
             <div className="grid grid-cols-3 gap-4 mt-4">
               <div>
                 <label className="block text-gray-700 font-semibold mb-2">
-                  City
+                  City *
                 </label>
                 <input
                   type="text"
                   name="city"
                   value={formData.city}
                   onChange={handleChange}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                  className={shippingInputClass(shippingErrors.city)}
+                  aria-invalid={Boolean(shippingErrors.city)}
+                  required
                 />
+                <PaymentFieldError message={shippingErrors.city} />
               </div>
               <div>
                 <label className="block text-gray-700 font-semibold mb-2">
-                  State
+                  State / County (optional)
                 </label>
                 <input
                   type="text"
                   name="state"
                   value={formData.state}
                   onChange={handleChange}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                  className={shippingInputClass(shippingErrors.state)}
+                  aria-invalid={Boolean(shippingErrors.state)}
                 />
+                <PaymentFieldError message={shippingErrors.state} />
               </div>
               <div>
                 <label className="block text-gray-700 font-semibold mb-2">
-                  ZIP Code
+                  ZIP Code *
                 </label>
                 <input
                   type="text"
                   name="zipCode"
                   value={formData.zipCode}
                   onChange={handleChange}
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                  className={shippingInputClass(shippingErrors.zipCode)}
+                  aria-invalid={Boolean(shippingErrors.zipCode)}
+                  required
                 />
+                <PaymentFieldError message={shippingErrors.zipCode} />
               </div>
             </div>
           </div>
