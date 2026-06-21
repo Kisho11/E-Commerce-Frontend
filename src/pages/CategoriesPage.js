@@ -241,28 +241,50 @@ function CategoriesPage() {
             {(selectedCategoryMeta?.subcategories || []).length > 0 && (
               <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4">
                 <h2 className="mb-3 text-sm font-bold uppercase tracking-[0.12em] text-slate-500">Subcategories</h2>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   <button
                     type="button"
                     onClick={() => setSelectedSubcategory(null)}
-                    className={`rounded-full px-4 py-2 text-sm font-bold transition ${
-                      !selectedSubcategory ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    className={`overflow-hidden rounded-xl border text-left transition ${
+                      !selectedSubcategory
+                        ? 'border-primary bg-red-50 ring-2 ring-primary/20'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                     }`}
                   >
-                    All {selectedCategory.name}
+                    <div className="h-20 bg-slate-100">
+                      {selectedCategoryMeta.image ? (
+                        <img src={selectedCategoryMeta.image} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-xs text-slate-500">No image</div>
+                      )}
+                    </div>
+                    <p className={`p-2 text-xs font-bold sm:text-sm ${!selectedSubcategory ? 'text-primary' : 'text-slate-800'}`}>
+                      All {selectedCategory.name}
+                    </p>
                   </button>
                   {selectedCategoryMeta.subcategories.map((subcategory) => (
                     <button
                       key={subcategory.name}
                       type="button"
                       onClick={() => setSelectedSubcategory(subcategory.name)}
-                      className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                      className={`overflow-hidden rounded-xl border text-left transition ${
                         selectedSubcategory === subcategory.name
-                          ? 'bg-primary text-white'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          ? 'border-primary bg-red-50 ring-2 ring-primary/20'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
-                      {subcategory.name}
+                      <div className="h-20 bg-slate-100">
+                        {subcategory.image ? (
+                          <img src={subcategory.image} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-xs text-slate-500">No image</div>
+                        )}
+                      </div>
+                      <p className={`truncate p-2 text-xs font-bold sm:text-sm ${
+                        selectedSubcategory === subcategory.name ? 'text-primary' : 'text-slate-800'
+                      }`}>
+                        {subcategory.name}
+                      </p>
                     </button>
                   ))}
                 </div>
