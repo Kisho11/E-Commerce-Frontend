@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 
 function Footer() {
   const { t } = useLanguage();
+  const mapUrl = 'https://www.google.com/maps/search/?api=1&query=Elmshelf%2C%203%20Langley%20Cl%2C%20Romford%20RM3%208XB';
 
   const openCookieSettings = () => {
     window.dispatchEvent(new Event('open-cookie-settings'));
@@ -35,9 +36,9 @@ function Footer() {
           <div>
             <h4 className="text-sm font-bold uppercase tracking-[0.1em] text-slate-300">{t('footer.support')}</h4>
             <div className="mt-4 space-y-2 text-sm">
-              <Link to="/clients" className="block text-slate-400 transition hover:text-white">{t('nav.clients')}</Link>
-              <Link to="/reviews" className="block text-slate-400 transition hover:text-white">{t('nav.reviews')}</Link>
-              <Link to="/sponsor" className="block text-slate-400 transition hover:text-white">Partners</Link>
+              <span className="block cursor-not-allowed text-slate-600" aria-disabled="true">{t('nav.clients')}</span>
+              <span className="block cursor-not-allowed text-slate-600" aria-disabled="true">{t('nav.reviews')}</span>
+              <span className="block cursor-not-allowed text-slate-600" aria-disabled="true">Partners</span>
             </div>
           </div>
 
@@ -51,7 +52,10 @@ function Footer() {
                   </svg>
                 </span>
                 <a
-                  href="geo:0,0?q=Elmshelf, 3 Langley Cl, Romford RM3 8XB"
+                  href={mapUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open Elmshelf location in Google Maps"
                   className="flex-1 text-left text-lg font-bold leading-relaxed text-white no-underline transition hover:text-red-300 hover:no-underline sm:text-xl"
                 >
                   Elmshelf, 3 Langley Cl, Romford RM3 8XB
