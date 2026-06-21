@@ -95,13 +95,15 @@ function validatePaymentField(name, value, isEditingCard) {
     case 'cardHolder':
       if (!v) return 'Card holder name is required.';
       if (v.length < 2) return 'Card holder name must be at least 2 characters.';
+      if (v.length > 80) return 'Card holder name must be 80 characters or fewer.';
+      if (!/^[a-zA-Z\s'-]+$/.test(v)) return 'Use only letters, spaces, hyphens, or apostrophes.';
       return '';
     case 'cardNumber': {
       if (isEditingCard && !v) return '';
       const digits = v.replace(/\D/g, '');
       if (!digits) return 'Card number is required.';
       if (digits.length < 13 || digits.length > 19) return 'Enter a valid card number (13–19 digits).';
-      if (!luhnCheck(digits)) return 'Card number is invalid.';
+      if (/^(\d)\1+$/.test(digits) || !luhnCheck(digits)) return 'Card number is invalid.';
       return '';
     }
     case 'expiry': {
@@ -116,7 +118,9 @@ function validatePaymentField(name, value, isEditingCard) {
     }
     case 'billingZip':
       if (!v) return 'Billing ZIP / postal code is required.';
-      if (!/^[a-zA-Z0-9\s-]{3,10}$/.test(v)) return 'Enter a valid ZIP / postal code (3–10 characters).';
+      if (!/^(?:\d{5}(?:-\d{4})?|[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})$/i.test(v)) {
+        return 'Enter a valid US ZIP code or UK postal code.';
+      }
       return '';
     default:
       return '';
@@ -155,7 +159,7 @@ const STATUS_COLORS = {
 
 function FieldError({ msg }) {
   if (!msg) return null;
-  return <p className="mt-1 text-xs font-medium text-red-600">{msg}</p>;
+  return <p className="mt-1 text-xs font-medium text-red-600" role="alert">{msg}</p>;
 }
 
 function inputCls(hasError) {

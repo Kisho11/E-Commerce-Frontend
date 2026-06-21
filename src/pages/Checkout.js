@@ -33,6 +33,66 @@ function getSavedPaymentCardNumber(paymentMethod = null) {
   return paymentMethod.maskedNumber || (paymentMethod.last4 ? `**** **** **** ${paymentMethod.last4}` : '');
 }
 
+const emptyPaymentErrors = { cardNumber: '', expiryDate: '', cvv: '' };
+
+function luhnCheck(cardNumber) {
+  let sum = 0;
+  let shouldDouble = false;
+
+  for (let index = cardNumber.length - 1; index >= 0; index -= 1) {
+    let digit = Number(cardNumber[index]);
+    if (shouldDouble) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    shouldDouble = !shouldDouble;
+  }
+
+  return sum % 10 === 0;
+}
+
+function isMaskedCardNumber(value = '') {
+  return /^(?:\*{4}\s*){3}\d{4}$/.test(value.trim());
+}
+
+function validateCheckoutPayment(payment) {
+  const cardNumber = payment.cardNumber.trim();
+  const cardDigits = cardNumber.replace(/\D/g, '');
+  let cardNumberError = '';
+  if (!isMaskedCardNumber(cardNumber)) {
+    if (cardDigits.length < 13 || cardDigits.length > 19 || /^(\d)\1+$/.test(cardDigits) || !luhnCheck(cardDigits)) {
+      cardNumberError = 'Enter a valid card number.';
+    }
+  }
+
+  const expiry = payment.expiryDate.trim();
+  let expiryDateError = '';
+  if (!/^\d{2}\/\d{2}$/.test(expiry)) {
+    expiryDateError = 'Enter expiry as MM/YY.';
+  } else {
+    const [month, year] = expiry.split('/').map(Number);
+    const expiryEnd = new Date(2000 + year, month);
+    if (month < 1 || month > 12) expiryDateError = 'Expiry month must be 01–12.';
+    else if (expiryEnd <= new Date()) expiryDateError = 'This card has expired.';
+  }
+
+  const cvv = payment.cvv.trim();
+  const cvvError = /^\d{3,4}$/.test(cvv) ? '' : 'Enter a valid 3 or 4 digit CVV.';
+  const errors = { cardNumber: cardNumberError, expiryDate: expiryDateError, cvv: cvvError };
+  return { errors, valid: Object.values(errors).every((error) => !error) };
+}
+
+function paymentInputClass(hasError) {
+  return `w-full rounded-lg border-2 px-4 py-3 focus:outline-none ${
+    hasError ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-300 focus:border-primary'
+  }`;
+}
+
+function PaymentFieldError({ message }) {
+  return message ? <p className="mt-1 text-sm font-medium text-red-600" role="alert">{message}</p> : null;
+}
+
 function Checkout() {
   const navigate = useNavigate();
   const { getSelectedCartItems, getSelectedTotalPrice, removeFromCart, loadCart } = useCart();
@@ -63,6 +123,7 @@ function Checkout() {
   const [placedOrder, setPlacedOrder] = useState(null);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [paymentErrors, setPaymentErrors] = useState(emptyPaymentErrors);
   const checkoutItems = getSelectedCartItems();
   const subtotal = getSelectedTotalPrice();
   const taxRate = 0.1;
@@ -159,6 +220,35 @@ function Checkout() {
     }));
   };
 
+  const handleCardNumberChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 19);
+    const cardNumber = digits.match(/.{1,4}/g)?.join(' ') || '';
+    setFormData((prev) => ({ ...prev, cardNumber }));
+    setPaymentErrors((prev) => ({
+      ...prev,
+      cardNumber: validateCheckoutPayment({ ...formData, cardNumber }).errors.cardNumber,
+    }));
+  };
+
+  const handleExpiryDateChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+    const expiryDate = digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
+    setFormData((prev) => ({ ...prev, expiryDate }));
+    setPaymentErrors((prev) => ({
+      ...prev,
+      expiryDate: validateCheckoutPayment({ ...formData, expiryDate }).errors.expiryDate,
+    }));
+  };
+
+  const handleCvvChange = (e) => {
+    const cvv = e.target.value.replace(/\D/g, '').slice(0, 4);
+    setFormData((prev) => ({ ...prev, cvv }));
+    setPaymentErrors((prev) => ({
+      ...prev,
+      cvv: validateCheckoutPayment({ ...formData, cvv }).errors.cvv,
+    }));
+  };
+
   const buildOrderPayload = () => {
     const fullName = `${formData.firstName} ${formData.lastName}`.trim();
     const sanitizedCardDigits = formData.cardNumber.replace(/\D/g, '');
@@ -206,6 +296,9 @@ function Checkout() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError('');
+    const paymentValidation = validateCheckoutPayment(formData);
+    setPaymentErrors(paymentValidation.errors);
+    if (!paymentValidation.valid) return;
     // Validate form
     if (
       !formData.firstName ||
@@ -506,11 +599,14 @@ function Checkout() {
                 name="cardNumber"
                 placeholder="1234 5678 9012 3456"
                 value={formData.cardNumber}
-                onChange={handleChange}
-                maxLength="19"
-                className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                onChange={handleCardNumberChange}
+                maxLength={23}
+                inputMode="numeric"
+                aria-invalid={Boolean(paymentErrors.cardNumber)}
+                className={paymentInputClass(paymentErrors.cardNumber)}
                 required
               />
+              <PaymentFieldError message={paymentErrors.cardNumber} />
             </div>
 
             <div className="grid grid-cols-2 gap-4 mt-4">
@@ -523,10 +619,14 @@ function Checkout() {
                   name="expiryDate"
                   placeholder="12/25"
                   value={formData.expiryDate}
-                  onChange={handleChange}
-                  maxLength="5"
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                  onChange={handleExpiryDateChange}
+                  maxLength={5}
+                  inputMode="numeric"
+                  aria-invalid={Boolean(paymentErrors.expiryDate)}
+                  className={paymentInputClass(paymentErrors.expiryDate)}
+                  required
                 />
+                <PaymentFieldError message={paymentErrors.expiryDate} />
               </div>
               <div>
                 <label className="block text-gray-700 font-semibold mb-2">
@@ -537,10 +637,14 @@ function Checkout() {
                   name="cvv"
                   placeholder="123"
                   value={formData.cvv}
-                  onChange={handleChange}
-                  maxLength="4"
-                  className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
+                  onChange={handleCvvChange}
+                  maxLength={4}
+                  inputMode="numeric"
+                  aria-invalid={Boolean(paymentErrors.cvv)}
+                  className={paymentInputClass(paymentErrors.cvv)}
+                  required
                 />
+                <PaymentFieldError message={paymentErrors.cvv} />
               </div>
             </div>
           </div>
