@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useOrders } from '../context/OrderContext';
 import { useAuth } from '../context/AuthContext';
 import OrderDetailsModal from '../components/OrderDetailsModal';
@@ -193,18 +193,18 @@ function inputCls(hasError) {
 }
 
 function CustomerPortal() {
-  const { user } = useAuth();
+  const { user, authFetch } = useAuth();
   const { orders } = useOrders();
   const [selectedOrder, setSelectedOrder] = useState(null);
 
   const [profile, setProfile] = useState(() => {
-    const stored = readLocalStorage(PROFILE_KEY, null);
-    if (stored && (stored.fullName || stored.email)) return stored;
+    const stored = readLocalStorage(PROFILE_KEY, {});
     return {
       ...defaultProfile,
-      fullName: user?.name || '',
-      email: user?.email || '',
-      phone: user?.phone || '',
+      ...stored,
+      fullName: stored.fullName || user?.name || '',
+      email: stored.email || user?.email || '',
+      phone: stored.phone || user?.phone || '',
     };
   });
 
@@ -224,6 +224,46 @@ function CustomerPortal() {
   const [deleteText, setDeleteText] = useState('');
 
   const isEditing = useMemo(() => editingId !== null, [editingId]);
+
+  useEffect(() => {
+    if (!process.env.REACT_APP_API_URL || !user) return undefined;
+
+    let cancelled = false;
+    const loadProfileDetails = async () => {
+      try {
+        const [profileResponse, addressesResponse] = await Promise.all([
+          authFetch('/users/me'),
+          authFetch('/users/me/addresses'),
+        ]);
+        const serverProfile = profileResponse.ok ? await profileResponse.json() : null;
+        const addresses = addressesResponse.ok ? await addressesResponse.json() : [];
+        if (cancelled) return;
+
+        const savedAddress = Array.isArray(addresses)
+          ? addresses.find((address) => address.is_default) || addresses[addresses.length - 1]
+          : null;
+
+        setProfile((previous) => ({
+          ...previous,
+          fullName: previous.fullName || serverProfile?.full_name || user.name || '',
+          email: previous.email || serverProfile?.email || user.email || '',
+          phone: previous.phone || serverProfile?.phone || savedAddress?.phone || user.phone || '',
+          address: previous.address || savedAddress?.address_line1 || '',
+          city: previous.city || savedAddress?.city || '',
+          state: previous.state || savedAddress?.state || '',
+          zipCode: previous.zipCode || savedAddress?.postal_code || '',
+        }));
+      } catch {
+        // The existing local profile remains available if the backend cannot be reached.
+      }
+    };
+
+    loadProfileDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, user]);
 
   const addAudit = (action, detail = '') => {
     const entry = { id: Date.now(), action, detail, at: nowIso() };
