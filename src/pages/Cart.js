@@ -16,7 +16,19 @@ function formatSelectedAttributes(item) {
 
 function ShoppingCart() {
   const navigate = useNavigate();
-  const { cartItems, removeFromCart, updateQuantity, getTotalPrice } = useCart();
+  const {
+    cartItems,
+    removeFromCart,
+    updateQuantity,
+    getSelectedCartItems,
+    getSelectedTotalPrice,
+    isCartItemSelected,
+    toggleCartItemSelection,
+    setAllCartItemsSelected,
+  } = useCart();
+  const selectedCartItems = getSelectedCartItems();
+  const selectedSubtotal = getSelectedTotalPrice();
+  const allItemsSelected = selectedCartItems.length === cartItems.length;
 
   if (cartItems.length === 0) {
     return (
@@ -41,12 +53,33 @@ function ShoppingCart() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
+          <label className="mb-4 flex cursor-pointer items-center gap-3 rounded-lg bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+            <input
+              type="checkbox"
+              checked={allItemsSelected}
+              onChange={(event) => setAllCartItemsSelected(event.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+            />
+            Select all items ({selectedCartItems.length} of {cartItems.length})
+          </label>
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-1">
             {cartItems.map((item) => (
               <div
                 key={item.lineId}
-                className="flex flex-col gap-3 bg-white p-3 rounded-xl shadow transition hover:shadow-lg sm:gap-4 sm:p-6 lg:flex-row"
+                className={`flex flex-col gap-3 rounded-xl bg-white p-3 shadow transition hover:shadow-lg sm:gap-4 sm:p-6 lg:flex-row ${
+                  isCartItemSelected(item.lineId) ? 'ring-2 ring-primary/20' : 'opacity-70'
+                }`}
               >
+                <label className="flex cursor-pointer items-center gap-2 self-start text-xs font-semibold text-slate-700 sm:text-sm">
+                  <input
+                    type="checkbox"
+                    checked={isCartItemSelected(item.lineId)}
+                    onChange={() => toggleCartItemSelection(item.lineId)}
+                    className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                    aria-label={`Select ${item.name} for checkout`}
+                  />
+                  Select
+                </label>
                 {item.image && (
                   <img
                     src={item.image}
@@ -120,7 +153,7 @@ function ShoppingCart() {
           <div className="space-y-4 border-b border-slate-200 pb-4 mb-4">
             <div className="flex justify-between">
               <span className="text-slate-600">Subtotal:</span>
-              <span className="font-semibold text-slate-900">£{getTotalPrice().toFixed(2)}</span>
+              <span className="font-semibold text-slate-900">£{selectedSubtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-600">Shipping:</span>
@@ -128,20 +161,21 @@ function ShoppingCart() {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-600">Tax (10%):</span>
-              <span className="font-semibold text-slate-900">£{(getTotalPrice() * 0.1).toFixed(2)}</span>
+              <span className="font-semibold text-slate-900">£{(selectedSubtotal * 0.1).toFixed(2)}</span>
             </div>
           </div>
 
           <div className="flex justify-between text-2xl font-bold text-slate-900 mb-6 bg-slate-50 p-4 rounded-lg">
             <span>Total:</span>
-            <span>£{(getTotalPrice() * 1.1).toFixed(2)}</span>
+            <span>£{(selectedSubtotal * 1.1).toFixed(2)}</span>
           </div>
 
           <button
             onClick={() => navigate('/checkout')}
-            className="w-full rounded-lg bg-slate-900 text-white py-3 px-4 font-bold hover:bg-red-700 transition mb-4"
+            disabled={selectedCartItems.length === 0}
+            className="mb-4 w-full rounded-lg bg-slate-900 px-4 py-3 font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            Proceed to Checkout
+            {selectedCartItems.length > 0 ? `Checkout (${selectedCartItems.length} selected)` : 'Select items to checkout'}
           </button>
 
           <button

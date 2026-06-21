@@ -35,7 +35,7 @@ function getSavedPaymentCardNumber(paymentMethod = null) {
 
 function Checkout() {
   const navigate = useNavigate();
-  const { cartItems, getTotalPrice, clearCart, loadCart } = useCart();
+  const { getSelectedCartItems, getSelectedTotalPrice, removeFromCart, loadCart } = useCart();
   const { placeOrder, loadOrders } = useOrders();
   const { user, authFetch } = useAuth();
   const [formData, setFormData] = useState(() => {
@@ -63,7 +63,8 @@ function Checkout() {
   const [placedOrder, setPlacedOrder] = useState(null);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const subtotal = getTotalPrice();
+  const checkoutItems = getSelectedCartItems();
+  const subtotal = getSelectedTotalPrice();
   const taxRate = 0.1;
   const taxAmount = subtotal * taxRate;
   const shippingFee = 0;
@@ -71,10 +72,10 @@ function Checkout() {
   const requiresBackendCheckout = Boolean(process.env.REACT_APP_API_URL);
 
   useEffect(() => {
-    if (requiresBackendCheckout && !user && cartItems.length > 0) {
+    if (requiresBackendCheckout && !user && checkoutItems.length > 0) {
       navigate('/login?mode=customer-signin&redirect=%2Fcheckout', { replace: true });
     }
-  }, [cartItems.length, navigate, requiresBackendCheckout, user]);
+  }, [checkoutItems.length, navigate, requiresBackendCheckout, user]);
 
   useEffect(() => {
     if (!requiresBackendCheckout || !user) return;
@@ -107,16 +108,16 @@ function Checkout() {
     };
   }, [authFetch, requiresBackendCheckout, user]);
 
-  if (requiresBackendCheckout && !user && cartItems.length > 0) {
+  if (requiresBackendCheckout && !user && checkoutItems.length > 0) {
     return null;
   }
 
-  if (cartItems.length === 0 && !orderPlaced) {
+  if (checkoutItems.length === 0 && !orderPlaced) {
     return (
       <div className="container mx-auto px-4 py-16 text-center sm:px-8">
         <Seo title="Checkout" description="Complete your Elmshelf checkout securely." noindex />
         <h1 className="text-3xl sm:text-4xl font-bold text-primary mb-4">Checkout</h1>
-        <p className="text-lg text-gray-600 mb-6">Your cart is empty</p>
+        <p className="text-lg text-gray-600 mb-6">Select at least one cart item before checkout.</p>
         <button
           onClick={() => navigate('/')}
           className="bg-primary text-white px-8 py-3 rounded-lg hover:bg-red-700 transition font-semibold"
@@ -189,7 +190,7 @@ function Checkout() {
         cardLast4: cardLast4 || '',
         expiryDate: formData.expiryDate || '',
       },
-      items: cartItems.map((item) => ({
+      items: checkoutItems.map((item) => ({
         lineId: item.lineId,
         id: item.id,
         name: item.name,
@@ -256,6 +257,7 @@ function Checkout() {
           body: JSON.stringify({
             address_id: addressData.id,
             notes: '',
+            cart_item_ids: checkoutItems.map((item) => item.cartItemId),
           }),
         });
         const orderData = await orderResponse.json().catch(() => null);
@@ -281,7 +283,6 @@ function Checkout() {
           updatedAt: new Date().toISOString(),
         }));
 
-        await clearCart();
         await loadCart().catch(() => {});
         await loadOrders().catch(() => {});
         setPlacedOrder(createdOrder);
@@ -311,7 +312,9 @@ function Checkout() {
     }));
     setPlacedOrder(createdOrder);
     setOrderPlaced(true);
-    await clearCart();
+    for (const item of checkoutItems) {
+      await removeFromCart(item.lineId);
+    }
   };
 
   if (orderPlaced) {
@@ -565,7 +568,7 @@ function Checkout() {
           <h2 className="text-2xl font-bold text-primary mb-6">Order Summary</h2>
 
           <div className="space-y-3 mb-6 pb-6 border-b border-gray-300 max-h-64 overflow-y-auto">
-            {cartItems.map((item) => (
+            {checkoutItems.map((item) => (
               <div key={item.lineId || `${item.id}-${item.selectedColor || ''}-${item.selectedSize || ''}`} className="flex justify-between text-sm bg-white p-3 rounded-lg">
                 {(() => {
                   const selectedAttributeLabels =

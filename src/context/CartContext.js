@@ -71,6 +71,7 @@ const mapBackendCartItem = (item = {}) => {
 export function CartProvider({ children }) {
   const { user, authFetch } = useAuth();
   const [cartItems, setCartItems] = useState(() => readGuestCartItems());
+  const [selectedLineIds, setSelectedLineIds] = useState(null);
   const [cartToast, setCartToast] = useState({ visible: false, message: '', id: null });
   const mergedGuestCartForUserRef = useRef(null);
 
@@ -280,6 +281,38 @@ export function CartProvider({ children }) {
   const getTotalPrice = useCallback(() => totalPrice, [totalPrice]);
   const getTotalItems = useCallback(() => totalItems, [totalItems]);
 
+  const getSelectedCartItems = useCallback(
+    () => (selectedLineIds === null ? cartItems : cartItems.filter((item) => selectedLineIds.includes(item.lineId))),
+    [cartItems, selectedLineIds]
+  );
+  const getSelectedTotalPrice = useCallback(
+    () =>
+      getSelectedCartItems().reduce((total, item) => {
+        const price = item.salePrice || item.price;
+        return total + price * item.quantity;
+      }, 0),
+    [getSelectedCartItems]
+  );
+  const isCartItemSelected = useCallback(
+    (lineId) => selectedLineIds === null || selectedLineIds.includes(lineId),
+    [selectedLineIds]
+  );
+  const toggleCartItemSelection = useCallback(
+    (lineId) => {
+      setSelectedLineIds((previous) => {
+        const next = new Set(previous === null ? cartItems.map((item) => item.lineId) : previous);
+        if (next.has(lineId)) next.delete(lineId);
+        else next.add(lineId);
+        return [...next];
+      });
+    },
+    [cartItems]
+  );
+  const setAllCartItemsSelected = useCallback(
+    (selected) => setSelectedLineIds(selected ? null : []),
+    []
+  );
+
   const clearCart = useCallback(async () => {
     if (isBackendCartUser) {
       const response = await authFetch('/cart/', {
@@ -291,6 +324,7 @@ export function CartProvider({ children }) {
       }
     }
     setCartItems([]);
+    setSelectedLineIds(null);
     if (!isBackendCartUser) {
       localStorage.removeItem(GUEST_CART_KEY);
     }
@@ -306,6 +340,11 @@ export function CartProvider({ children }) {
       updateQuantity,
       getTotalPrice,
       getTotalItems,
+      getSelectedCartItems,
+      getSelectedTotalPrice,
+      isCartItemSelected,
+      toggleCartItemSelection,
+      setAllCartItemsSelected,
       clearCart,
       cartToast,
       hideCartToast,
@@ -320,6 +359,11 @@ export function CartProvider({ children }) {
       updateQuantity,
       getTotalPrice,
       getTotalItems,
+      getSelectedCartItems,
+      getSelectedTotalPrice,
+      isCartItemSelected,
+      toggleCartItemSelection,
+      setAllCartItemsSelected,
       clearCart,
       cartToast,
       hideCartToast,
