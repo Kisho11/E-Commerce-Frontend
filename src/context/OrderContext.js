@@ -237,13 +237,63 @@ export function OrderProvider({ children }) {
     return newOrder;
   }, [orders, user]);
 
+  const updateOrderStatus = useCallback(async (orderId, status) => {
+    const normalizedStatus = String(status || '').toLowerCase();
+    const validStatuses = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'];
+    if (!validStatuses.includes(normalizedStatus)) {
+      throw new Error('Invalid order status.');
+    }
+
+    if (API_BASE_URL) {
+      if (!user || !['manager', 'admin'].includes(user.role)) {
+        throw new Error('You do not have permission to update order status.');
+      }
+
+      const endpoint = user.role === 'manager'
+        ? `/manager/orders/${orderId}/status`
+        : `/orders/admin/${orderId}/status`;
+      const response = await authFetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: normalizedStatus }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Unable to update order status.');
+      }
+
+      const updatedOrder = mapOrderFromApi(data);
+      setOrders((previousOrders) =>
+        previousOrders.map((order) => (Number(order.id) === Number(orderId) ? updatedOrder : order))
+      );
+      return updatedOrder;
+    }
+
+    const existingOrder = orders.find((order) => Number(order.id) === Number(orderId));
+    if (!existingOrder) {
+      throw new Error('Order not found.');
+    }
+
+    const updatedOrder = normalizeOrder({
+      ...existingOrder,
+      status: normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1),
+    });
+    setOrders((previousOrders) =>
+      previousOrders.map((order) => (Number(order.id) === Number(orderId) ? updatedOrder : order))
+    );
+    return updatedOrder;
+  }, [authFetch, orders, user]);
+
   const value = useMemo(
     () => ({
       orders,
       placeOrder,
       loadOrders,
+      updateOrderStatus,
     }),
-    [orders, placeOrder, loadOrders]
+    [orders, placeOrder, loadOrders, updateOrderStatus]
   );
 
   return (

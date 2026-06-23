@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
@@ -8,14 +8,14 @@ import UiIcon from '../components/UiIcon';
 
 function ManagerDashboard() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, authFetch } = useAuth();
 
   useEffect(() => {
     if (user?.mustResetPassword) {
       navigate('/manager-activate', { replace: true });
     }
   }, [user, navigate]);
-  const { orders } = useOrders();
+  const { orders, updateOrderStatus } = useOrders();
   const { products, adjustStock, getInventorySummary, loadAllProducts } = useProducts();
 
   useEffect(() => {
@@ -24,8 +24,41 @@ function ManagerDashboard() {
 
   const [activeTab, setActiveTab] = useState('orders');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [orderActionMessage, setOrderActionMessage] = useState('');
+  const [orderActionError, setOrderActionError] = useState('');
+  const [isUpdatingOrder, setIsUpdatingOrder] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
   const [stockFilter, setStockFilter] = useState('all');
+  const [tasks, setTasks] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState('');
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'medium', dueDate: '' });
+
+  const loadTasks = useCallback(async () => {
+    if (!user?.id) return;
+
+    setTasksLoading(true);
+    setTasksError('');
+    try {
+      const response = await authFetch(`/tasks/?assigned_to=${user.id}`);
+      const data = await response.json().catch(() => []);
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Unable to load tasks.');
+      }
+      setTasks(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setTasksError(error.message || 'Unable to load tasks.');
+    } finally {
+      setTasksLoading(false);
+    }
+  }, [authFetch, user?.id]);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
 
   const recentOrders = [...orders].sort(
     (a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)
@@ -89,6 +122,74 @@ function ManagerDashboard() {
     if (!window.confirm('Are you sure you want to logout?')) return;
     logout();
     navigate('/');
+  };
+
+  const selectedOrderForAction = recentOrders.find((order) => Number(order.id) === Number(selectedOrderId));
+
+  const handleOrderStatusUpdate = async (status) => {
+    if (!selectedOrderForAction || isUpdatingOrder) return;
+
+    setOrderActionMessage('');
+    setOrderActionError('');
+    setIsUpdatingOrder(true);
+    try {
+      const updatedOrder = await updateOrderStatus(selectedOrderForAction.id, status);
+      setSelectedOrder((currentOrder) =>
+        Number(currentOrder?.id) === Number(updatedOrder.id) ? updatedOrder : currentOrder
+      );
+      setOrderActionMessage(`Order #${updatedOrder.id} marked as ${updatedOrder.status}.`);
+    } catch (error) {
+      setOrderActionError(error.message || 'Unable to update order status.');
+    } finally {
+      setIsUpdatingOrder(false);
+    }
+  };
+
+  const handleCreateTask = async (event) => {
+    event.preventDefault();
+    const title = newTask.title.trim();
+    if (!title || isCreatingTask) return;
+
+    setIsCreatingTask(true);
+    setTasksError('');
+    try {
+      const response = await authFetch('/tasks/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          description: newTask.description.trim() || null,
+          priority: newTask.priority,
+          due_date: newTask.dueDate ? new Date(`${newTask.dueDate}T12:00:00`).toISOString() : null,
+          assigned_to: user?.id || null,
+        }),
+      });
+      const createdTask = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(createdTask?.detail || 'Unable to create task.');
+      }
+
+      setTasks((previousTasks) => [createdTask, ...previousTasks]);
+      setNewTask({ title: '', description: '', priority: 'medium', dueDate: '' });
+      setShowTaskForm(false);
+    } catch (error) {
+      setTasksError(error.message || 'Unable to create task.');
+    } finally {
+      setIsCreatingTask(false);
+    }
+  };
+
+  const formatTaskLabel = (value = '') =>
+    String(value)
+      .split('_')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+
+  const formatTaskDueDate = (value) => {
+    if (!value) return 'No due date';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'No due date' : date.toLocaleDateString();
   };
 
   const getStockState = (product) => {
@@ -192,20 +293,40 @@ function ManagerDashboard() {
                 Order Management
               </h3>
               <div className="flex gap-2">
-                <button className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition">
+                <button
+                  type="button"
+                  onClick={() => handleOrderStatusUpdate('delivered')}
+                  disabled={!selectedOrderForAction || isUpdatingOrder || ['Delivered', 'Cancelled'].includes(selectedOrderForAction.status)}
+                  className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
                   <UiIcon name="check" className="h-4 w-4" />
-                  Mark Complete
+                  {isUpdatingOrder ? 'Updating…' : 'Mark Complete'}
                 </button>
-                <button className="inline-flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-orange-700 transition">
+                <button
+                  type="button"
+                  onClick={() => handleOrderStatusUpdate('shipped')}
+                  disabled={!selectedOrderForAction || isUpdatingOrder || ['Shipped', 'Delivered', 'Cancelled'].includes(selectedOrderForAction.status)}
+                  className="inline-flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-orange-700 transition disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
                   <UiIcon name="truck" className="h-4 w-4" />
                   Update Shipping
                 </button>
               </div>
             </div>
+            <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              <p className="text-gray-600">
+                {selectedOrderForAction ? `Selected order: #${selectedOrderForAction.id}` : 'Select an order to update its status.'}
+              </p>
+              {orderActionMessage && <p className="font-medium text-green-700" role="status">{orderActionMessage}</p>}
+              {orderActionError && <p className="font-medium text-red-700" role="alert">{orderActionError}</p>}
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-100">
                   <tr>
+                    <th className="w-12 px-3 py-3 text-left">
+                      <span className="sr-only">Select order</span>
+                    </th>
                     <th className="px-6 py-3 text-left font-semibold text-gray-700">Order ID</th>
                     <th className="px-6 py-3 text-left font-semibold text-gray-700">Customer</th>
                     <th className="px-6 py-3 text-left font-semibold text-gray-700">Amount</th>
@@ -216,7 +337,21 @@ function ManagerDashboard() {
                 </thead>
                 <tbody>
                   {recentOrders.map((order) => (
-                    <tr key={order.id} className="border-b border-gray-200 hover:bg-gray-50">
+                    <tr key={order.id} className={`border-b border-gray-200 hover:bg-gray-50 ${Number(selectedOrderId) === Number(order.id) ? 'bg-blue-50' : ''}`}>
+                      <td className="px-3 py-4">
+                        <input
+                          type="radio"
+                          name="selected-order"
+                          checked={Number(selectedOrderId) === Number(order.id)}
+                          onChange={() => {
+                            setSelectedOrderId(order.id);
+                            setOrderActionMessage('');
+                            setOrderActionError('');
+                          }}
+                          aria-label={`Select order ${order.id}`}
+                          className="h-4 w-4 cursor-pointer accent-blue-600"
+                        />
+                      </td>
                       <td className="px-6 py-4 font-bold text-blue-700">#{order.id}</td>
                       <td className="px-6 py-4">{order.customer}</td>
                       <td className="px-6 py-4 font-semibold">£{order.amount.toFixed(2)}</td>
@@ -440,43 +575,109 @@ function ManagerDashboard() {
                 <UiIcon name="tasks" className="h-6 w-6" />
                 My Tasks
               </h3>
-              <button className="bg-primary text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-800 transition">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTaskForm((visible) => !visible);
+                  setTasksError('');
+                }}
+                className="bg-primary text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-800 transition"
+              >
                 + New Task
               </button>
             </div>
+            {showTaskForm && (
+              <form onSubmit={handleCreateTask} className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Task title
+                    <input
+                      required
+                      value={newTask.title}
+                      onChange={(event) => setNewTask((current) => ({ ...current, title: event.target.value }))}
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                      placeholder="e.g. Prepare shipping labels"
+                    />
+                  </label>
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Priority
+                    <select
+                      value={newTask.priority}
+                      onChange={(event) => setNewTask((current) => ({ ...current, priority: event.target.value }))}
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                  </label>
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Due date
+                    <input
+                      type="date"
+                      value={newTask.dueDate}
+                      onChange={(event) => setNewTask((current) => ({ ...current, dueDate: event.target.value }))}
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                    />
+                  </label>
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Description <span className="font-normal text-gray-500">(optional)</span>
+                    <input
+                      value={newTask.description}
+                      onChange={(event) => setNewTask((current) => ({ ...current, description: event.target.value }))}
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                      placeholder="Add a short note"
+                    />
+                  </label>
+                </div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowTaskForm(false)}
+                    className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!newTask.title.trim() || isCreatingTask}
+                    className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+                  >
+                    {isCreatingTask ? 'Creating…' : 'Create Task'}
+                  </button>
+                </div>
+              </form>
+            )}
+            {tasksError && <p className="mb-4 text-sm font-medium text-red-700" role="alert">{tasksError}</p>}
             <div className="space-y-4">
-              {[
-                { title: 'Process pending orders', priority: 'High', due: '2026-02-22', status: 'In Progress' },
-                { title: 'Update inventory levels', priority: 'Medium', due: '2026-02-23', status: 'Not Started' },
-                { title: 'Handle customer complaints', priority: 'High', due: '2026-02-22', status: 'In Progress' },
-                { title: 'Review low stock items', priority: 'Medium', due: '2026-02-24', status: 'Not Started' },
-                { title: 'Prepare shipping labels', priority: 'Low', due: '2026-02-25', status: 'Completed' },
-              ].map((task, idx) => (
-                <div key={idx} className="border-2 border-gray-200 p-4 rounded-lg hover:shadow-md transition flex justify-between items-center">
+              {tasksLoading ? (
+                <p className="py-6 text-center text-sm text-gray-500">Loading tasks…</p>
+              ) : tasks.length === 0 ? (
+                <p className="py-6 text-center text-sm text-gray-500">No tasks assigned to you yet.</p>
+              ) : tasks.map((task) => (
+                <div key={task.id} className="border-2 border-gray-200 p-4 rounded-lg hover:shadow-md transition flex justify-between items-center">
                   <div>
                     <h4 className="font-bold text-gray-800">{task.title}</h4>
+                    {task.description && <p className="mt-1 text-sm text-gray-600">{task.description}</p>}
                     <div className="flex gap-4 mt-2">
                       <span className={`text-sm px-2 py-1 rounded ${
-                        task.priority === 'High' ? 'bg-blue-100 text-blue-800' :
-                        task.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                        task.priority === 'high' ? 'bg-blue-100 text-blue-800' :
+                        task.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-green-100 text-green-800'
                       }`}>
-                        {task.priority}
+                        {formatTaskLabel(task.priority)}
                       </span>
-                      <span className="text-sm text-gray-600">Due: {task.due}</span>
+                      <span className="text-sm text-gray-600">Due: {formatTaskDueDate(task.due_date)}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                      task.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                      task.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                      task.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
                       'bg-gray-100 text-gray-800'
                     }`}>
-                      {task.status}
+                      {formatTaskLabel(task.status)}
                     </span>
-                    <button className="text-blue-600 hover:text-blue-800" aria-label="Task actions">
-                      <UiIcon name="ellipsis" className="h-4 w-4" />
-                    </button>
                   </div>
                 </div>
               ))}
