@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
+import { PRODUCT_TYPES, resolveProductType } from '../utils/productType';
 
 const formatPriceRange = (product) => {
   const minPrice = Number(product.minPrice);
@@ -26,8 +27,14 @@ function ProductCard({ product }) {
   const { addToCart } = useCart();
   const { t } = useLanguage();
   const productUrl = `/product/${product.id}`;
+  const availableStock = Math.max(
+    Number(product.inventory?.onHand ?? 0) - Number(product.inventory?.reserved ?? 0),
+    0
+  );
+  const isOutOfStock = resolveProductType(product) !== PRODUCT_TYPES.CUSTOM && availableStock <= 0;
 
   const handleAddToCart = () => {
+    if (isOutOfStock) return;
     addToCart(product);
   };
 
@@ -57,10 +64,12 @@ function ProductCard({ product }) {
       </Link>
       <div className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4 lg:px-2 lg:pb-2">
         <button
+          type="button"
           onClick={handleAddToCart}
-          className="w-full rounded-xl bg-slate-900 px-2 py-2.5 text-xs font-bold leading-none text-white transition hover:bg-red-700 sm:text-sm lg:py-1.5 lg:text-[10px]"
+          disabled={isOutOfStock}
+          className="w-full rounded-xl bg-slate-900 px-2 py-2.5 text-xs font-bold leading-none text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 sm:text-sm lg:py-1.5 lg:text-[10px]"
         >
-          {t('product.addToCart')}
+          {isOutOfStock ? 'Out of stock' : t('product.addToCart')}
         </button>
       </div>
     </article>

@@ -189,11 +189,11 @@ function ProductManagement() {
   const variantAttributeGroups = useMemo(() => {
     if (formData.productType !== PRODUCT_TYPES.VARIABLE) return [];
     return formData.variantGroups
-      .filter((g) => g.finalized)
       .map((g) => ({
-        attribute: g.attribute,
-        values: g.values.map((e) => e.value).filter(Boolean),
-      }));
+        attribute: (g.attribute || '').trim(),
+        values: g.values.map((e) => (e.value || '').trim()).filter(Boolean),
+      }))
+      .filter((group) => group.attribute && group.values.length > 0);
   }, [formData.productType, formData.variantGroups]);
 
   useEffect(() => {
@@ -275,7 +275,11 @@ function ProductManagement() {
         });
         return next;
       });
-      setSuccess(targetFields.length === AI_CONTENT_FIELDS.length ? 'All product content generated. Review it before saving.' : 'Content generated. Review it before saving.');
+      const successMessage = targetFields.length === AI_CONTENT_FIELDS.length
+        ? 'All product content generated. Review it before saving.'
+        : 'Content generated. Review it before saving.';
+      setSuccess(successMessage);
+      window.alert(successMessage);
     } catch (generationError) {
       setError(generationError.message || 'Unable to generate product content.');
     } finally {
@@ -627,9 +631,22 @@ function ProductManagement() {
       })
       .filter((row) => row.attribute || row.value);
 
+    const completeVariantGroups = formData.variantGroups.map((group) => ({
+      ...group,
+      attribute: (group.attribute || '').trim(),
+      values: (group.values || []).map((entry) => ({
+        ...entry,
+        value: (entry.value || '').trim(),
+      })),
+      finalized: Boolean(
+        (group.attribute || '').trim() &&
+        (group.values || []).length > 0 &&
+        (group.values || []).every((entry) => (entry.value || '').trim())
+      ),
+    }));
     const matrixVariantPricing = syncVariantPricingWithGroups(
       formData.variantPricing,
-      formData.variantGroups,
+      completeVariantGroups,
       formData.price
     );
 
