@@ -107,7 +107,7 @@ function validateCheckoutShippingField(name, value) {
       if (!trimmedValue) return 'Email is required.';
       return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedValue) ? '' : 'Enter a valid email address.';
     case 'phone': {
-      if (!trimmedValue) return '';
+      if (!trimmedValue) return 'Phone number is required.';
       const digits = trimmedValue.replace(/\D/g, '');
       return digits.length >= 7 && digits.length <= 15 ? '' : 'Enter a valid phone number (7–15 digits).';
     }
@@ -354,7 +354,14 @@ function Checkout() {
     setShippingErrors(shippingValidation.errors);
     const paymentValidation = validateCheckoutPayment(formData);
     setPaymentErrors(paymentValidation.errors);
-    if (!shippingValidation.valid || !paymentValidation.valid) return;
+    if (!shippingValidation.valid || !paymentValidation.valid) {
+      const firstError = [
+        ...Object.values(shippingValidation.errors),
+        ...Object.values(paymentValidation.errors),
+      ].find(Boolean);
+      window.alert(firstError || 'Please complete all required checkout fields.');
+      return;
+    }
 
     if (requiresBackendCheckout && (!user || user.role !== 'user')) {
       setSubmitError('Please sign in with a customer account before checking out.');
@@ -428,7 +435,11 @@ function Checkout() {
         setOrderPlaced(true);
         return;
       } catch (error) {
-        setSubmitError(error.message || 'Unable to place your order');
+        const message = error.message || 'Unable to place your order';
+        setSubmitError(message);
+        if (message === 'Cart is empty') {
+          window.alert('Your cart is empty. Please add at least one item before placing an order.');
+        }
         return;
       } finally {
         setSubmitting(false);
@@ -569,7 +580,7 @@ function Checkout() {
               </div>
               <div>
                 <label className="block text-gray-700 font-semibold mb-2">
-                  Phone
+                  Phone *
                 </label>
                 <input
                   type="tel"
@@ -579,6 +590,7 @@ function Checkout() {
                   className={shippingInputClass(shippingErrors.phone)}
                   inputMode="tel"
                   aria-invalid={Boolean(shippingErrors.phone)}
+                  required
                 />
                 <PaymentFieldError message={shippingErrors.phone} />
               </div>
