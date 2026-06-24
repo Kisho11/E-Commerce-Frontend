@@ -34,6 +34,8 @@ function ManagerDashboard() {
   const [tasks, setTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [tasksError, setTasksError] = useState('');
+  const [taskView, setTaskView] = useState('active');
+  const [updatingTaskId, setUpdatingTaskId] = useState(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'medium', dueDate: '' });
@@ -178,6 +180,31 @@ function ManagerDashboard() {
     }
   };
 
+  const handleTaskStatusUpdate = async (task, status) => {
+    if (!task?.id || updatingTaskId) return;
+
+    setUpdatingTaskId(task.id);
+    setTasksError('');
+    try {
+      const response = await authFetch(`/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      const updatedTask = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(updatedTask?.detail || 'Unable to update task status.');
+      }
+      setTasks((currentTasks) => currentTasks.map((currentTask) => (
+        currentTask.id === updatedTask.id ? updatedTask : currentTask
+      )));
+    } catch (error) {
+      setTasksError(error.message || 'Unable to update task status.');
+    } finally {
+      setUpdatingTaskId(null);
+    }
+  };
+
   const formatTaskLabel = (value = '') =>
     String(value)
       .split('_')
@@ -190,6 +217,10 @@ function ManagerDashboard() {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? 'No due date' : date.toLocaleDateString();
   };
+
+  const activeTasks = tasks.filter((task) => task.status !== 'completed');
+  const completedTasks = tasks.filter((task) => task.status === 'completed');
+  const visibleTasks = taskView === 'completed' ? completedTasks : activeTasks;
 
   const getStockState = (product) => {
     const onHand = Number(product.inventory?.onHand || 0);
@@ -643,13 +674,35 @@ function ManagerDashboard() {
               </form>
             )}
             {tasksError && <p className="mb-4 text-sm font-medium text-red-700" role="alert">{tasksError}</p>}
+            <div className="mb-5 flex flex-wrap gap-2 border-b border-gray-200 pb-4">
+              <button
+                type="button"
+                onClick={() => setTaskView('active')}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                  taskView === 'active' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Active ({activeTasks.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTaskView('completed')}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                  taskView === 'completed' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Completed ({completedTasks.length})
+              </button>
+            </div>
             <div className="space-y-4">
               {tasksLoading ? (
                 <p className="py-6 text-center text-sm text-gray-500">Loading tasks…</p>
-              ) : tasks.length === 0 ? (
-                <p className="py-6 text-center text-sm text-gray-500">No tasks assigned to you yet.</p>
-              ) : tasks.map((task) => (
-                <div key={task.id} className="border-2 border-gray-200 p-4 rounded-lg hover:shadow-md transition flex justify-between items-center">
+              ) : visibleTasks.length === 0 ? (
+                <p className="py-6 text-center text-sm text-gray-500">
+                  {taskView === 'completed' ? 'No completed tasks yet.' : 'No active tasks assigned to you yet.'}
+                </p>
+              ) : visibleTasks.map((task) => (
+                <div key={task.id} className="border-2 border-gray-200 p-4 rounded-lg hover:shadow-md transition flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h4 className="font-bold text-gray-800">{task.title}</h4>
                     {task.description && <p className="mt-1 text-sm text-gray-600">{task.description}</p>}
@@ -664,7 +717,7 @@ function ManagerDashboard() {
                       <span className="text-sm text-gray-600">Due: {formatTaskDueDate(task.due_date)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                       task.status === 'completed' ? 'bg-green-100 text-green-800' :
                       task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
@@ -672,6 +725,36 @@ function ManagerDashboard() {
                     }`}>
                       {formatTaskLabel(task.status)}
                     </span>
+                    {task.status === 'pending' && (
+                      <button
+                        type="button"
+                        onClick={() => handleTaskStatusUpdate(task, 'in_progress')}
+                        disabled={updatingTaskId === task.id}
+                        className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                      >
+                        {updatingTaskId === task.id ? 'Updatingâ€¦' : 'Start'}
+                      </button>
+                    )}
+                    {task.status === 'in_progress' && (
+                      <button
+                        type="button"
+                        onClick={() => handleTaskStatusUpdate(task, 'completed')}
+                        disabled={updatingTaskId === task.id}
+                        className="rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                      >
+                        {updatingTaskId === task.id ? 'Updatingâ€¦' : 'Complete'}
+                      </button>
+                    )}
+                    {task.status === 'completed' && (
+                      <button
+                        type="button"
+                        onClick={() => handleTaskStatusUpdate(task, 'in_progress')}
+                        disabled={updatingTaskId === task.id}
+                        className="rounded-md border border-blue-300 px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-gray-400"
+                      >
+                        {updatingTaskId === task.id ? 'Updatingâ€¦' : 'Reopen'}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
