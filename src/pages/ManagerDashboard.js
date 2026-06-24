@@ -5,6 +5,7 @@ import { useOrders } from '../context/OrderContext';
 import { useProducts } from '../context/ProductContext';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import UiIcon from '../components/UiIcon';
+import InventoryManagement from './InventoryManagement';
 
 function ManagerDashboard() {
   const navigate = useNavigate();
@@ -16,7 +17,7 @@ function ManagerDashboard() {
     }
   }, [user, navigate]);
   const { orders, updateOrderStatus } = useOrders();
-  const { products, adjustStock, getInventorySummary, loadAllProducts } = useProducts();
+  const { products, adjustStock, loadAllProducts } = useProducts();
 
   useEffect(() => {
     loadAllProducts();
@@ -63,8 +64,6 @@ function ManagerDashboard() {
   const recentOrders = [...orders].sort(
     (a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)
   );
-
-  const inventorySummary = getInventorySummary();
 
   const filteredInventory = useMemo(() => {
     return products
@@ -383,22 +382,17 @@ function ManagerDashboard() {
         )}
 
         {activeTab === 'inventory' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="rounded-xl bg-white p-5 shadow-md">
-                <p className="text-xs font-bold uppercase tracking-wide text-gray-500">On Hand</p>
-                <p className="mt-2 text-3xl font-bold text-gray-900">{inventorySummary.totalOnHand}</p>
-              </div>
-              <div className="rounded-xl bg-white p-5 shadow-md">
-                <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Reserved</p>
-                <p className="mt-2 text-3xl font-bold text-orange-700">{inventorySummary.totalReserved}</p>
-              </div>
-              <div className="rounded-xl bg-white p-5 shadow-md">
-                <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Available</p>
-                <p className="mt-2 text-3xl font-bold text-green-700">{inventorySummary.totalAvailable}</p>
-              </div>
-            </div>
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h3 className="mb-6 flex items-center gap-2 text-2xl font-bold text-primary">
+              <UiIcon name="warehouse" className="h-6 w-6" />
+              Inventory Management
+            </h3>
+            <InventoryManagement />
+          </div>
+        )}
 
+        {false && (
+          <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-md p-6">
               <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <h3 className="flex items-center gap-2 text-2xl font-bold text-blue-700">
