@@ -11,8 +11,9 @@ function Navbar() {
   const [isMobileNavHidden, setIsMobileNavHidden] = useState(false);
   const [searchScope, setSearchScope] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const lastScrollYRef = useRef(0);
-  const { categories } = useProducts();
+  const { categories, products } = useProducts();
   const { getTotalItems } = useCart();
   const { isAuthenticated, user, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
@@ -43,6 +44,19 @@ function Navbar() {
     [categories]
   );
 
+  const productSuggestions = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    if (!query) return [];
+
+    return products
+      .filter((product) => {
+        const nameMatches = String(product.name || '').toLocaleLowerCase().startsWith(query);
+        const inSelectedCategory = searchScope === 'all' || (product.categories || []).includes(searchScope);
+        return nameMatches && inSelectedCategory;
+      })
+      .slice(0, 8);
+  }, [products, searchQuery, searchScope]);
+
   const handleNavigate = () => {
     setIsMobileMenuOpen(false);
   };
@@ -50,6 +64,7 @@ function Navbar() {
   const handleSearchSubmit = (event) => {
     event.preventDefault();
     const trimmedQuery = searchQuery.trim();
+    setShowSearchSuggestions(false);
 
     if (searchScope === 'all') {
       if (trimmedQuery) {
@@ -72,11 +87,24 @@ function Navbar() {
   const handleScopeChange = (event) => {
     const value = event.target.value;
     setSearchScope(value);
+    setShowSearchSuggestions(Boolean(searchQuery.trim()));
     if (value === 'all') {
       navigate('/categories');
     } else {
       navigate(categoryPath(value));
     }
+  };
+
+  const handleSearchQueryChange = (event) => {
+    setSearchQuery(event.target.value);
+    setShowSearchSuggestions(Boolean(event.target.value.trim()));
+  };
+
+  const handleSuggestionSelect = (product) => {
+    setSearchQuery(product.name || '');
+    setShowSearchSuggestions(false);
+    handleNavigate();
+    navigate(`/product/${product.id}`);
   };
 
   const handleLogout = () => {
@@ -212,7 +240,7 @@ function Navbar() {
           <div className="hidden flex-1 items-center justify-center md:flex">
             <form
               onSubmit={handleSearchSubmit}
-              className="flex w-full max-w-[640px] items-stretch overflow-hidden rounded-[16px] bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-1.5"
+              className="relative flex w-full max-w-[640px] items-stretch rounded-[16px] bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-1.5"
             >
               <div className="flex w-full items-stretch overflow-hidden rounded-[12px] bg-white">
                 <div className="relative w-[142px] shrink-0 border-r border-slate-200 bg-slate-100">
@@ -248,7 +276,8 @@ function Navbar() {
                     id="header-search-query"
                     type="search"
                     value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
+                    onChange={handleSearchQueryChange}
+                    onFocus={() => setShowSearchSuggestions(Boolean(searchQuery.trim()))}
                     placeholder="Search shelving, counters, gondolas, fittings..."
                     className="h-[34px] min-w-0 w-full px-11 pr-4 text-[14px] text-slate-900 outline-none placeholder:text-slate-400"
                   />
@@ -266,6 +295,26 @@ function Navbar() {
                   Go
                 </button>
               </div>
+              {showSearchSuggestions && (
+                <div className="absolute left-[150px] right-[80px] top-full z-50 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                  {productSuggestions.length > 0 ? productSuggestions.map((product) => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => handleSuggestionSelect(product)}
+                      className="flex w-full flex-col px-4 py-2.5 text-left transition hover:bg-slate-50"
+                    >
+                      <span className="text-sm font-semibold text-slate-900">{product.name}</span>
+                      {product.categories?.length > 0 && (
+                        <span className="text-xs text-slate-500">{product.categories.join(' · ')}</span>
+                      )}
+                    </button>
+                  )) : (
+                    <p className="px-4 py-3 text-sm text-slate-500">No products start with “{searchQuery.trim()}”.</p>
+                  )}
+                </div>
+              )}
             </form>
           </div>
 
@@ -399,7 +448,7 @@ function Navbar() {
         <div className="border-t border-slate-800 py-3 lg:hidden">
           <form
             onSubmit={handleSearchSubmit}
-            className="overflow-hidden rounded-[16px] bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-1.5"
+            className="relative rounded-[16px] bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-1.5"
           >
             <div className="flex overflow-hidden rounded-[12px] bg-white">
               <div className="relative w-[122px] shrink-0 border-r border-slate-200 bg-slate-100">
@@ -430,7 +479,8 @@ function Navbar() {
                 <input
                   type="search"
                   value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onChange={handleSearchQueryChange}
+                  onFocus={() => setShowSearchSuggestions(Boolean(searchQuery.trim()))}
                   placeholder="Search products"
                   className="h-[32px] min-w-0 w-full bg-white px-9 pr-3 text-sm text-slate-900 outline-none placeholder:text-slate-400"
                 />
@@ -446,6 +496,26 @@ function Navbar() {
                 </svg>
               </button>
             </div>
+            {showSearchSuggestions && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                {productSuggestions.length > 0 ? productSuggestions.map((product) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => handleSuggestionSelect(product)}
+                    className="flex w-full flex-col px-4 py-2.5 text-left transition hover:bg-slate-50"
+                  >
+                    <span className="text-sm font-semibold text-slate-900">{product.name}</span>
+                    {product.categories?.length > 0 && (
+                      <span className="text-xs text-slate-500">{product.categories.join(' · ')}</span>
+                    )}
+                  </button>
+                )) : (
+                  <p className="px-4 py-3 text-sm text-slate-500">No products start with “{searchQuery.trim()}”.</p>
+                )}
+              </div>
+            )}
           </form>
         </div>
 

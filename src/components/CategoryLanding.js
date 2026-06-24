@@ -42,7 +42,7 @@ function CategoryLanding({ searchQuery = '', showSearch = false, onSearchChange 
 
   return (
     <div>
-      <div className="mb-8">
+      <div className="mb-8 ml-4 sm:ml-6">
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">{t('categories.shopByCategory')}</p>
         <h2 className="mt-2 text-3xl font-bold text-slate-900 sm:text-5xl">{t('categories.chooseCategory')}</h2>
         <p className="mt-3 max-w-4xl text-sm text-slate-600 sm:text-base">
