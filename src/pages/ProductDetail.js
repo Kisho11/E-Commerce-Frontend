@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useProducts } from '../context/ProductContext';
 import UiIcon from '../components/UiIcon';
 import BackButton from '../components/BackButton';
+import ProductCard from '../components/ProductCard';
 import Seo from '../components/Seo';
 import { getProductPriceDisplay, PRODUCT_TYPES, resolveProductType } from '../utils/productType';
+import { categoryPath } from '../utils/categoryRoutes';
 
 const uiConfig = {
   rating: 4,
@@ -54,7 +56,10 @@ function ProductDetail() {
   const { addToCart } = useCart();
   const { products, loadAllProducts } = useProducts();
   const product = products.find((p) => p.id === parseInt(id, 10));
+  const relatedProductsRef = useRef(null);
   const [resolvedProductId, setResolvedProductId] = useState(null);
+  const [visibleRelatedCount, setVisibleRelatedCount] = useState(4);
+  const [canScrollRelatedLeft, setCanScrollRelatedLeft] = useState(false);
 
   const [selectedAttributes, setSelectedAttributes] = useState({});
   const [quantity, setQuantity] = useState(1);
@@ -85,6 +90,26 @@ function ProductDetail() {
     };
   }, [product, productType]);
 
+  const relatedProducts = useMemo(() => {
+    if (!product) return [];
+    const productCategories = new Set(product.categories || []);
+
+    return products
+      .filter((candidate) => (
+        candidate.id !== product.id
+        && candidate.isActive !== false
+        && (candidate.categories || []).some((category) => productCategories.has(category))
+      ))
+      .sort((left, right) => {
+        const isAvailable = (candidate) => {
+          if (resolveProductType(candidate) === PRODUCT_TYPES.CUSTOM) return true;
+          return Number(candidate.inventory?.onHand ?? 0) - Number(candidate.inventory?.reserved ?? 0) > 0;
+        };
+        return Number(isAvailable(right)) - Number(isAvailable(left));
+      })
+      .slice(0, 12);
+  }, [product, products]);
+
   useEffect(() => {
     let isActive = true;
 
@@ -108,6 +133,11 @@ function ProductDetail() {
     setSelectedImageIndex(0);
     setIsHoverZoomed(false);
     setZoomOrigin('50% 50%');
+  }, [product?.id]);
+
+  useEffect(() => {
+    setVisibleRelatedCount(4);
+    setCanScrollRelatedLeft(false);
   }, [product?.id]);
 
   useEffect(() => {
@@ -237,6 +267,28 @@ function ProductDetail() {
     const y = ((event.clientY - rect.top) / rect.height) * 100;
     setZoomOrigin(`${x}% ${y}%`);
   };
+
+  const scrollRelatedProducts = (direction) => {
+    const container = relatedProductsRef.current;
+    if (!container) return;
+
+    if (direction > 0 && visibleRelatedCount < relatedProducts.length) {
+      setVisibleRelatedCount((currentCount) => Math.min(currentCount + 4, relatedProducts.length));
+      setCanScrollRelatedLeft(true);
+      window.requestAnimationFrame(() => {
+        container.scrollBy({ left: Math.max(container.clientWidth * 0.8, 260), behavior: 'smooth' });
+      });
+      return;
+    }
+
+    container.scrollBy({ left: direction * Math.max(container.clientWidth * 0.8, 260), behavior: 'smooth' });
+  };
+
+  const handleRelatedProductsScroll = (event) => {
+    setCanScrollRelatedLeft(event.currentTarget.scrollLeft > 4);
+  };
+
+  const visibleRelatedProducts = relatedProducts.slice(0, visibleRelatedCount);
 
   return (
     <div className="bg-white pb-10">
@@ -542,6 +594,60 @@ function ProductDetail() {
               </div>
             )}
           </div>
+        )}
+
+        {relatedProducts.length > 0 && (
+          <section className="shell mx-auto mt-12 max-w-7xl px-2 sm:px-4" aria-labelledby="related-products-heading">
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-t border-slate-200 pt-8">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">More to explore</p>
+                <h2 id="related-products-heading" className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">
+                  Related Products
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  More products from the same category, with available items shown first.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {product.categories?.[0] && (
+                  <Link
+                    to={categoryPath(product.categories[0])}
+                    className="rounded-lg px-3 py-2 text-sm font-semibold text-primary transition hover:bg-red-50"
+                  >
+                    View all
+                  </Link>
+                )}
+                <button
+                  type="button"
+                  onClick={() => scrollRelatedProducts(-1)}
+                  disabled={!canScrollRelatedLeft}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 text-slate-700 transition hover:border-primary hover:bg-red-50 hover:text-primary disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 disabled:hover:bg-transparent"
+                  aria-label="Show previous related products"
+                >
+                  <span aria-hidden="true">←</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollRelatedProducts(1)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 text-slate-700 transition hover:border-primary hover:bg-red-50 hover:text-primary"
+                  aria-label="Show more related products"
+                >
+                  <span aria-hidden="true">→</span>
+                </button>
+              </div>
+            </div>
+            <div
+              ref={relatedProductsRef}
+              onScroll={handleRelatedProductsScroll}
+              className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-3 [scrollbar-width:thin]"
+            >
+              {visibleRelatedProducts.map((relatedProduct) => (
+                <div key={relatedProduct.id} className="w-[210px] shrink-0 snap-start sm:w-[240px]">
+                  <ProductCard product={relatedProduct} />
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </div>
