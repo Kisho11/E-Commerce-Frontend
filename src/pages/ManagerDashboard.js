@@ -7,6 +7,8 @@ import OrderDetailsModal from '../components/OrderDetailsModal';
 import UiIcon from '../components/UiIcon';
 import InventoryManagement from './InventoryManagement';
 
+const ORDER_STATUS_OPTIONS = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
+
 function ManagerDashboard() {
   const navigate = useNavigate();
   const { user, logout, authFetch } = useAuth();
@@ -26,6 +28,7 @@ function ManagerDashboard() {
   const [activeTab, setActiveTab] = useState('orders');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [selectedOrderStatus, setSelectedOrderStatus] = useState('');
   const [orderActionMessage, setOrderActionMessage] = useState('');
   const [orderActionError, setOrderActionError] = useState('');
   const [isUpdatingOrder, setIsUpdatingOrder] = useState(false);
@@ -126,9 +129,25 @@ function ManagerDashboard() {
   };
 
   const selectedOrderForAction = recentOrders.find((order) => Number(order.id) === Number(selectedOrderId));
+  const selectedOrderForActionId = selectedOrderForAction?.id;
+  const selectedOrderForActionStatus = selectedOrderForAction?.status || '';
+
+  useEffect(() => {
+    if (!selectedOrderForActionId) {
+      setSelectedOrderStatus('');
+      return;
+    }
+
+    setSelectedOrderStatus(selectedOrderForActionStatus || 'Pending');
+  }, [selectedOrderForActionId, selectedOrderForActionStatus]);
 
   const handleOrderStatusUpdate = async (status) => {
     if (!selectedOrderForAction || isUpdatingOrder) return;
+    if (String(selectedOrderForAction.status).toLowerCase() === String(status).toLowerCase()) {
+      setOrderActionMessage(`Order #${selectedOrderForAction.id} is already ${selectedOrderForAction.status}.`);
+      setOrderActionError('');
+      return;
+    }
 
     setOrderActionMessage('');
     setOrderActionError('');
@@ -317,29 +336,39 @@ function ManagerDashboard() {
 
         {activeTab === 'orders' && (
           <div className="bg-white rounded-xl shadow-md p-6">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-center lg:justify-between">
               <h3 className="flex items-center gap-2 text-2xl font-bold text-blue-700">
                 <UiIcon name="list" className="h-6 w-6" />
                 Order Management
               </h3>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={selectedOrderStatus}
+                  onChange={(event) => setSelectedOrderStatus(event.target.value)}
+                  disabled={!selectedOrderForAction || isUpdatingOrder}
+                  className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                  aria-label="Choose order status"
+                >
+                  <option value="" disabled>Choose status</option>
+                  {ORDER_STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="button"
-                  onClick={() => handleOrderStatusUpdate('delivered')}
-                  disabled={!selectedOrderForAction || isUpdatingOrder || ['Delivered', 'Cancelled'].includes(selectedOrderForAction.status)}
-                  className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition disabled:cursor-not-allowed disabled:bg-gray-300"
+                  onClick={() => handleOrderStatusUpdate(selectedOrderStatus)}
+                  disabled={
+                    !selectedOrderForAction ||
+                    !selectedOrderStatus ||
+                    isUpdatingOrder ||
+                    selectedOrderStatus === selectedOrderForAction.status
+                  }
+                  className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
-                  <UiIcon name="check" className="h-4 w-4" />
-                  {isUpdatingOrder ? 'Updating…' : 'Mark Complete'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleOrderStatusUpdate('shipped')}
-                  disabled={!selectedOrderForAction || isUpdatingOrder || ['Shipped', 'Delivered', 'Cancelled'].includes(selectedOrderForAction.status)}
-                  className="inline-flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-orange-700 transition disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  <UiIcon name="truck" className="h-4 w-4" />
-                  Update Shipping
+                  <UiIcon name="save" className="h-4 w-4" />
+                  Apply Status
                 </button>
               </div>
             </div>
@@ -375,6 +404,7 @@ function ManagerDashboard() {
                           checked={Number(selectedOrderId) === Number(order.id)}
                           onChange={() => {
                             setSelectedOrderId(order.id);
+                            setSelectedOrderStatus(order.status || 'Pending');
                             setOrderActionMessage('');
                             setOrderActionError('');
                           }}
