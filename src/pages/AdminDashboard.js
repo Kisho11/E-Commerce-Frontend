@@ -12,7 +12,7 @@ import OrderDetailsModal from '../components/OrderDetailsModal';
 import UiIcon from '../components/UiIcon';
 
 const ORDER_STATUS_OPTIONS = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
-const ADMIN_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const ADMIN_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 
 const formatDisplayDate = (value) => {
   if (!value || value === 'N/A') return 'N/A';
@@ -45,6 +45,11 @@ function AdminDashboard() {
   const [customerSortBy, setCustomerSortBy] = useState('name');
   const [customerSortDir, setCustomerSortDir] = useState('asc');
   const [dashboardStats, setDashboardStats] = useState(null);
+  const [salesReportPeriod, setSalesReportPeriod] = useState('month');
+  const [salesReport, setSalesReport] = useState(null);
+  const [topCategoriesReport, setTopCategoriesReport] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsError, setReportsError] = useState('');
 
   const sortedOrders = [...orders].sort(
     (a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)
@@ -235,6 +240,53 @@ function AdminDashboard() {
   }, [authFetch, user]);
 
   useEffect(() => {
+    if (user?.role !== 'admin' || activeTab !== 'reports') return undefined;
+
+    let cancelled = false;
+    const loadReports = async () => {
+      setReportsLoading(true);
+      setReportsError('');
+
+      try {
+        const [salesResponse, categoriesResponse] = await Promise.all([
+          authFetch(`/admin/reports/sales?period=${encodeURIComponent(salesReportPeriod)}`),
+          authFetch('/admin/reports/top-categories?limit=5'),
+        ]);
+        const salesData = await salesResponse.json().catch(() => null);
+        const categoriesData = await categoriesResponse.json().catch(() => []);
+
+        if (!salesResponse.ok) {
+          throw new Error(salesData?.detail || 'Unable to load sales report.');
+        }
+        if (!categoriesResponse.ok) {
+          throw new Error(categoriesData?.detail || 'Unable to load category report.');
+        }
+
+        if (!cancelled) {
+          setSalesReport(salesData || null);
+          setTopCategoriesReport(Array.isArray(categoriesData) ? categoriesData : []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSalesReport(null);
+          setTopCategoriesReport([]);
+          setReportsError(error.message || 'Unable to load reports.');
+        }
+      } finally {
+        if (!cancelled) {
+          setReportsLoading(false);
+        }
+      }
+    };
+
+    loadReports();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, authFetch, salesReportPeriod, user]);
+
+  useEffect(() => {
     if (!selectedOrderForActionId) {
       setSelectedOrderStatus('');
       return;
@@ -283,6 +335,7 @@ function AdminDashboard() {
     pendingOrders: dashboardStats?.pending_orders ?? pendingOrders,
     lowStockProducts: dashboardStats?.low_stock_count ?? 0,
   };
+  const maxCategoryUnits = Math.max(...topCategoriesReport.map((category) => Number(category.units_sold || 0)), 1);
 
   const handleLogout = () => {
     if (!window.confirm('Are you sure you want to logout?')) return;
@@ -723,50 +776,88 @@ function AdminDashboard() {
         {/* Reports Tab */}
         {activeTab === 'reports' && (
           <div className="bg-white rounded-xl shadow-md p-6">
-            <h3 className="mb-6 flex items-center gap-2 text-2xl font-bold text-primary">
-              <UiIcon name="chart" className="h-6 w-6" />
-              Reports & Analytics
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="flex items-center gap-2 text-2xl font-bold text-primary">
+                <UiIcon name="chart" className="h-6 w-6" />
+                Reports & Analytics
+              </h3>
+              <select
+                value={salesReportPeriod}
+                onChange={(event) => setSalesReportPeriod(event.target.value)}
+                className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-red-100"
+                aria-label="Sales report period"
+              >
+                <option value="week">Last 7 days</option>
+                <option value="month">Last 30 days</option>
+                <option value="year">Last 365 days</option>
+              </select>
+            </div>
+
+            {reportsError ? (
+              <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                {reportsError}
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div className="border-2 border-gray-200 rounded-lg p-6">
-                <h4 className="font-bold text-lg text-gray-800 mb-4">Sales This Month</h4>
+                <h4 className="font-bold text-lg text-gray-800 mb-4">
+                  Sales {salesReportPeriod === 'week' ? 'This Week' : salesReportPeriod === 'year' ? 'This Year' : 'This Month'}
+                </h4>
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Total Sales</span>
-                    <span className="font-bold text-primary">$45,230</span>
+                    <span className="font-bold text-primary">
+                      {reportsLoading ? 'Loading...' : `£${Number(salesReport?.total_revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Orders</span>
-                    <span className="font-bold text-primary">342</span>
+                    <span className="font-bold text-primary">
+                      {reportsLoading ? 'Loading...' : Number(salesReport?.total_orders || 0).toLocaleString()}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Avg Order Value</span>
-                    <span className="font-bold text-accent">$132.14</span>
+                    <span className="font-bold text-accent">
+                      {reportsLoading ? 'Loading...' : `£${Number(salesReport?.avg_order_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    </span>
                   </div>
+                  {salesReport?.start_date ? (
+                    <p className="pt-2 text-xs text-gray-500">
+                      From {formatDisplayDate(salesReport.start_date)}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
               <div className="border-2 border-gray-200 rounded-lg p-6">
                 <h4 className="font-bold text-lg text-gray-800 mb-4">Top Categories</h4>
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Shop Shelving</span>
-                    <div className="w-32 bg-gray-200 rounded-full h-2">
-                      <div className="bg-accent h-2 rounded-full" style={{width: '85%'}}></div>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Displays</span>
-                    <div className="w-32 bg-gray-200 rounded-full h-2">
-                      <div className="bg-accent h-2 rounded-full" style={{width: '65%'}}></div>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Refrigeration</span>
-                    <div className="w-32 bg-gray-200 rounded-full h-2">
-                      <div className="bg-accent h-2 rounded-full" style={{width: '45%'}}></div>
-                    </div>
-                  </div>
+                  {reportsLoading ? (
+                    <p className="text-sm text-gray-500">Loading categories...</p>
+                  ) : topCategoriesReport.length > 0 ? (
+                    topCategoriesReport.map((category) => {
+                      const unitsSold = Number(category.units_sold || 0);
+                      const width = Math.max(8, Math.round((unitsSold / maxCategoryUnits) * 100));
+
+                      return (
+                        <div key={category.category} className="space-y-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-gray-600">{category.category}</span>
+                            <span className="text-xs font-semibold text-gray-500">
+                              {unitsSold} units | £{Number(category.revenue || 0).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-gray-200">
+                            <div className="h-2 rounded-full bg-accent" style={{ width: `${width}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-gray-500">No category sales found for this report.</p>
+                  )}
                 </div>
               </div>
             </div>
