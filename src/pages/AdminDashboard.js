@@ -11,6 +11,19 @@ import ManagerManagement from './ManagerManagement';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import UiIcon from '../components/UiIcon';
 
+const formatDisplayDate = (value) => {
+  if (!value || value === 'N/A') return 'N/A';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('en-GB', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+  }).format(date);
+};
+
 function AdminDashboard() {
   const navigate = useNavigate();
   const { user, logout, registeredCustomers, loadCustomers, authFetch } = useAuth();
@@ -74,7 +87,7 @@ function AdminDashboard() {
       const orderData = customerOrderStats.get(Number(customer.id)) || {
         email: customer.email,
         phone: customer.phone || 'N/A',
-        address: 'N/A',
+        address: customer.address || 'N/A',
         orders: [],
       };
       const computedTotalSpent = orderData.orders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
@@ -85,6 +98,8 @@ function AdminDashboard() {
       const firstOrder = sortedCustomerOrders[sortedCustomerOrders.length - 1];
       const lastOrder = sortedCustomerOrders[0];
       const orderCount = customer.orderCount || orderData.orders.length;
+      const joinDate = customer.createdAt || firstOrder?.date || 'N/A';
+      const lastOrderDate = customer.lastOrderDate || lastOrder?.date || 'N/A';
 
       return {
         key: `customer-${customer.id}`,
@@ -92,12 +107,14 @@ function AdminDashboard() {
         name: customer.name || 'Unknown Customer',
         email: customer.email || orderData.email || 'N/A',
         phone: customer.phone || orderData.phone || 'N/A',
-        address: orderData.address || 'N/A',
+        address: customer.address || orderData.address || 'N/A',
         isActive: customer.isActive,
         totalSpent,
         orderCount,
-        joinDate: customer.createdAt || firstOrder?.date || 'N/A',
-        lastOrderDate: customer.lastOrderDate || lastOrder?.date || 'N/A',
+        joinDate,
+        joinDateDisplay: formatDisplayDate(joinDate),
+        lastOrderDate,
+        lastOrderDateDisplay: formatDisplayDate(lastOrderDate),
         orderHistory: sortedCustomerOrders,
       };
     });
@@ -546,8 +563,8 @@ function AdminDashboard() {
                       <td className="px-6 py-4 text-gray-600">{customer.email}</td>
                       <td className="px-6 py-4 text-gray-600">{customer.address}</td>
                       <td className="px-6 py-4 font-semibold text-gray-700">{customer.orderCount}</td>
-                      <td className="px-6 py-4 font-semibold text-gray-700">${customer.totalSpent.toFixed(2)}</td>
-                      <td className="px-6 py-4 text-gray-600">{customer.joinDate}</td>
+                      <td className="px-6 py-4 font-semibold text-gray-700">£{customer.totalSpent.toFixed(2)}</td>
+                      <td className="px-6 py-4 text-gray-600">{customer.joinDateDisplay}</td>
                       <td className="px-6 py-4">
                         <button
                           type="button"
@@ -653,9 +670,9 @@ function AdminDashboard() {
                   <p className="text-sm text-gray-700 sm:col-span-2"><span className="font-bold">Address:</span> {selectedCustomer.address}</p>
                   <p className="text-sm text-gray-700"><span className="font-bold">Status:</span> {selectedCustomer.isActive ? 'Active' : 'Inactive'}</p>
                   <p className="text-sm text-gray-700"><span className="font-bold">Orders:</span> {selectedCustomer.orderCount}</p>
-                  <p className="text-sm text-gray-700"><span className="font-bold">Total Spent:</span> ${selectedCustomer.totalSpent.toFixed(2)}</p>
-                  <p className="text-sm text-gray-700"><span className="font-bold">Join Date:</span> {selectedCustomer.joinDate}</p>
-                  <p className="text-sm text-gray-700"><span className="font-bold">Last Order:</span> {selectedCustomer.lastOrderDate}</p>
+                  <p className="text-sm text-gray-700"><span className="font-bold">Total Spent:</span> £{selectedCustomer.totalSpent.toFixed(2)}</p>
+                  <p className="text-sm text-gray-700"><span className="font-bold">Join Date:</span> {selectedCustomer.joinDateDisplay}</p>
+                  <p className="text-sm text-gray-700"><span className="font-bold">Last Order:</span> {selectedCustomer.lastOrderDateDisplay}</p>
                 </div>
 
                 <h4 className="mb-3 text-lg font-bold text-gray-800">Order History</h4>

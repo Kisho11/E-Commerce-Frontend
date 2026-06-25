@@ -85,11 +85,27 @@ const mapManager = (manager) => ({
   temporaryPassword: manager.temporary_password || '',
 });
 
+const formatCustomerAddress = (address) => {
+  if (!address) return '';
+
+  return [
+    address.address_line1,
+    address.address_line2,
+    address.city,
+    address.state,
+    address.postal_code,
+    address.country,
+  ]
+    .filter(Boolean)
+    .join(', ');
+};
+
 const mapCustomer = (customer) => ({
   id: customer.id,
   email: customer.email,
   name: customer.full_name,
-  phone: customer.phone || '',
+  phone: customer.phone || customer.address?.phone || '',
+  address: formatCustomerAddress(customer.address),
   role: normalizeRole(customer.role),
   isActive: customer.is_active,
   createdAt: customer.created_at,
