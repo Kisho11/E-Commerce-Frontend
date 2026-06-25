@@ -12,6 +12,7 @@ import OrderDetailsModal from '../components/OrderDetailsModal';
 import UiIcon from '../components/UiIcon';
 
 const ORDER_STATUS_OPTIONS = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
+const ADMIN_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 const formatDisplayDate = (value) => {
   if (!value || value === 'N/A') return 'N/A';
@@ -241,6 +242,36 @@ function AdminDashboard() {
 
     setSelectedOrderStatus(selectedOrderForActionStatus || 'Pending');
   }, [selectedOrderForActionId, selectedOrderForActionStatus]);
+
+  useEffect(() => {
+    if (user?.role !== 'admin') return undefined;
+
+    let idleTimer = null;
+    const activityEvents = ['click', 'keydown', 'mousemove', 'mousedown', 'scroll', 'touchstart'];
+
+    const logoutForIdle = () => {
+      logout();
+      navigate('/login?mode=admin&reason=idle-timeout', { replace: true });
+      window.alert('You have been logged out after 5 minutes of inactivity.');
+    };
+
+    const resetIdleTimer = () => {
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(logoutForIdle, ADMIN_IDLE_TIMEOUT_MS);
+    };
+
+    resetIdleTimer();
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, resetIdleTimer, { passive: true });
+    });
+
+    return () => {
+      window.clearTimeout(idleTimer);
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, resetIdleTimer);
+      });
+    };
+  }, [logout, navigate, user?.role]);
 
   const stats = {
     availableProducts: dashboardStats?.available_products ?? products.filter(
