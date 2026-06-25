@@ -78,6 +78,9 @@ const normalizeOrder = (order) => {
     orderTime: order.orderTime || formatTime(createdDate),
     createdAt,
     source: order.source || 'web_checkout',
+    deliveryMode: order.deliveryMode || '',
+    deliveryNote: order.deliveryNote || '',
+    notes: order.notes || '',
   };
 };
 
@@ -130,6 +133,9 @@ const mapOrderFromApi = (order = {}) => {
     orderTime: formatTime(createdDate),
     createdAt,
     source: 'backend',
+    deliveryMode: order.delivery_mode || '',
+    deliveryNote: order.delivery_note || '',
+    notes: order.notes || '',
   });
 };
 
@@ -223,6 +229,9 @@ export function OrderProvider({ children }) {
       amount: Number(payload.amount) || 0,
       pricing: payload.pricing || {},
       payment: payload.payment || {},
+      deliveryMode: payload.deliveryMode || '',
+      deliveryNote: payload.deliveryNote || '',
+      notes: payload.notes || '',
       status: 'Pending',
       date: formatDate(now),
       orderTime: formatTime(now),

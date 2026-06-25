@@ -8,6 +8,10 @@ import Seo from '../components/Seo';
 
 const PROFILE_KEY = 'customerProfile';
 const PAYMENT_KEY = 'customerPaymentMethods';
+const DELIVERY_MODE_LABELS = {
+  ship: 'Ship to address',
+  pickup: 'Pickup from store',
+};
 const getUserStorageKey = (key, userId) => `${key}:${userId || 'guest'}`;
 
 function readLocalStorage(key, fallback) {
@@ -129,10 +133,23 @@ function validateCheckoutShippingField(name, value) {
 }
 
 function validateCheckoutShipping(shipping) {
+  const addressFields = ['address', 'city', 'state', 'zipCode'];
+  const isPickup = shipping.deliveryMode === 'pickup';
   const errors = Object.fromEntries(
-    Object.keys(emptyShippingErrors).map((field) => [field, validateCheckoutShippingField(field, shipping[field])])
+    Object.keys(emptyShippingErrors).map((field) => [
+      field,
+      isPickup && addressFields.includes(field) ? '' : validateCheckoutShippingField(field, shipping[field]),
+    ])
   );
   return { errors, valid: Object.values(errors).every((error) => !error) };
+}
+
+function buildOrderNotes(deliveryMode, deliveryNote) {
+  const note = deliveryNote.trim();
+  return [
+    `Delivery mode: ${DELIVERY_MODE_LABELS[deliveryMode] || DELIVERY_MODE_LABELS.ship}`,
+    note ? `Delivery note: ${note}` : '',
+  ].filter(Boolean).join('\n');
 }
 
 function shippingInputClass(hasError) {
@@ -166,6 +183,8 @@ function Checkout() {
       cardNumber: getSavedPaymentCardNumber(savedPayment),
       expiryDate: savedPayment?.expiry || '',
       cvv: '',
+      deliveryMode: 'ship',
+      deliveryNote: '',
     };
   });
 
@@ -272,6 +291,9 @@ function Checkout() {
     if (Object.hasOwn(emptyShippingErrors, name)) {
       setShippingErrors((prev) => ({ ...prev, [name]: validateCheckoutShippingField(name, value) }));
     }
+    if (name === 'deliveryMode') {
+      setShippingErrors(validateCheckoutShipping({ ...formData, deliveryMode: value }).errors);
+    }
   };
 
   const handleCardNumberChange = (e) => {
@@ -316,11 +338,14 @@ function Checkout() {
       customerEmail: formData.email,
       customerPhone: formData.phone,
       shippingAddress: {
-        address: formData.address,
-        city: formData.city,
-        state: formData.state,
-        zipCode: formData.zipCode,
+        address: formData.deliveryMode === 'pickup' ? 'Pickup from store' : formData.address,
+        city: formData.deliveryMode === 'pickup' ? '' : formData.city,
+        state: formData.deliveryMode === 'pickup' ? '' : formData.state,
+        zipCode: formData.deliveryMode === 'pickup' ? '' : formData.zipCode,
       },
+      deliveryMode: formData.deliveryMode,
+      deliveryNote: formData.deliveryNote.trim(),
+      notes: buildOrderNotes(formData.deliveryMode, formData.deliveryNote),
       amount: totalWithTax,
       pricing: {
         subtotal,
@@ -381,11 +406,11 @@ function Checkout() {
           body: JSON.stringify({
             full_name: orderPayload.customer,
             phone: orderPayload.customerPhone || 'N/A',
-            address_line1: orderPayload.shippingAddress.address,
+            address_line1: orderPayload.deliveryMode === 'pickup' ? 'Pickup from store' : orderPayload.shippingAddress.address,
             address_line2: null,
-            city: orderPayload.shippingAddress.city || '-',
-            state: orderPayload.shippingAddress.state || '-',
-            postal_code: orderPayload.shippingAddress.zipCode || '-',
+            city: orderPayload.deliveryMode === 'pickup' ? 'Store pickup' : (orderPayload.shippingAddress.city || '-'),
+            state: orderPayload.deliveryMode === 'pickup' ? '-' : (orderPayload.shippingAddress.state || '-'),
+            postal_code: orderPayload.deliveryMode === 'pickup' ? '-' : (orderPayload.shippingAddress.zipCode || '-'),
             country: 'GB',
             is_default: false,
           }),
@@ -402,7 +427,9 @@ function Checkout() {
           },
           body: JSON.stringify({
             address_id: addressData.id,
-            notes: '',
+            delivery_mode: orderPayload.deliveryMode,
+            delivery_note: orderPayload.deliveryNote || null,
+            notes: orderPayload.notes,
             cart_item_ids: checkoutItems.map((item) => item.cartItemId),
           }),
         });
@@ -422,10 +449,14 @@ function Checkout() {
           fullName: orderPayload.customer,
           email: orderPayload.customerEmail,
           phone: orderPayload.customerPhone,
-          address: orderPayload.shippingAddress.address,
-          city: orderPayload.shippingAddress.city,
-          state: orderPayload.shippingAddress.state,
-          zipCode: orderPayload.shippingAddress.zipCode,
+          ...(orderPayload.deliveryMode === 'ship'
+            ? {
+                address: orderPayload.shippingAddress.address,
+                city: orderPayload.shippingAddress.city,
+                state: orderPayload.shippingAddress.state,
+                zipCode: orderPayload.shippingAddress.zipCode,
+              }
+            : {}),
           updatedAt: new Date().toISOString(),
         }));
 
@@ -454,10 +485,14 @@ function Checkout() {
       fullName: orderPayload.customer,
       email: orderPayload.customerEmail,
       phone: orderPayload.customerPhone,
-      address: orderPayload.shippingAddress.address,
-      city: orderPayload.shippingAddress.city,
-      state: orderPayload.shippingAddress.state,
-      zipCode: orderPayload.shippingAddress.zipCode,
+      ...(orderPayload.deliveryMode === 'ship'
+        ? {
+            address: orderPayload.shippingAddress.address,
+            city: orderPayload.shippingAddress.city,
+            state: orderPayload.shippingAddress.state,
+            zipCode: orderPayload.shippingAddress.zipCode,
+          }
+        : {}),
       updatedAt: new Date().toISOString(),
     }));
     setPlacedOrder(createdOrder);
@@ -492,8 +527,13 @@ function Checkout() {
               <strong>Confirmation email:</strong> {formData.email}
             </p>
             <p>
-              <strong>Delivery:</strong> 2-5 business days
+              <strong>Delivery:</strong> {DELIVERY_MODE_LABELS[placedOrder?.deliveryMode] || DELIVERY_MODE_LABELS.ship}
             </p>
+            {placedOrder?.deliveryNote ? (
+              <p className="mt-2">
+                <strong>Note:</strong> {placedOrder.deliveryNote}
+              </p>
+            ) : null}
           </div>
           <p className="text-gray-600 mb-8">
             Check your email for order details and tracking information.
@@ -522,11 +562,75 @@ function Checkout() {
               {submitError}
             </div>
           ) : null}
-          {/* Shipping Information */}
+
           <div className="bg-white p-8 rounded-xl shadow-md">
             <h2 className="mb-6 flex items-center gap-2 text-2xl font-bold text-primary">
               <UiIcon name="truck" className="h-6 w-6" />
-              Shipping Information
+              Delivery Options
+            </h2>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label
+                className={`cursor-pointer rounded-xl border-2 p-4 transition ${
+                  formData.deliveryMode === 'ship'
+                    ? 'border-primary bg-red-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="deliveryMode"
+                  value="ship"
+                  checked={formData.deliveryMode === 'ship'}
+                  onChange={handleChange}
+                  className="sr-only"
+                />
+                <span className="block text-base font-bold text-gray-900">Ship to address</span>
+                <span className="mt-1 block text-sm text-gray-600">We will deliver the order to your address.</span>
+              </label>
+
+              <label
+                className={`cursor-pointer rounded-xl border-2 p-4 transition ${
+                  formData.deliveryMode === 'pickup'
+                    ? 'border-primary bg-red-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="deliveryMode"
+                  value="pickup"
+                  checked={formData.deliveryMode === 'pickup'}
+                  onChange={handleChange}
+                  className="sr-only"
+                />
+                <span className="block text-base font-bold text-gray-900">Pickup from store</span>
+                <span className="mt-1 block text-sm text-gray-600">We will prepare the order for collection.</span>
+              </label>
+            </div>
+
+            <div className="mt-5">
+              <label className="block text-gray-700 font-semibold mb-2">
+                Delivery Note (optional)
+              </label>
+              <textarea
+                name="deliveryNote"
+                value={formData.deliveryNote}
+                onChange={handleChange}
+                rows={4}
+                maxLength={500}
+                placeholder="Add any delivery or pickup instructions"
+                className="w-full rounded-lg border-2 border-gray-300 px-4 py-3 focus:border-primary focus:outline-none"
+              />
+              <p className="mt-1 text-xs text-gray-500">{formData.deliveryNote.length}/500 characters</p>
+            </div>
+          </div>
+
+          {/* Shipping Information */}
+          <div className="bg-white p-8 rounded-xl shadow-md">
+            <h2 className="mb-6 flex items-center gap-2 text-2xl font-bold text-primary">
+              <UiIcon name="users" className="h-6 w-6" />
+              {formData.deliveryMode === 'pickup' ? 'Contact Information' : 'Shipping Information'}
             </h2>
 
             <div className="grid grid-cols-2 gap-4">
@@ -596,68 +700,72 @@ function Checkout() {
               </div>
             </div>
 
-            <div className="mt-4">
-              <label className="block text-gray-700 font-semibold mb-2">
-                Address *
-              </label>
-              <input
-                type="text"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  className={shippingInputClass(shippingErrors.address)}
-                  aria-invalid={Boolean(shippingErrors.address)}
-                  required
-                />
-                <PaymentFieldError message={shippingErrors.address} />
-            </div>
+            {formData.deliveryMode === 'ship' && (
+              <>
+                <div className="mt-4">
+                  <label className="block text-gray-700 font-semibold mb-2">
+                    Address *
+                  </label>
+                  <input
+                    type="text"
+                    name="address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    className={shippingInputClass(shippingErrors.address)}
+                    aria-invalid={Boolean(shippingErrors.address)}
+                    required
+                  />
+                  <PaymentFieldError message={shippingErrors.address} />
+                </div>
 
-            <div className="grid grid-cols-3 gap-4 mt-4">
-              <div>
-                <label className="block text-gray-700 font-semibold mb-2">
-                  City *
-                </label>
-                <input
-                  type="text"
-                  name="city"
-                  value={formData.city}
-                  onChange={handleChange}
-                  className={shippingInputClass(shippingErrors.city)}
-                  aria-invalid={Boolean(shippingErrors.city)}
-                  required
-                />
-                <PaymentFieldError message={shippingErrors.city} />
-              </div>
-              <div>
-                <label className="block text-gray-700 font-semibold mb-2">
-                  State / County (optional)
-                </label>
-                <input
-                  type="text"
-                  name="state"
-                  value={formData.state}
-                  onChange={handleChange}
-                  className={shippingInputClass(shippingErrors.state)}
-                  aria-invalid={Boolean(shippingErrors.state)}
-                />
-                <PaymentFieldError message={shippingErrors.state} />
-              </div>
-              <div>
-                <label className="block text-gray-700 font-semibold mb-2">
-                  ZIP Code *
-                </label>
-                <input
-                  type="text"
-                  name="zipCode"
-                  value={formData.zipCode}
-                  onChange={handleChange}
-                  className={shippingInputClass(shippingErrors.zipCode)}
-                  aria-invalid={Boolean(shippingErrors.zipCode)}
-                  required
-                />
-                <PaymentFieldError message={shippingErrors.zipCode} />
-              </div>
-            </div>
+                <div className="grid grid-cols-3 gap-4 mt-4">
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2">
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      name="city"
+                      value={formData.city}
+                      onChange={handleChange}
+                      className={shippingInputClass(shippingErrors.city)}
+                      aria-invalid={Boolean(shippingErrors.city)}
+                      required
+                    />
+                    <PaymentFieldError message={shippingErrors.city} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2">
+                      State / County (optional)
+                    </label>
+                    <input
+                      type="text"
+                      name="state"
+                      value={formData.state}
+                      onChange={handleChange}
+                      className={shippingInputClass(shippingErrors.state)}
+                      aria-invalid={Boolean(shippingErrors.state)}
+                    />
+                    <PaymentFieldError message={shippingErrors.state} />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2">
+                      ZIP Code *
+                    </label>
+                    <input
+                      type="text"
+                      name="zipCode"
+                      value={formData.zipCode}
+                      onChange={handleChange}
+                      className={shippingInputClass(shippingErrors.zipCode)}
+                      aria-invalid={Boolean(shippingErrors.zipCode)}
+                      required
+                    />
+                    <PaymentFieldError message={shippingErrors.zipCode} />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Payment Information */}
@@ -781,6 +889,10 @@ function Checkout() {
           </div>
 
           <div className="space-y-3 mb-6 pb-6 border-b border-gray-300">
+            <div className="flex justify-between gap-4 text-gray-700">
+              <span>Delivery:</span>
+              <span className="text-right font-semibold">{DELIVERY_MODE_LABELS[formData.deliveryMode]}</span>
+            </div>
             <div className="flex justify-between text-gray-700">
               <span>Subtotal:</span>
               <span className="font-semibold">£{subtotal.toFixed(2)}</span>

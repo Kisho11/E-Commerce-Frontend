@@ -22,6 +22,12 @@ function formatVariant(item) {
   ].filter(Boolean).join(' | ');
 }
 
+function formatDeliveryMode(value = '') {
+  if (value === 'ship') return 'Ship to address';
+  if (value === 'pickup') return 'Pickup from store';
+  return value || '-';
+}
+
 function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
   if (!order) return null;
 
@@ -71,6 +77,7 @@ function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
 
             <section className="rounded-lg border border-gray-200 p-3">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Shipping</p>
+              <p><strong>Delivery Mode:</strong> {formatDeliveryMode(order.deliveryMode)}</p>
               <p><strong>Address:</strong> {order.shippingAddress?.address || '-'}</p>
               <p><strong>City:</strong> {order.shippingAddress?.city || '-'}</p>
               <p><strong>State:</strong> {order.shippingAddress?.state || '-'}</p>
@@ -129,6 +136,13 @@ function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
             <p className="text-sm text-gray-600">No items found.</p>
           )}
         </section>
+
+        {(order.notes || order.deliveryNote) && (
+          <section className="mt-3 rounded-lg border border-gray-200 p-3">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Delivery Notes</p>
+            <p className="whitespace-pre-line text-sm text-gray-700">{order.notes || order.deliveryNote}</p>
+          </section>
+        )}
 
           <details className="mt-3 rounded-lg border border-gray-200 p-3">
             <summary className="cursor-pointer text-sm font-bold text-gray-700">Raw Order Payload</summary>
