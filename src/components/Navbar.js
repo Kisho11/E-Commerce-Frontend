@@ -13,7 +13,7 @@ function Navbar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const lastScrollYRef = useRef(0);
-  const { categories, products } = useProducts();
+  const { categories, products, productsLoading } = useProducts();
   const { getTotalItems } = useCart();
   const { isAuthenticated, user, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
@@ -297,7 +297,9 @@ function Navbar() {
               </div>
               {showSearchSuggestions && (
                 <div className="absolute left-[150px] right-[80px] top-full z-50 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
-                  {productSuggestions.length > 0 ? productSuggestions.map((product) => (
+                  {productsLoading && products.length === 0 ? (
+                    <p className="px-4 py-3 text-sm text-slate-500">Loading products...</p>
+                  ) : productSuggestions.length > 0 ? productSuggestions.map((product) => (
                     <button
                       key={product.id}
                       type="button"
@@ -498,7 +500,9 @@ function Navbar() {
             </div>
             {showSearchSuggestions && (
               <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
-                {productSuggestions.length > 0 ? productSuggestions.map((product) => (
+                {productsLoading && products.length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-slate-500">Loading products...</p>
+                ) : productSuggestions.length > 0 ? productSuggestions.map((product) => (
                   <button
                     key={product.id}
                     type="button"

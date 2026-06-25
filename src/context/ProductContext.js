@@ -474,6 +474,10 @@ export function ProductProvider({ children }) {
     }
   }, []);
 
+  useEffect(() => {
+    loadAllProducts();
+  }, [loadAllProducts]);
+
   const categoryNames = useMemo(() => categories.map((c) => c.name), [categories]);
 
   const fetchProductsPage = useCallback(async ({

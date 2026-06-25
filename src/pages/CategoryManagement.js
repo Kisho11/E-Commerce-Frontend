@@ -108,6 +108,10 @@ function CategoryManagement() {
     window.alert(`Warning: "${duplicateName}" already exists. Please use a unique category or subcategory name.`);
   };
 
+  const showRequiredSubcategoryWarning = () => {
+    window.alert('Subcategory name is required');
+  };
+
   const handleAddCategory = async () => {
     setError('');
     setSuccess('');
@@ -240,7 +244,7 @@ function CategoryManagement() {
     if (!addingSubcategoryFor) return;
 
     if (!newSubcategoryName.trim()) {
-      setError('Subcategory name is required');
+      showRequiredSubcategoryWarning();
       return;
     }
 
@@ -277,7 +281,7 @@ function CategoryManagement() {
 
     if (!editingSubcategory) return;
     if (!editSubcategoryName.trim()) {
-      setError('Subcategory name is required');
+      showRequiredSubcategoryWarning();
       return;
     }
 
