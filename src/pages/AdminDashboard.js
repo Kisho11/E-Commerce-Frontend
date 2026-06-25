@@ -11,6 +11,8 @@ import ManagerManagement from './ManagerManagement';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import UiIcon from '../components/UiIcon';
 
+const ORDER_STATUS_OPTIONS = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
+
 const formatDisplayDate = (value) => {
   if (!value || value === 'N/A') return 'N/A';
 
@@ -27,10 +29,15 @@ const formatDisplayDate = (value) => {
 function AdminDashboard() {
   const navigate = useNavigate();
   const { user, logout, registeredCustomers, loadCustomers, authFetch } = useAuth();
-  const { orders, loadOrders } = useOrders();
+  const { orders, loadOrders, updateOrderStatus } = useOrders();
   const { products, loadAllProducts } = useProducts();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [selectedOrderStatus, setSelectedOrderStatus] = useState('');
+  const [orderActionMessage, setOrderActionMessage] = useState('');
+  const [orderActionError, setOrderActionError] = useState('');
+  const [isUpdatingOrder, setIsUpdatingOrder] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerMinOrders, setCustomerMinOrders] = useState(0);
@@ -44,6 +51,9 @@ function AdminDashboard() {
   const recentOrders = sortedOrders.slice(0, 5);
   const totalRevenue = orders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
   const pendingOrders = orders.filter((order) => order.status === 'Pending').length;
+  const selectedOrderForAction = sortedOrders.find((order) => Number(order.id) === Number(selectedOrderId));
+  const selectedOrderForActionId = selectedOrderForAction?.id;
+  const selectedOrderForActionStatus = selectedOrderForAction?.status || '';
 
   const customerLookup = useMemo(
     () => new Map(registeredCustomers.map((customer) => [Number(customer.id), customer])),
@@ -223,6 +233,15 @@ function AdminDashboard() {
     };
   }, [authFetch, user]);
 
+  useEffect(() => {
+    if (!selectedOrderForActionId) {
+      setSelectedOrderStatus('');
+      return;
+    }
+
+    setSelectedOrderStatus(selectedOrderForActionStatus || 'Pending');
+  }, [selectedOrderForActionId, selectedOrderForActionStatus]);
+
   const stats = {
     availableProducts: dashboardStats?.available_products ?? products.filter(
       (product) => Math.max((product.inventory?.onHand ?? 0) - (product.inventory?.reserved ?? 0), 0) > 0
@@ -238,6 +257,30 @@ function AdminDashboard() {
     if (!window.confirm('Are you sure you want to logout?')) return;
     logout();
     navigate('/');
+  };
+
+  const handleOrderStatusUpdate = async (status) => {
+    if (!selectedOrderForAction || isUpdatingOrder) return;
+    if (String(selectedOrderForAction.status).toLowerCase() === String(status).toLowerCase()) {
+      setOrderActionMessage(`Order #${selectedOrderForAction.id} is already ${selectedOrderForAction.status}.`);
+      setOrderActionError('');
+      return;
+    }
+
+    setOrderActionMessage('');
+    setOrderActionError('');
+    setIsUpdatingOrder(true);
+    try {
+      const updatedOrder = await updateOrderStatus(selectedOrderForAction.id, status);
+      setSelectedOrder((currentOrder) =>
+        Number(currentOrder?.id) === Number(updatedOrder.id) ? updatedOrder : currentOrder
+      );
+      setOrderActionMessage(`Order #${updatedOrder.id} marked as ${updatedOrder.status}.`);
+    } catch (error) {
+      setOrderActionError(error.message || 'Unable to update order status.');
+    } finally {
+      setIsUpdatingOrder(false);
+    }
   };
 
   return (
@@ -431,14 +474,56 @@ function AdminDashboard() {
         {/* Orders Tab */}
         {activeTab === 'orders' && (
           <div className="bg-white rounded-xl shadow-md p-6">
-            <h3 className="mb-6 flex items-center gap-2 text-2xl font-bold text-primary">
-              <UiIcon name="list" className="h-6 w-6" />
-              All Orders
-            </h3>
+            <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <h3 className="flex items-center gap-2 text-2xl font-bold text-primary">
+                <UiIcon name="list" className="h-6 w-6" />
+                All Orders
+              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={selectedOrderStatus}
+                  onChange={(event) => setSelectedOrderStatus(event.target.value)}
+                  disabled={!selectedOrderForAction || isUpdatingOrder}
+                  className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                  aria-label="Choose order status"
+                >
+                  <option value="" disabled>Choose status</option>
+                  {ORDER_STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => handleOrderStatusUpdate(selectedOrderStatus)}
+                  disabled={
+                    !selectedOrderForAction ||
+                    !selectedOrderStatus ||
+                    isUpdatingOrder ||
+                    selectedOrderStatus === selectedOrderForAction.status
+                  }
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  <UiIcon name="save" className="h-4 w-4" />
+                  Apply Status
+                </button>
+              </div>
+            </div>
+            <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              <p className="text-gray-600">
+                {selectedOrderForAction ? `Selected order: #${selectedOrderForAction.id}` : 'Select an order to update its status.'}
+              </p>
+              {orderActionMessage && <p className="font-medium text-green-700" role="status">{orderActionMessage}</p>}
+              {orderActionError && <p className="font-medium text-red-700" role="alert">{orderActionError}</p>}
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-100">
                   <tr>
+                    <th className="w-12 px-3 py-3 text-left">
+                      <span className="sr-only">Select order</span>
+                    </th>
                     <th className="px-6 py-3 text-left font-semibold text-gray-700">Order ID</th>
                     <th className="px-6 py-3 text-left font-semibold text-gray-700">Customer</th>
                     <th className="px-6 py-3 text-left font-semibold text-gray-700">Amount</th>
@@ -449,7 +534,22 @@ function AdminDashboard() {
                 </thead>
                 <tbody>
                   {sortedOrders.map((order) => (
-                    <tr key={order.id} className="border-b border-gray-200 hover:bg-gray-50">
+                    <tr key={order.id} className={`border-b border-gray-200 hover:bg-gray-50 ${Number(selectedOrderId) === Number(order.id) ? 'bg-red-50' : ''}`}>
+                      <td className="px-3 py-4">
+                        <input
+                          type="radio"
+                          name="admin-selected-order"
+                          checked={Number(selectedOrderId) === Number(order.id)}
+                          onChange={() => {
+                            setSelectedOrderId(order.id);
+                            setSelectedOrderStatus(order.status || 'Pending');
+                            setOrderActionMessage('');
+                            setOrderActionError('');
+                          }}
+                          aria-label={`Select order ${order.id}`}
+                          className="h-4 w-4 cursor-pointer accent-primary"
+                        />
+                      </td>
                       <td className="px-6 py-4 font-bold text-primary">#{order.id}</td>
                       <td className="px-6 py-4">{customerLookup.get(Number(order.customerId || order.userId || 0))?.name || order.customer || 'Unknown Customer'}</td>
                       <td className="px-6 py-4 font-semibold">${order.amount.toFixed(2)}</td>
