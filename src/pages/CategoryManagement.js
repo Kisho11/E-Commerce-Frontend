@@ -20,7 +20,6 @@ function CategoryManagement() {
   const [editSubcategoryImage, setEditSubcategoryImage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState('name-asc');
-  const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   const normalizedNames = useMemo(
@@ -70,7 +69,7 @@ function CategoryManagement() {
     if (!file) return;
     const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!allowedImageTypes.includes(file.type)) {
-      setError('Please upload a JPG, PNG, WebP, or GIF image');
+      showWarning('Please upload a JPG, PNG, WebP, or GIF image');
       return;
     }
 
@@ -78,7 +77,6 @@ function CategoryManagement() {
     reader.onload = () => {
       onLoad(typeof reader.result === 'string' ? reader.result : '');
       if (onNameLoad) onNameLoad(file.name);
-      setError('');
     };
     reader.readAsDataURL(file);
   };
@@ -103,21 +101,24 @@ function CategoryManagement() {
     event.target.value = '';
   };
 
+  const showWarning = (message) => {
+    window.alert(message);
+  };
+
   const showDuplicateCategoryWarning = (name) => {
     const duplicateName = name.trim() || 'this category or subcategory';
-    window.alert(`Warning: "${duplicateName}" already exists. Please use a unique category or subcategory name.`);
+    showWarning(`Warning: "${duplicateName}" already exists. Please use a unique category or subcategory name.`);
   };
 
   const showRequiredSubcategoryWarning = () => {
-    window.alert('Subcategory name is required');
+    showWarning('Subcategory name is required');
   };
 
   const handleAddCategory = async () => {
-    setError('');
     setSuccess('');
 
     if (!newCategoryName.trim()) {
-      setError('Category name is required');
+      showWarning('Category name is required');
       return;
     }
 
@@ -143,17 +144,16 @@ function CategoryManagement() {
       if (message.toLowerCase().includes('category or subcategory with this name already exists')) {
         showDuplicateCategoryWarning(newCategoryName);
       } else {
-        setError(message);
+        showWarning(message);
       }
     }
   };
 
   const handleUpdateCategory = async (oldName) => {
-    setError('');
     setSuccess('');
 
     if (!editName.trim()) {
-      setError('Category name is required');
+      showWarning('Category name is required');
       return;
     }
 
@@ -184,7 +184,7 @@ function CategoryManagement() {
       if (message.toLowerCase().includes('category or subcategory with this name already exists')) {
         showDuplicateCategoryWarning(editName);
       } else {
-        setError(message);
+        showWarning(message);
       }
     }
   };
@@ -238,7 +238,6 @@ function CategoryManagement() {
   };
 
   const handleAddSubcategory = async () => {
-    setError('');
     setSuccess('');
 
     if (!addingSubcategoryFor) return;
@@ -270,13 +269,12 @@ function CategoryManagement() {
       if (message.toLowerCase().includes('category or subcategory with this name already exists')) {
         showDuplicateCategoryWarning(newSubcategoryName);
       } else {
-        setError(message);
+        showWarning(message);
       }
     }
   };
 
   const handleUpdateSubcategory = async () => {
-    setError('');
     setSuccess('');
 
     if (!editingSubcategory) return;
@@ -312,13 +310,12 @@ function CategoryManagement() {
       if (message.toLowerCase().includes('category or subcategory with this name already exists')) {
         showDuplicateCategoryWarning(editSubcategoryName);
       } else {
-        setError(message);
+        showWarning(message);
       }
     }
   };
 
   const handleDeleteSubcategory = async () => {
-    setError('');
     setSuccess('');
 
     if (!editingSubcategory) return;
@@ -329,7 +326,7 @@ function CategoryManagement() {
       setSuccess(`Subcategory "${editingSubcategory.name}" deleted successfully!`);
       closeEditSubcategoryEditor();
     } catch (err) {
-      setError(err.message || 'Unable to delete subcategory');
+      showWarning(err.message || 'Unable to delete subcategory');
     }
   };
 
@@ -357,21 +354,12 @@ function CategoryManagement() {
             <p className="text-sm text-slate-500">New categories will appear as new rows in the table.</p>
           </div>
 
-          {(error || success) && (
+          {success && (
             <div className="mb-4 grid gap-3">
-              {error && (
-                <div className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
-                  <UiIcon name="alert" className="h-4 w-4" />
-                  {error}
-                </div>
-              )}
-
-              {success && (
-                <div className="inline-flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-                  <UiIcon name="check" className="h-4 w-4" />
-                  {success}
-                </div>
-              )}
+              <div className="inline-flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+                <UiIcon name="check" className="h-4 w-4" />
+                {success}
+              </div>
             </div>
           )}
 
