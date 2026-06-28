@@ -13,6 +13,18 @@ import UiIcon from '../components/UiIcon';
 
 const ORDER_STATUS_OPTIONS = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
 const ADMIN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const emptyCustomerEditForm = {
+  fullName: '',
+  email: '',
+  phone: '',
+  isActive: true,
+  addressLine1: '',
+  addressLine2: '',
+  city: '',
+  state: '',
+  postalCode: '',
+  country: 'US',
+};
 
 const formatDisplayDate = (value) => {
   if (!value || value === 'N/A') return 'N/A';
@@ -40,6 +52,12 @@ function AdminDashboard() {
   const [orderActionError, setOrderActionError] = useState('');
   const [isUpdatingOrder, setIsUpdatingOrder] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [editingCustomer, setEditingCustomer] = useState(null);
+  const [customerEditForm, setCustomerEditForm] = useState(emptyCustomerEditForm);
+  const [customerActionMessage, setCustomerActionMessage] = useState('');
+  const [customerActionError, setCustomerActionError] = useState('');
+  const [isSavingCustomer, setIsSavingCustomer] = useState(false);
+  const [deletingCustomerId, setDeletingCustomerId] = useState(null);
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerMinOrders, setCustomerMinOrders] = useState(0);
   const [customerSortBy, setCustomerSortBy] = useState('name');
@@ -124,6 +142,7 @@ function AdminDashboard() {
         email: customer.email || orderData.email || 'N/A',
         phone: customer.phone || orderData.phone || 'N/A',
         address: customer.address || orderData.address || 'N/A',
+        addressDetails: customer.addressDetails || null,
         isActive: customer.isActive,
         totalSpent,
         orderCount,
@@ -341,6 +360,121 @@ function AdminDashboard() {
     if (!window.confirm('Are you sure you want to logout?')) return;
     logout();
     navigate('/');
+  };
+
+  const startEditCustomer = (customer) => {
+    const address = customer.addressDetails || {};
+    setEditingCustomer(customer);
+    setCustomerEditForm({
+      fullName: customer.name || '',
+      email: customer.email || '',
+      phone: customer.phone === 'N/A' ? '' : customer.phone || '',
+      isActive: customer.isActive !== false,
+      addressLine1: address.address_line1 || '',
+      addressLine2: address.address_line2 || '',
+      city: address.city || '',
+      state: address.state || '',
+      postalCode: address.postal_code || '',
+      country: address.country || 'US',
+    });
+    setCustomerActionMessage('');
+    setCustomerActionError('');
+  };
+
+  const handleCustomerEditChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setCustomerEditForm((current) => ({
+      ...current,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+  };
+
+  const saveCustomerEdit = async (event) => {
+    event.preventDefault();
+    if (!editingCustomer || isSavingCustomer) return;
+
+    const fullName = customerEditForm.fullName.trim();
+    const email = customerEditForm.email.trim().toLowerCase();
+    if (!fullName || !email) {
+      setCustomerActionError('Customer name and email are required.');
+      return;
+    }
+
+    const addressValues = [
+      customerEditForm.addressLine1,
+      customerEditForm.addressLine2,
+      customerEditForm.city,
+      customerEditForm.state,
+      customerEditForm.postalCode,
+    ].map((value) => value.trim());
+    const hasAddress = addressValues.some(Boolean);
+
+    setIsSavingCustomer(true);
+    setCustomerActionError('');
+    setCustomerActionMessage('');
+    try {
+      const response = await authFetch(`/admin/customers/${editingCustomer.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: fullName,
+          email,
+          phone: customerEditForm.phone.trim() || null,
+          is_active: customerEditForm.isActive,
+          address: hasAddress
+            ? {
+                full_name: fullName,
+                phone: customerEditForm.phone.trim() || 'N/A',
+                address_line1: customerEditForm.addressLine1.trim(),
+                address_line2: customerEditForm.addressLine2.trim() || null,
+                city: customerEditForm.city.trim(),
+                state: customerEditForm.state.trim(),
+                postal_code: customerEditForm.postalCode.trim(),
+                country: customerEditForm.country.trim() || 'US',
+              }
+            : undefined,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Unable to update customer.');
+      }
+
+      await loadCustomers();
+      setEditingCustomer(null);
+      setCustomerActionMessage(`Updated ${fullName}.`);
+    } catch (error) {
+      setCustomerActionError(error.message || 'Unable to update customer.');
+    } finally {
+      setIsSavingCustomer(false);
+    }
+  };
+
+  const deleteCustomer = async (customer) => {
+    if (!customer || deletingCustomerId) return;
+    const confirmed = window.confirm(
+      `Delete ${customer.name}? This will deactivate and anonymize the customer while preserving order history.`
+    );
+    if (!confirmed) return;
+
+    setDeletingCustomerId(customer.id);
+    setCustomerActionError('');
+    setCustomerActionMessage('');
+    try {
+      const response = await authFetch(`/admin/customers/${customer.id}`, { method: 'DELETE' });
+      if (!response.ok && response.status !== 204) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.detail || 'Unable to delete customer.');
+      }
+      await loadCustomers();
+      if (selectedCustomer?.id === customer.id) setSelectedCustomer(null);
+      if (editingCustomer?.id === customer.id) setEditingCustomer(null);
+      setCustomerActionMessage(`Deleted ${customer.name}.`);
+    } catch (error) {
+      setCustomerActionError(error.message || 'Unable to delete customer.');
+    } finally {
+      setDeletingCustomerId(null);
+    }
   };
 
   const handleOrderStatusUpdate = async (status) => {
@@ -671,6 +805,16 @@ function AdminDashboard() {
               <UiIcon name="users" className="h-6 w-6" />
               Customers
             </h3>
+            {customerActionMessage && (
+              <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+                {customerActionMessage}
+              </p>
+            )}
+            {customerActionError && (
+              <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                {customerActionError}
+              </p>
+            )}
             <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               <input
                 type="text"
@@ -750,6 +894,7 @@ function AdminDashboard() {
                       <td className="px-6 py-4 font-semibold text-gray-700">£{customer.totalSpent.toFixed(2)}</td>
                       <td className="px-6 py-4 text-gray-600">{customer.joinDateDisplay}</td>
                       <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-3">
                         <button
                           type="button"
                           onClick={() => setSelectedCustomer(customer)}
@@ -757,6 +902,22 @@ function AdminDashboard() {
                         >
                           View
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => startEditCustomer(customer)}
+                          className="font-semibold text-green-700 hover:text-green-900"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteCustomer(customer)}
+                          disabled={deletingCustomerId === customer.id}
+                          className="font-semibold text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:text-red-300"
+                        >
+                          {deletingCustomerId === customer.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -865,6 +1026,151 @@ function AdminDashboard() {
         )}
 
         <OrderDetailsModal order={selectedOrder} onClose={() => setSelectedOrder(null)} accentClass="text-primary" />
+        {editingCustomer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4" onClick={() => setEditingCustomer(null)}>
+            <form
+              className="flex max-h-[86svh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl"
+              onClick={(event) => event.stopPropagation()}
+              onSubmit={saveCustomerEdit}
+            >
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 px-4 py-3 sm:px-5">
+                <div>
+                  <h3 className="text-xl font-bold text-primary">Edit Customer</h3>
+                  <p className="text-sm text-gray-600">{editingCustomer.email}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingCustomer(null)}
+                  className="rounded border border-gray-300 px-3 py-1 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Full name
+                    <input
+                      name="fullName"
+                      value={customerEditForm.fullName}
+                      onChange={handleCustomerEditChange}
+                      required
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                    />
+                  </label>
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Email
+                    <input
+                      type="email"
+                      name="email"
+                      value={customerEditForm.email}
+                      onChange={handleCustomerEditChange}
+                      required
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                    />
+                  </label>
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Phone
+                    <input
+                      name="phone"
+                      value={customerEditForm.phone}
+                      onChange={handleCustomerEditChange}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                    />
+                  </label>
+                  <label className="mt-7 flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <input
+                      type="checkbox"
+                      name="isActive"
+                      checked={customerEditForm.isActive}
+                      onChange={handleCustomerEditChange}
+                      className="h-4 w-4"
+                    />
+                    Active account
+                  </label>
+                </div>
+
+                <div>
+                  <h4 className="mb-3 text-sm font-bold uppercase tracking-[0.08em] text-gray-500">Default address</h4>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <label className="block text-sm font-semibold text-gray-700 sm:col-span-2">
+                      Address line 1
+                      <input
+                        name="addressLine1"
+                        value={customerEditForm.addressLine1}
+                        onChange={handleCustomerEditChange}
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                      />
+                    </label>
+                    <label className="block text-sm font-semibold text-gray-700 sm:col-span-2">
+                      Address line 2
+                      <input
+                        name="addressLine2"
+                        value={customerEditForm.addressLine2}
+                        onChange={handleCustomerEditChange}
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                      />
+                    </label>
+                    <label className="block text-sm font-semibold text-gray-700">
+                      City
+                      <input
+                        name="city"
+                        value={customerEditForm.city}
+                        onChange={handleCustomerEditChange}
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                      />
+                    </label>
+                    <label className="block text-sm font-semibold text-gray-700">
+                      State / county
+                      <input
+                        name="state"
+                        value={customerEditForm.state}
+                        onChange={handleCustomerEditChange}
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                      />
+                    </label>
+                    <label className="block text-sm font-semibold text-gray-700">
+                      Postal code
+                      <input
+                        name="postalCode"
+                        value={customerEditForm.postalCode}
+                        onChange={handleCustomerEditChange}
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                      />
+                    </label>
+                    <label className="block text-sm font-semibold text-gray-700">
+                      Country
+                      <input
+                        name="country"
+                        value={customerEditForm.country}
+                        onChange={handleCustomerEditChange}
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal focus:border-primary focus:outline-none"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 justify-end gap-3 border-t border-gray-200 px-4 py-3 sm:px-5">
+                <button
+                  type="button"
+                  onClick={() => setEditingCustomer(null)}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingCustomer}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  {isSavingCustomer ? 'Saving...' : 'Save customer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
         {selectedCustomer && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4" onClick={() => setSelectedCustomer(null)}>
             <div

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useOrders } from '../context/OrderContext';
 import { useAuth } from '../context/AuthContext';
 import OrderDetailsModal from '../components/OrderDetailsModal';
@@ -195,7 +196,8 @@ function inputCls(hasError) {
 }
 
 function CustomerPortal() {
-  const { user, authFetch } = useAuth();
+  const navigate = useNavigate();
+  const { user, authFetch, logout } = useAuth();
   const { orders } = useOrders();
   const [selectedOrder, setSelectedOrder] = useState(null);
   const profileStorageKey = getUserStorageKey(PROFILE_KEY, user?.id);
@@ -228,6 +230,7 @@ function CustomerPortal() {
   const [privacyMessage, setPrivacyMessage] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteText, setDeleteText] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const isEditing = useMemo(() => editingId !== null, [editingId]);
 
@@ -429,13 +432,7 @@ function CustomerPortal() {
     setTimeout(() => setPrivacyMessage(''), 3000);
   };
 
-  const deleteAllData = () => {
-    if (!confirmDelete || deleteText !== 'DELETE') {
-      setPrivacyMessage('To proceed, tick confirmation and type DELETE.');
-      setTimeout(() => setPrivacyMessage(''), 3000);
-      return;
-    }
-
+  const clearLocalPortalData = () => {
     localStorage.removeItem(profileStorageKey);
     localStorage.removeItem(paymentStorageKey);
     localStorage.removeItem(consentStorageKey);
@@ -451,9 +448,42 @@ function CustomerPortal() {
     setEditingId(null);
     setConfirmDelete(false);
     setDeleteText('');
+  };
 
-    setPrivacyMessage('All stored portal data has been deleted.');
-    setTimeout(() => setPrivacyMessage(''), 3500);
+  const deleteAllData = async () => {
+    if (!confirmDelete || deleteText !== 'DELETE') {
+      setPrivacyMessage('To proceed, tick confirmation and type DELETE.');
+      setTimeout(() => setPrivacyMessage(''), 3000);
+      return;
+    }
+
+    if (!process.env.REACT_APP_API_URL) {
+      clearLocalPortalData();
+      setPrivacyMessage('Backend account deletion is not configured in this environment. Local portal data was deleted.');
+      setTimeout(() => setPrivacyMessage(''), 3500);
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    setPrivacyMessage('');
+
+    try {
+      const response = await authFetch('/users/me', { method: 'DELETE' }, false);
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.detail || 'Unable to delete your account. Please try again or contact support.');
+      }
+
+      clearLocalPortalData();
+      logout();
+      navigate('/login?mode=customer-signin&reason=account-deleted', { replace: true });
+      window.alert('Your account has been deleted.');
+    } catch (error) {
+      setPrivacyMessage(error.message || 'Unable to delete your account. Please try again or contact support.');
+      setTimeout(() => setPrivacyMessage(''), 5000);
+    } finally {
+      setIsDeletingAccount(false);
+    }
   };
 
   return (
@@ -873,7 +903,7 @@ function CustomerPortal() {
       <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
         <h3 className="text-lg font-bold text-slate-900">Privacy &amp; data rights</h3>
         <p className="mt-2 text-sm text-slate-600">
-          You can export your data (right of access/portability) and delete stored account data (right to erasure).
+          You can export your data (right of access/portability) and delete your customer account (right to erasure).
         </p>
 
         <div className="mt-4 flex flex-wrap gap-3">
@@ -892,9 +922,9 @@ function CustomerPortal() {
         </div>
 
         <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4">
-          <p className="text-sm font-bold text-red-700">Delete all stored customer data</p>
+          <p className="text-sm font-bold text-red-700">Delete customer account</p>
           <p className="mt-1 text-sm text-red-700">
-            This removes profile, payment methods, consent settings, and audit history from this browser.
+            This deactivates your login, removes local portal data, deletes your cart and reviews, and anonymizes personal details kept with order history.
           </p>
           <div className="mt-3 space-y-3">
             <label className="flex items-center gap-2 text-sm text-red-700">
@@ -915,9 +945,10 @@ function CustomerPortal() {
             />
             <button
               onClick={deleteAllData}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-500"
+              disabled={isDeletingAccount}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-300"
             >
-              Delete all my data
+              {isDeletingAccount ? 'Deleting account...' : 'Delete my account'}
             </button>
           </div>
         </div>

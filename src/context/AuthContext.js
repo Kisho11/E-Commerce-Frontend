@@ -106,6 +106,7 @@ const mapCustomer = (customer) => ({
   name: customer.full_name,
   phone: customer.phone || customer.address?.phone || '',
   address: formatCustomerAddress(customer.address),
+  addressDetails: customer.address || null,
   role: normalizeRole(customer.role),
   isActive: customer.is_active,
   createdAt: customer.created_at,
