@@ -114,6 +114,7 @@ function FieldError({ message }) {
 }
 
 const CARD_ELEMENT_OPTIONS = {
+  hidePostalCode: true,
   style: {
     base: {
       fontSize: '16px',
@@ -157,6 +158,7 @@ function CheckoutForm() {
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [shippingErrors, setShippingErrors] = useState(emptyShippingErrors);
+  const [cardComplete, setCardComplete] = useState(false);
 
   const checkoutItems = getSelectedCartItems();
   const subtotal = getSelectedTotalPrice();
@@ -297,6 +299,11 @@ function CheckoutForm() {
     if (!shippingValidation.valid) {
       const firstError = Object.values(shippingValidation.errors).find(Boolean);
       window.alert(firstError || 'Please complete all required checkout fields.');
+      return;
+    }
+
+    if (requiresBackendCheckout && !cardComplete) {
+      setSubmitError('Please enter your complete card details before placing your order.');
       return;
     }
 
@@ -532,7 +539,7 @@ function CheckoutForm() {
     );
   }
 
-  const isSubmitDisabled = submitting || (requiresBackendCheckout && !stripe);
+  const isSubmitDisabled = submitting || (requiresBackendCheckout && (!stripe || !cardComplete));
 
   return (
     <div className="container mx-auto px-4 py-8 sm:px-8">
@@ -755,7 +762,13 @@ function CheckoutForm() {
               <>
                 <label className="block text-gray-700 font-semibold mb-2">Card Details *</label>
                 <div className="rounded-lg border-2 border-gray-300 px-4 py-4 focus-within:border-primary transition-colors">
-                  <CardElement options={CARD_ELEMENT_OPTIONS} />
+                  <CardElement
+                    options={CARD_ELEMENT_OPTIONS}
+                    onChange={(e) => {
+                      setCardComplete(e.complete);
+                      if (submitError) setSubmitError('');
+                    }}
+                  />
                 </div>
                 <p className="mt-3 flex items-center gap-1.5 text-xs text-gray-500">
                   <svg className="h-4 w-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
