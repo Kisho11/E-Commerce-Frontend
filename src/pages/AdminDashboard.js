@@ -12,7 +12,7 @@ import OrderDetailsModal from '../components/OrderDetailsModal';
 import UiIcon from '../components/UiIcon';
 
 const ORDER_STATUS_OPTIONS = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
-const ADMIN_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+const ADMIN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
 const formatDisplayDate = (value) => {
   if (!value || value === 'N/A') return 'N/A';
@@ -304,7 +304,7 @@ function AdminDashboard() {
     const logoutForIdle = () => {
       logout();
       navigate('/login?mode=admin&reason=idle-timeout', { replace: true });
-      window.alert('You have been logged out after 5 minutes of inactivity.');
+      window.alert('You have been logged out after 30 minutes of inactivity.');
     };
 
     const resetIdleTimer = () => {
