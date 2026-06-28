@@ -17,6 +17,7 @@ const DELIVERY_MODE_LABELS = {
   ship: 'Ship to address',
   pickup: 'Pickup from store',
 };
+const CHECKOUT_TAX_RATE = Number(process.env.REACT_APP_CHECKOUT_TAX_RATE ?? '0.1');
 const getUserStorageKey = (key, userId) => `${key}:${userId || 'guest'}`;
 
 function readLocalStorage(key, fallback) {
@@ -159,7 +160,7 @@ function CheckoutForm() {
 
   const checkoutItems = getSelectedCartItems();
   const subtotal = getSelectedTotalPrice();
-  const taxRate = 0.1;
+  const taxRate = CHECKOUT_TAX_RATE;
   const taxAmount = subtotal * taxRate;
   const shippingFee = 0;
   const totalWithTax = subtotal + taxAmount + shippingFee;
@@ -307,6 +308,10 @@ function CheckoutForm() {
 
     if (requiresBackendCheckout) {
       setSubmitting(true);
+      let pendingOrderId = null;
+      let shouldMarkPaymentFailed = false;
+      let paymentIntentCreated = false;
+      let paymentSucceeded = false;
       try {
         const orderPayload = buildOrderPayload();
 
@@ -355,6 +360,7 @@ function CheckoutForm() {
         if (!orderResponse.ok) {
           throw new Error(orderData?.detail || 'Unable to place your order');
         }
+        pendingOrderId = orderData.id;
 
         // 3. Create Stripe PaymentIntent
         const intentResponse = await authFetch(`/payments/create-payment-intent/${orderData.id}`, {
@@ -364,10 +370,15 @@ function CheckoutForm() {
         if (!intentResponse.ok) {
           throw new Error(intentData?.detail || 'Unable to initialize payment');
         }
+        paymentIntentCreated = true;
 
         // 4. Confirm card payment with Stripe
         const cardElement = elements.getElement(CardElement);
-        const { error: stripeError } = await stripe.confirmCardPayment(intentData.client_secret, {
+        if (!stripe || !cardElement) {
+          throw new Error('Payment form is not ready. Please try again.');
+        }
+
+        const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(intentData.client_secret, {
           payment_method: {
             card: cardElement,
             billing_details: {
@@ -379,11 +390,35 @@ function CheckoutForm() {
         });
 
         if (stripeError) {
+          shouldMarkPaymentFailed = true;
           throw new Error(stripeError.message);
         }
 
         // 5. Payment succeeded — update local state and redirect
-        const createdOrder = placeOrder({ ...orderPayload, id: orderData?.id });
+        if (!paymentIntent || paymentIntent.status !== 'succeeded') {
+          shouldMarkPaymentFailed = ['requires_payment_method', 'canceled'].includes(paymentIntent?.status);
+          throw new Error('Payment is not complete yet. Please finish authentication or try another card.');
+        }
+        paymentSucceeded = true;
+
+        const confirmResponse = await authFetch(`/payments/confirm-order/${orderData.id}`, {
+          method: 'POST',
+        });
+        const confirmedOrderData = await confirmResponse.json().catch(() => null);
+        if (!confirmResponse.ok) {
+          throw new Error(confirmedOrderData?.detail || 'Unable to confirm your payment');
+        }
+
+        const backendOrderTotal = Number(confirmedOrderData?.total_amount ?? orderData?.total_amount ?? orderPayload.amount);
+        const finalizedOrderPayload = {
+          ...orderPayload,
+          amount: backendOrderTotal,
+          pricing: {
+            ...orderPayload.pricing,
+            total: backendOrderTotal,
+          },
+        };
+        const createdOrder = placeOrder({ ...finalizedOrderPayload, id: confirmedOrderData?.id || orderData?.id });
 
         const savedProfile = readLocalStorage(profileStorageKey, {});
         localStorage.setItem(profileStorageKey, JSON.stringify({
@@ -407,6 +442,19 @@ function CheckoutForm() {
         setPlacedOrder(createdOrder);
         setOrderPlaced(true);
       } catch (error) {
+        if (!paymentSucceeded && shouldMarkPaymentFailed && pendingOrderId) {
+          await authFetch(`/payments/mark-payment-failed/${pendingOrderId}`, {
+            method: 'POST',
+          }).catch(() => {});
+        } else if (!paymentSucceeded && paymentIntentCreated && pendingOrderId) {
+          await authFetch(`/payments/mark-payment-failed/${pendingOrderId}`, {
+            method: 'POST',
+          }).catch(() => {});
+        } else if (!paymentSucceeded && pendingOrderId) {
+          await authFetch(`/orders/${pendingOrderId}/cancel`, {
+            method: 'PUT',
+          }).catch(() => {});
+        }
         const message = error.message || 'Unable to place your order';
         setSubmitError(message);
         if (message === 'Cart is empty') {

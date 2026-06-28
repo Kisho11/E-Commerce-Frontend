@@ -1,6 +1,7 @@
 # ── API ───────────────────────────────────────────────────────────────────────
 # URL of your backend server (no trailing slash)
 REACT_APP_API_URL=http://localhost:8000/api/v1
+REACT_APP_CHECKOUT_TAX_RATE=0.1
 
 # ── reCAPTCHA v2 ─────────────────────────────────────────────────────────────
 # Create a v2 "I'm not a robot" site at: https://www.google.com/recaptcha/admin/create
