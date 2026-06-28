@@ -13,6 +13,8 @@ function Navbar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const lastScrollYRef = useRef(0);
+  const desktopSearchRef = useRef(null);
+  const mobileSearchRef = useRef(null);
   const { categories, products, productsLoading } = useProducts();
   const { getTotalItems } = useCart();
   const { isAuthenticated, user, logout } = useAuth();
@@ -73,6 +75,7 @@ function Navbar() {
 
   const handleNavigate = () => {
     setIsMobileMenuOpen(false);
+    setShowSearchSuggestions(false);
   };
 
   const handleSearchSubmit = (event) => {
@@ -134,6 +137,27 @@ function Navbar() {
     navigate('/');
     window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    if (!showSearchSuggestions) return undefined;
+
+    const isInsideSearch = (target) =>
+      desktopSearchRef.current?.contains(target) || mobileSearchRef.current?.contains(target);
+
+    const handleOutsideInteraction = (event) => {
+      if (!isInsideSearch(event.target)) {
+        setShowSearchSuggestions(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handleOutsideInteraction);
+    document.addEventListener('focusin', handleOutsideInteraction);
+
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsideInteraction);
+      document.removeEventListener('focusin', handleOutsideInteraction);
+    };
+  }, [showSearchSuggestions]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -253,6 +277,7 @@ function Navbar() {
 
           <div className="hidden flex-1 items-center justify-center md:flex">
             <form
+              ref={desktopSearchRef}
               onSubmit={handleSearchSubmit}
               className="relative flex w-full max-w-[640px] items-stretch rounded-[16px] bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-1.5"
             >
@@ -463,6 +488,7 @@ function Navbar() {
 
         <div className="border-t border-slate-800 py-3 lg:hidden">
           <form
+            ref={mobileSearchRef}
             onSubmit={handleSearchSubmit}
             className="relative rounded-[16px] bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 p-1.5"
           >
