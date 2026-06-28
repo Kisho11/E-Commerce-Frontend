@@ -501,13 +501,15 @@ export function ProductProvider({ children }) {
         }
       }
       if (search.trim()) {
-        const term = search.trim().toLowerCase();
+        const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
         localItems = localItems.filter((product) =>
-          [product.name, product.description, ...(product.categories || []), ...(product.subcategories || []), ...(product.industries || [])]
+          terms.every((term) =>
+            [product.name, product.description, ...(product.categories || []), ...(product.subcategories || []), ...(product.industries || [])]
             .filter(Boolean)
             .join(' ')
             .toLowerCase()
             .includes(term)
+          )
         );
       }
       const start = (page - 1) * perPage;

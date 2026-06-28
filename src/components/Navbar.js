@@ -35,7 +35,7 @@ function Navbar() {
 
   const searchScopes = useMemo(
     () => [
-      { value: 'all', label: 'All Categories' },
+      { value: 'all', label: 'All Products' },
       ...categories.map((category) => ({
         value: category.name,
         label: category.name,
@@ -45,14 +45,28 @@ function Navbar() {
   );
 
   const productSuggestions = useMemo(() => {
-    const query = searchQuery.trim().toLocaleLowerCase();
-    if (!query) return [];
+    const terms = searchQuery
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    if (terms.length === 0) return [];
 
     return products
       .filter((product) => {
-        const nameMatches = String(product.name || '').toLocaleLowerCase().startsWith(query);
+        const searchableText = [
+          product.name,
+          product.description,
+          ...(product.categories || []),
+          ...(product.subcategories || []),
+          ...(product.industries || []),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        const textMatches = terms.every((term) => searchableText.includes(term));
         const inSelectedCategory = searchScope === 'all' || (product.categories || []).includes(searchScope);
-        return nameMatches && inSelectedCategory;
+        return textMatches && inSelectedCategory;
       })
       .slice(0, 8);
   }, [products, searchQuery, searchScope]);
@@ -68,9 +82,9 @@ function Navbar() {
 
     if (searchScope === 'all') {
       if (trimmedQuery) {
-        navigate(`/categories?search=${encodeURIComponent(trimmedQuery)}`);
+        navigate(`/products-by-industry?q=${encodeURIComponent(trimmedQuery)}`);
       } else {
-        navigate('/categories');
+        navigate('/products-by-industry');
       }
       handleNavigate();
       return;
@@ -89,7 +103,7 @@ function Navbar() {
     setSearchScope(value);
     setShowSearchSuggestions(Boolean(searchQuery.trim()));
     if (value === 'all') {
-      navigate('/categories');
+      navigate('/products-by-industry');
     } else {
       navigate(categoryPath(value));
     }
@@ -309,11 +323,11 @@ function Navbar() {
                     >
                       <span className="text-sm font-semibold text-slate-900">{product.name}</span>
                       {product.categories?.length > 0 && (
-                        <span className="text-xs text-slate-500">{product.categories.join(' · ')}</span>
+                        <span className="text-xs text-slate-500">{product.categories.join(' / ')}</span>
                       )}
                     </button>
                   )) : (
-                    <p className="px-4 py-3 text-sm text-slate-500">No products start with “{searchQuery.trim()}”.</p>
+                    <p className="px-4 py-3 text-sm text-slate-500">No products match "{searchQuery.trim()}".</p>
                   )}
                 </div>
               )}
@@ -512,11 +526,11 @@ function Navbar() {
                   >
                     <span className="text-sm font-semibold text-slate-900">{product.name}</span>
                     {product.categories?.length > 0 && (
-                      <span className="text-xs text-slate-500">{product.categories.join(' · ')}</span>
+                      <span className="text-xs text-slate-500">{product.categories.join(' / ')}</span>
                     )}
                   </button>
                 )) : (
-                  <p className="px-4 py-3 text-sm text-slate-500">No products start with “{searchQuery.trim()}”.</p>
+                  <p className="px-4 py-3 text-sm text-slate-500">No products match "{searchQuery.trim()}".</p>
                 )}
               </div>
             )}

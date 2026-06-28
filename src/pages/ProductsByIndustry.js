@@ -19,7 +19,10 @@ function ProductsByIndustry() {
     [industry]
   );
   const query = searchParams.get('q')?.trim() || '';
-  const normalizedQuery = useMemo(() => query.toLowerCase(), [query]);
+  const searchTerms = useMemo(
+    () => query.toLowerCase().split(/\s+/).filter(Boolean),
+    [query]
+  );
   const seoTitle = formattedIndustry
     ? `${formattedIndustry} Shop Fittings`
     : query
@@ -42,7 +45,7 @@ function ProductsByIndustry() {
           return false;
         }
 
-        if (!normalizedQuery) {
+        if (searchTerms.length === 0) {
           return true;
         }
 
@@ -55,9 +58,9 @@ function ProductsByIndustry() {
           .join(' ')
           .toLowerCase();
 
-        return searchableContent.includes(normalizedQuery);
+        return searchTerms.every((term) => searchableContent.includes(term));
       }),
-    [formattedIndustry, normalizedQuery, products]
+    [formattedIndustry, products, searchTerms]
   );
 
   return (
