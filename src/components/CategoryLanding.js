@@ -1,8 +1,11 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ProductCard from './ProductCard';
 import { useLanguage } from '../context/LanguageContext';
 import { useProducts } from '../context/ProductContext';
 import { categoryPath } from '../utils/categoryRoutes';
+
+const FEATURED_CATEGORY = 'Shop Shelving';
 
 function CategoryLanding({ searchQuery = '', showSearch = false, onSearchChange = null }) {
   const navigate = useNavigate();
@@ -39,6 +42,37 @@ function CategoryLanding({ searchQuery = '', showSearch = false, onSearchChange 
       return categoryName.includes(normalizedSearch) || subcategoryNames.includes(normalizedSearch);
     });
   }, [categoryItems, normalizedSearch]);
+
+  const shopShelvingProducts = useMemo(() => {
+    const featuredCategory = FEATURED_CATEGORY.toLowerCase();
+
+    return products.filter((product) => {
+      const categoryText = [
+        ...(product.categories || []),
+        ...(product.subcategories || []),
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      const isShopShelvingProduct = categoryText.includes(featuredCategory);
+      if (!isShopShelvingProduct) return false;
+
+      if (!normalizedSearch) return true;
+
+      const searchableText = [
+        product.name,
+        product.description,
+        ...(product.categories || []),
+        ...(product.subcategories || []),
+        ...(product.industries || []),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchableText.includes(normalizedSearch);
+    });
+  }, [normalizedSearch, products]);
 
   return (
     <div>
@@ -98,6 +132,45 @@ function CategoryLanding({ searchQuery = '', showSearch = false, onSearchChange 
           <p className="py-10 text-center text-sm text-slate-500">No categories match your search.</p>
         )}
       </div>
+
+      <section className="mt-10" aria-labelledby="shop-shelving-products-heading">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Featured products</p>
+            <h2 id="shop-shelving-products-heading" className="mt-2 text-2xl font-bold text-slate-900 sm:text-4xl">
+              {FEATURED_CATEGORY} Products
+            </h2>
+            <p className="mt-2 text-sm text-slate-600 sm:text-base">
+              {productsLoading
+                ? 'Loading products...'
+                : `Showing ${shopShelvingProducts.length} ${FEATURED_CATEGORY} products.`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate(categoryPath(FEATURED_CATEGORY))}
+            className="rounded-full border border-primary bg-white px-5 py-2.5 text-sm font-bold text-primary transition hover:bg-red-50"
+          >
+            View all
+          </button>
+        </div>
+
+        {productsLoading && shopShelvingProducts.length === 0 ? (
+          <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white py-16">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-700" />
+          </div>
+        ) : shopShelvingProducts.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4 xl:grid-cols-5">
+            {shopShelvingProducts.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+            No {FEATURED_CATEGORY} products found.
+          </div>
+        )}
+      </section>
     </div>
   );
 }
