@@ -39,6 +39,7 @@ const createEmptyVariantValue = () => ({
 const createEmptyVariantGroup = () => ({
   attribute: '',
   values: [createEmptyVariantValue()],
+  affectsPrice: true,
   finalized: false,
 });
 
@@ -55,8 +56,12 @@ const getFinalizedVariantGroups = (variantGroups = []) =>
       values: (group.values || [])
         .map((entry) => (entry.value || '').trim())
         .filter(Boolean),
+      affectsPrice: group.affectsPrice !== false,
     }))
     .filter((group) => group.attribute && group.values.length > 0);
+
+const getPriceAffectingVariantGroups = (variantGroups = []) =>
+  getFinalizedVariantGroups(variantGroups).filter((group) => group.affectsPrice !== false);
 
 const buildVariantCombinations = (variantGroups = []) => {
   if (variantGroups.length === 0) return [];
@@ -97,6 +102,7 @@ const buildVariantGroupsFromPricing = (variantPricing = []) => {
   const groups = Object.entries(grouped).map(([attribute, values]) => ({
     attribute,
     values: [...values].map((value) => ({ value })),
+    affectsPrice: true,
     finalized: true,
   }));
 
@@ -104,7 +110,7 @@ const buildVariantGroupsFromPricing = (variantPricing = []) => {
 };
 
 const syncVariantPricingWithGroups = (variantPricing = [], variantGroups = [], basePrice = '') => {
-  const finalizedGroups = getFinalizedVariantGroups(variantGroups);
+  const finalizedGroups = getPriceAffectingVariantGroups(variantGroups);
   const combinations = buildVariantCombinations(finalizedGroups);
   const existingByKey = new Map(
     (variantPricing || [])
@@ -118,7 +124,7 @@ const syncVariantPricingWithGroups = (variantPricing = [], variantGroups = [], b
       attribute: 'Combination',
       value: Object.values(attributes).join(' / '),
       attributes,
-      price: existing?.price ?? basePrice ?? '',
+      price: existing?.price ?? '',
       stock: existing?.stock ?? 0,
       sku: existing?.sku ?? '',
     };
@@ -129,7 +135,6 @@ function ProductManagement() {
   const { products, categories, categoryNames, addProduct, updateProduct, deleteProduct, loadAllProducts } = useProducts();
   const { authFetch } = useAuth();
   const [showAddForm, setShowAddForm] = useState(false);
-  const [showVariantGrid, setShowVariantGrid] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [draggedImageIndex, setDraggedImageIndex] = useState(null);
   const [dragOverImageIndex, setDragOverImageIndex] = useState(null);
@@ -225,7 +230,6 @@ function ProductManagement() {
       videoUrls: Array(MIN_VIDEO_COUNT).fill(''),
     });
     setEditingId(null);
-    setShowVariantGrid(false);
     setError('');
     setSuccess('');
     setIsPreparingEdit(false);
@@ -493,6 +497,18 @@ function ProductManagement() {
     });
   };
 
+  const handleVariantGroupPriceToggle = (index, checked) => {
+    setFormData((prev) => {
+      const nextGroups = [...prev.variantGroups];
+      nextGroups[index] = { ...nextGroups[index], affectsPrice: checked };
+      return {
+        ...prev,
+        variantGroups: nextGroups,
+        variantPricing: syncVariantPricingWithGroups(prev.variantPricing, nextGroups, prev.price),
+      };
+    });
+  };
+
   const handleAddVariantGroup = () => {
     setFormData((prev) => ({
       ...prev,
@@ -561,25 +577,12 @@ function ProductManagement() {
         values: targetGroup.values.map((entry, idx) => ({ ...entry, value: cleanValues[idx] })),
         finalized: true,
       };
-      return { ...prev, variantGroups: nextGroups };
+      return {
+        ...prev,
+        variantGroups: nextGroups,
+        variantPricing: syncVariantPricingWithGroups(prev.variantPricing, nextGroups, prev.price),
+      };
     });
-    setError('');
-  };
-
-  const handleOpenVariantGrid = () => {
-    const finalizedGroups = getFinalizedVariantGroups(formData.variantGroups);
-    const hasIncompleteGroup = finalizedGroups.length !== formData.variantGroups.length;
-
-    if (hasIncompleteGroup || finalizedGroups.length === 0) {
-      setError('Finish each attribute group before opening the variant grid');
-      return;
-    }
-
-    setFormData((prev) => ({
-      ...prev,
-      variantPricing: syncVariantPricingWithGroups(prev.variantPricing, prev.variantGroups, prev.price),
-    }));
-    setShowVariantGrid(true);
     setError('');
   };
 
@@ -638,6 +641,7 @@ function ProductManagement() {
         ...entry,
         value: (entry.value || '').trim(),
       })),
+      affectsPrice: group.affectsPrice !== false,
       finalized: Boolean(
         (group.attribute || '').trim() &&
         (group.values || []).length > 0 &&
@@ -661,11 +665,6 @@ function ProductManagement() {
         return;
       }
 
-      const hasMissingMatrixPrice = matrixVariantPricing.some((row) => row.price === '' || row.price === null || row.price === undefined);
-      if (hasMissingMatrixPrice) {
-        setError('Open the variant grid and add a price for each combination');
-        return;
-      }
     }
 
     const uploadedVideoUrls = formData.videoUrls.map((url) => url.trim()).filter(Boolean);
@@ -689,6 +688,7 @@ function ProductManagement() {
       price: formData.productType === PRODUCT_TYPES.CUSTOM ? '' : formData.price,
       salePrice: formData.productType === PRODUCT_TYPES.CUSTOM ? '' : formData.salePrice,
       productType: formData.productType,
+      variantGroups: formData.productType === PRODUCT_TYPES.VARIABLE ? completeVariantGroups : [],
       variantPricing: formData.productType === PRODUCT_TYPES.VARIABLE ? matrixVariantPricing : [],
       minPrice: undefined,
       maxPrice: undefined,
@@ -750,7 +750,6 @@ function ProductManagement() {
     setStatusPopup((prev) => ({ ...prev, visible: false }));
     setIsPreparingEdit(true);
     setEditingId(product.id);
-    setShowVariantGrid(false);
     setShowAddForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -776,8 +775,10 @@ function ProductManagement() {
           price: product.price || '',
           salePrice: product.salePrice || '',
           productType: resolveProductType(product),
-          variantGroups: Array.isArray(product.variantPricing) && product.variantPricing.length > 0
-            ? buildVariantGroupsFromPricing(product.variantPricing)
+          variantGroups: Array.isArray(product.variantGroups) && product.variantGroups.length > 0
+            ? product.variantGroups
+            : Array.isArray(product.variantPricing) && product.variantPricing.length > 0
+              ? buildVariantGroupsFromPricing(product.variantPricing)
             : [createEmptyVariantGroup()],
           variantPricing: Array.isArray(product.variantPricing) ? product.variantPricing : [],
           categories: product.categories || [],
@@ -1044,6 +1045,15 @@ function ProductManagement() {
                                   </span>
                                 ))}
                               </div>
+                              <label className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={group.affectsPrice !== false}
+                                  onChange={(e) => handleVariantGroupPriceToggle(groupIndex, e.target.checked)}
+                                  className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                />
+                                Affects price
+                              </label>
                             </div>
                             <div className="flex gap-2">
                               <button
@@ -1087,6 +1097,15 @@ function ProductManagement() {
                               placeholder="Attribute name (e.g. Color)"
                               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                             />
+                            <label className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={group.affectsPrice !== false}
+                                onChange={(e) => handleVariantGroupPriceToggle(groupIndex, e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                              />
+                              Affects price
+                            </label>
                           </div>
 
                           <div className="space-y-2">
@@ -1152,13 +1171,6 @@ function ProductManagement() {
                     >
                       + Add Attribute
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleOpenVariantGrid}
-                      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-                    >
-                      Open Variant Grid
-                    </button>
                     {formData.variantPricing.length > 0 && (
                       <p className="text-sm text-slate-500">
                         {formData.variantPricing.length} combination{formData.variantPricing.length === 1 ? '' : 's'} ready
@@ -1166,6 +1178,63 @@ function ProductManagement() {
                     )}
                   </div>
                 </div>
+                {getPriceAffectingVariantGroups(formData.variantGroups).length > 0 ? (
+                  <div className="mt-5 rounded-xl border border-slate-200 bg-white">
+                    <div className="border-b border-slate-200 px-4 py-3">
+                      <h6 className="text-base font-bold text-slate-900">Price Matrix</h6>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Leave a price blank to use the default product price. Only attributes marked as price-affecting are included.
+                      </p>
+                    </div>
+                    {formData.variantPricing.length > 0 ? (
+                      <div className="overflow-auto">
+                        <table className="min-w-full border-separate border-spacing-0">
+                          <thead className="bg-slate-100">
+                            <tr>
+                              {getPriceAffectingVariantGroups(formData.variantGroups).map((group) => (
+                                <th key={group.attribute} className="border-b border-slate-200 px-4 py-3 text-left text-sm font-bold text-slate-700">
+                                  {group.attribute}
+                                </th>
+                              ))}
+                              <th className="border-b border-slate-200 px-4 py-3 text-left text-sm font-bold text-slate-700">
+                                Price
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {formData.variantPricing.map((row, rowIndex) => (
+                              <tr key={getVariantPricingKey(row.attributes || {}) || `inline-variant-row-${rowIndex}`} className="bg-white">
+                                {getPriceAffectingVariantGroups(formData.variantGroups).map((group) => (
+                                  <td key={`${rowIndex}-${group.attribute}`} className="border-b border-slate-100 px-4 py-3 text-sm text-slate-700">
+                                    {row.attributes?.[group.attribute] || '-'}
+                                  </td>
+                                ))}
+                                <td className="border-b border-slate-100 px-4 py-3">
+                                  <input
+                                    type="number"
+                                    value={row.price}
+                                    onChange={(e) => handleVariantGridPriceChange(rowIndex, e.target.value)}
+                                    placeholder={formData.price ? `Default ${formData.price}` : 'Default price'}
+                                    step="0.01"
+                                    className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                                  />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="px-4 py-4 text-sm text-slate-500">
+                        Finish the attribute groups, then refresh the price matrix.
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-500">
+                    No attributes are marked as price-affecting. All options will use the default product price.
+                  </div>
+                )}
               </div>
             )}
 
@@ -1529,76 +1598,6 @@ function ProductManagement() {
               </button>
             </div>
           </form>
-        </div>
-      )}
-
-      {showAddForm && showVariantGrid && formData.productType === PRODUCT_TYPES.VARIABLE && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6">
-          <div className="w-full max-w-5xl rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <div>
-                <h4 className="text-xl font-bold text-slate-900">Variant Price Grid</h4>
-                <p className="text-sm text-slate-500">
-                  One row per attribute combination. Add the selling price for each combination.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowVariantGrid(false)}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="max-h-[70vh] overflow-auto px-6 py-5">
-              <table className="min-w-full border-separate border-spacing-0 overflow-hidden rounded-xl border border-slate-200">
-                <thead className="bg-slate-100">
-                  <tr>
-                    {getFinalizedVariantGroups(formData.variantGroups).map((group) => (
-                      <th key={group.attribute} className="border-b border-slate-200 px-4 py-3 text-left text-sm font-bold text-slate-700">
-                        {group.attribute}
-                      </th>
-                    ))}
-                    <th className="border-b border-slate-200 px-4 py-3 text-left text-sm font-bold text-slate-700">
-                      Price
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {formData.variantPricing.map((row, rowIndex) => (
-                    <tr key={getVariantPricingKey(row.attributes || {}) || `variant-row-${rowIndex}`} className="bg-white">
-                      {getFinalizedVariantGroups(formData.variantGroups).map((group) => (
-                        <td key={`${rowIndex}-${group.attribute}`} className="border-b border-slate-100 px-4 py-3 text-sm text-slate-700">
-                          {row.attributes?.[group.attribute] || '-'}
-                        </td>
-                      ))}
-                      <td className="border-b border-slate-100 px-4 py-3">
-                        <input
-                          type="number"
-                          value={row.price}
-                          onChange={(e) => handleVariantGridPriceChange(rowIndex, e.target.value)}
-                          placeholder={formData.price ? `Base ${formData.price}` : '0.00'}
-                          step="0.01"
-                          className="w-36 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex justify-end border-t border-slate-200 px-6 py-4">
-              <button
-                type="button"
-                onClick={() => setShowVariantGrid(false)}
-                className="rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-white transition hover:bg-red-800"
-              >
-                Done
-              </button>
-            </div>
-          </div>
         </div>
       )}
 

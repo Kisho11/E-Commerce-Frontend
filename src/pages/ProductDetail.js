@@ -17,6 +17,17 @@ const uiConfig = {
 const deriveAttributeOptions = (product = {}) => {
   const grouped = new Map();
 
+  if (Array.isArray(product.variantGroups) && product.variantGroups.length > 0) {
+    product.variantGroups.forEach((group) => {
+      const attribute = `${group.attribute || ''}`.trim();
+      const values = (group.values || [])
+        .map((entry) => `${entry.value || ''}`.trim())
+        .filter(Boolean);
+      if (!attribute || values.length === 0) return;
+      grouped.set(attribute, new Set(values));
+    });
+  }
+
   (product.variantPricing || []).forEach((row) => {
     const attributes = row.attributes && typeof row.attributes === 'object' ? row.attributes : null;
     if (attributes && Object.keys(attributes).length > 0) {
@@ -50,6 +61,36 @@ const deriveAttributeOptions = (product = {}) => {
   }));
 };
 
+const formatMoney = (value) => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return null;
+  return `£${amount.toFixed(2)}`;
+};
+
+const findSelectedVariantPrice = (product = {}, selectedAttributes = {}) => {
+  const rows = (product.variantPricing || [])
+    .filter((row) => row.attributes && typeof row.attributes === 'object' && Object.keys(row.attributes).length > 0)
+    .sort((left, right) => Object.keys(right.attributes || {}).length - Object.keys(left.attributes || {}).length);
+
+  const selected = Object.fromEntries(
+    Object.entries(selectedAttributes || {})
+      .map(([key, value]) => [`${key || ''}`.trim(), `${value || ''}`.trim()])
+      .filter(([key, value]) => key && value)
+  );
+
+  const match = rows.find((row) =>
+    Object.entries(row.attributes).every(([attribute, value]) => selected[attribute] === `${value || ''}`)
+  );
+
+  if (!match) return null;
+  if (match.price === '' || match.price == null) {
+    const basePrice = Number(product.price || 0);
+    return Number.isFinite(basePrice) ? basePrice : null;
+  }
+  const price = Number(match.price);
+  return Number.isFinite(price) ? price : null;
+};
+
 function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -71,6 +112,13 @@ function ProductDetail() {
   const productType = useMemo(() => resolveProductType(product), [product]);
   const priceDisplay = useMemo(() => getProductPriceDisplay(product), [product]);
   const attributeOptions = useMemo(() => deriveAttributeOptions(product), [product]);
+  const selectedVariantPrice = useMemo(
+    () => findSelectedVariantPrice(product, selectedAttributes),
+    [product, selectedAttributes]
+  );
+  const selectedPriceText = productType === PRODUCT_TYPES.VARIABLE && selectedVariantPrice != null
+    ? formatMoney(selectedVariantPrice)
+    : priceDisplay.text;
   const stockInfo = useMemo(() => {
     if (!product || productType === PRODUCT_TYPES.CUSTOM) {
       return { onHand: null, reserved: 0, available: null, isOutOfStock: false, isLowStock: false };
@@ -232,6 +280,7 @@ function ProductDetail() {
     await addToCart(product, {
       attributes: selectedAttributes,
       quantity,
+      unitPrice: selectedVariantPrice,
     });
   };
 
@@ -383,7 +432,7 @@ function ProductDetail() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{product.name}</h1>
             <p className={`mt-4 text-3xl tracking-tight ${productType === PRODUCT_TYPES.CUSTOM ? 'text-slate-600' : 'text-slate-900'}`}>
-                  {priceDisplay.text}
+                  {selectedPriceText}
                 </p>
 
             <div className="mt-4 flex items-center">

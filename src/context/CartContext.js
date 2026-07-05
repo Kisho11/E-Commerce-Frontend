@@ -37,6 +37,24 @@ const buildLineId = (productId, attributes = {}, cartItemId = null) => {
   return `${productId}::${suffix || 'default'}`;
 };
 
+const findSelectedVariantPrice = (product = {}, selectedAttributes = {}) => {
+  const rows = (product.variantPricing || [])
+    .filter((row) => row.attributes && typeof row.attributes === 'object' && Object.keys(row.attributes).length > 0)
+    .sort((left, right) => Object.keys(right.attributes || {}).length - Object.keys(left.attributes || {}).length);
+
+  const match = rows.find((row) =>
+    Object.entries(row.attributes).every(([attribute, value]) => selectedAttributes[attribute] === `${value || ''}`)
+  );
+
+  if (!match) return null;
+  if (match.price === '' || match.price == null) {
+    const basePrice = Number(product.price || 0);
+    return Number.isFinite(basePrice) ? basePrice : null;
+  }
+  const price = Number(match.price);
+  return Number.isFinite(price) ? price : null;
+};
+
 const resolveMediaUrl = (value) => {
   if (!value) return '';
   if (/^(data:|blob:|https?:)/i.test(value)) return value;
@@ -50,7 +68,8 @@ const mapBackendCartItem = (item = {}) => {
   const primaryImage = Array.isArray(product.images)
     ? [...product.images].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).find((image) => image.is_primary) || product.images[0]
     : null;
-  const price = Number(product.sale_price ?? product.price ?? 0);
+  const price = Number(item.unit_price ?? product.sale_price ?? product.price ?? 0);
+  const selectedAttributes = normalizeAttributes(item.selected_attributes || {});
 
   return {
     id: product.id,
@@ -59,12 +78,12 @@ const mapBackendCartItem = (item = {}) => {
     name: product.name || 'Unknown Product',
     description: product.description || '',
     price,
-    salePrice: product.sale_price != null ? Number(product.sale_price) : '',
+    salePrice: '',
     image: resolveMediaUrl(primaryImage?.image_url || ''),
     quantity: Number(item.quantity || 1),
-    selectedAttributes: {},
-    selectedColor: null,
-    selectedSize: null,
+    selectedAttributes,
+    selectedColor: selectedAttributes.Color || selectedAttributes.Colour || null,
+    selectedSize: selectedAttributes.Size || null,
   };
 };
 
@@ -114,6 +133,7 @@ export function CartProvider({ children }) {
               body: JSON.stringify({
                 product_id: item.id,
                 quantity: Math.max(1, Number(item.quantity) || 1),
+                selected_attributes: item.selectedAttributes || {},
               }),
             });
           }
@@ -145,6 +165,9 @@ export function CartProvider({ children }) {
     const selectedSize = selectedAttributes.Size || options.size || product.sizes?.[0] || null;
     const selectedQuantity = Math.max(1, Number(options.quantity) || 1);
     const lineId = buildLineId(product.id, selectedAttributes);
+    const variantPriceValue = options.unitPrice ?? findSelectedVariantPrice(product, selectedAttributes);
+    const variantPrice = variantPriceValue == null ? NaN : Number(variantPriceValue);
+    const selectedUnitPrice = Number.isFinite(variantPrice) ? variantPrice : null;
 
     if (isBackendCartUser) {
       const response = await authFetch('/cart/items', {
@@ -155,6 +178,7 @@ export function CartProvider({ children }) {
         body: JSON.stringify({
           product_id: product.id,
           quantity: selectedQuantity,
+          selected_attributes: selectedAttributes,
         }),
       });
       const data = await response.json().catch(() => null);
@@ -181,6 +205,8 @@ export function CartProvider({ children }) {
             {
               ...product,
               lineId,
+              price: selectedUnitPrice ?? Number(product.price || 0),
+              salePrice: selectedUnitPrice != null ? '' : product.salePrice,
               selectedAttributes,
               selectedColor,
               selectedSize,

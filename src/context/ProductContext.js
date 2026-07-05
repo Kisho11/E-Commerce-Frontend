@@ -5,6 +5,7 @@ const ProductContext = createContext();
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 const API_ORIGIN = API_BASE_URL ? new URL(API_BASE_URL).origin : '';
 const AUTH_EXPIRED_EVENT = 'app:auth-expired';
+const VARIANT_OPTION_META_KEY = '__option';
 
 const initialCategories = [
   {
@@ -165,9 +166,21 @@ const parseVariantAttributes = (groupAttribute = '', value = '', skuSuffix = '')
   }
 };
 
+const parseVariantOptionMeta = (skuSuffix = '') => {
+  if (!skuSuffix) return null;
+
+  try {
+    const parsed = JSON.parse(skuSuffix);
+    return parsed && parsed[VARIANT_OPTION_META_KEY] ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+};
+
 const mapVariantPricingFromApi = (variantGroups = [], basePrice = 0) =>
   (variantGroups || []).flatMap((group) =>
     (group.variants || []).map((variant) => {
+      if (parseVariantOptionMeta(variant.sku_suffix)) return null;
       const attributes = parseVariantAttributes(group.attribute, variant.value, variant.sku_suffix);
       return {
         attribute: attributes ? '' : group.attribute || '',
@@ -177,8 +190,25 @@ const mapVariantPricingFromApi = (variantGroups = [], basePrice = 0) =>
         stock: Number(variant.stock_quantity || 0),
         sku: attributes ? '' : variant.sku_suffix || '',
       };
-    })
+    }).filter(Boolean)
   );
+
+const mapVariantGroupsFromApi = (variantGroups = []) =>
+  (variantGroups || [])
+    .filter((group) => group.attribute !== 'Combination')
+    .map((group) => {
+      const variants = group.variants || [];
+      const metas = variants.map((variant) => parseVariantOptionMeta(variant.sku_suffix)).filter(Boolean);
+      return {
+        attribute: group.attribute || '',
+        affectsPrice: metas.length > 0 ? metas.some((meta) => meta.affectsPrice !== false) : true,
+        finalized: true,
+        values: variants
+          .map((variant) => ({ value: variant.value || '' }))
+          .filter((entry) => entry.value),
+      };
+    })
+    .filter((group) => group.attribute && group.values.length > 0);
 
 const deriveVariantPriceRange = (variantPricing = []) => {
   const prices = (variantPricing || [])
@@ -230,6 +260,7 @@ const mapProductFromApi = (product = {}) => {
     .filter((image) => !primaryImage || image.id !== primaryImage.id)
     .map((image) => resolveMediaUrl(image.image_url));
   const variantPricing = mapVariantPricingFromApi(product.variant_groups, product.price);
+  const variantGroups = mapVariantGroupsFromApi(product.variant_groups);
   const { minPrice, maxPrice } = deriveVariantPriceRange(variantPricing);
 
   return {
@@ -252,6 +283,7 @@ const mapProductFromApi = (product = {}) => {
     video: resolveMediaUrl(videos[0]?.video_url || ''),
     galleryVideos: videos.slice(1).map((video) => resolveMediaUrl(video.video_url)),
     videoCount: videos.length,
+    variantGroups,
     variantPricing,
     minPrice,
     maxPrice,
@@ -585,7 +617,30 @@ export function ProductProvider({ children }) {
     return [...new Set([...parentIds, ...childIds])];
   }, [categories]);
 
-  const buildVariantGroupsPayload = useCallback((basePrice = 0, variantPricing = []) => {
+  const buildVariantGroupsPayload = useCallback((basePrice = 0, variantPricing = [], variantGroups = []) => {
+    const optionGroups = (variantGroups || [])
+      .map((group) => {
+        const attribute = (group.attribute || '').trim();
+        const values = (group.values || [])
+          .map((entry) => (entry.value || '').trim())
+          .filter(Boolean);
+        if (!attribute || values.length === 0) return null;
+
+        return {
+          attribute,
+          variants: values.map((value) => ({
+            value,
+            price_modifier: 0,
+            stock_quantity: 0,
+            sku_suffix: JSON.stringify({
+              [VARIANT_OPTION_META_KEY]: true,
+              affectsPrice: group.affectsPrice !== false,
+            }),
+          })),
+        };
+      })
+      .filter(Boolean);
+
     const grouped = (variantPricing || []).reduce((acc, row) => {
       const attributes = row.attributes && typeof row.attributes === 'object' ? row.attributes : null;
       if (attributes && Object.keys(attributes).length > 0) {
@@ -614,10 +669,12 @@ export function ProductProvider({ children }) {
       return acc;
     }, {});
 
-    return Object.entries(grouped).map(([attribute, variants]) => ({
+    const pricingGroups = Object.entries(grouped).map(([attribute, variants]) => ({
       attribute,
       variants,
     }));
+
+    return [...optionGroups, ...pricingGroups];
   }, []);
 
   const syncProductMedia = useCallback(async (productId, productName, media = {}, existingProduct = null) => {
@@ -733,7 +790,7 @@ export function ProductProvider({ children }) {
       product_type: productWithId.productType || 'simple',
       industries: productWithId.industries || [],
       category_ids: getCategoryIdsByNames(productWithId.categories || [], productWithId.subcategories || []),
-      variant_groups: buildVariantGroupsPayload(productWithId.price, productWithId.variantPricing),
+      variant_groups: buildVariantGroupsPayload(productWithId.price, productWithId.variantPricing, productWithId.variantGroups),
     };
 
     const createResponse = await performRequest(`${API_BASE_URL}/products/`, {
@@ -812,7 +869,7 @@ export function ProductProvider({ children }) {
       product_type: merged.productType || 'simple',
       industries: merged.industries || [],
       category_ids: getCategoryIdsByNames(merged.categories || [], merged.subcategories || []),
-      variant_groups: buildVariantGroupsPayload(merged.price, merged.variantPricing),
+      variant_groups: buildVariantGroupsPayload(merged.price, merged.variantPricing, merged.variantGroups),
     };
 
     const updateResponse = await performRequest(`${API_BASE_URL}/products/${productId}`, {
