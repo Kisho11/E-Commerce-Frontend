@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import Seo from '../components/Seo';
 
+const CHECKOUT_TAX_RATE = Number(process.env.REACT_APP_CHECKOUT_TAX_RATE ?? '0.2');
+const checkoutTaxLabel = `${Math.round(CHECKOUT_TAX_RATE * 100)}%`;
+
 function formatSelectedAttributes(item) {
   if (item.selectedAttributes && Object.keys(item.selectedAttributes).length > 0) {
     return Object.entries(item.selectedAttributes).map(([key, value]) => `${key}: ${value}`);
@@ -28,6 +31,8 @@ function ShoppingCart() {
   } = useCart();
   const selectedCartItems = getSelectedCartItems();
   const selectedSubtotal = getSelectedTotalPrice();
+  const selectedTaxAmount = selectedSubtotal * CHECKOUT_TAX_RATE;
+  const selectedTotal = selectedSubtotal + selectedTaxAmount;
   const allItemsSelected = selectedCartItems.length === cartItems.length;
 
   if (cartItems.length === 0) {
@@ -160,14 +165,14 @@ function ShoppingCart() {
               <span className="font-semibold text-green-600">Free</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-600">Tax (10%):</span>
-              <span className="font-semibold text-slate-900">£{(selectedSubtotal * 0.1).toFixed(2)}</span>
+              <span className="text-slate-600">Tax ({checkoutTaxLabel}):</span>
+              <span className="font-semibold text-slate-900">£{selectedTaxAmount.toFixed(2)}</span>
             </div>
           </div>
 
           <div className="flex justify-between text-2xl font-bold text-slate-900 mb-6 bg-slate-50 p-4 rounded-lg">
             <span>Total:</span>
-            <span>£{(selectedSubtotal * 1.1).toFixed(2)}</span>
+            <span>£{selectedTotal.toFixed(2)}</span>
           </div>
 
           <button

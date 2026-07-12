@@ -38,8 +38,8 @@ const formatTime = (date) => {
 
 const normalizeOrder = (order) => {
   const amount = Number(order.amount || order.pricing?.total || 0);
-  const subtotal = Number(order.pricing?.subtotal ?? amount / 1.1);
-  const taxRate = Number(order.pricing?.taxRate ?? 0.1);
+  const subtotal = Number(order.pricing?.subtotal ?? amount / 1.2);
+  const taxRate = Number(order.pricing?.taxRate ?? 0.2);
   const taxAmount = Number(order.pricing?.taxAmount ?? subtotal * taxRate);
   const shippingFee = Number(order.pricing?.shippingFee ?? 0);
   const createdAt = order.createdAt || new Date(`${order.date || formatDate(new Date())}T12:00:00`).toISOString();

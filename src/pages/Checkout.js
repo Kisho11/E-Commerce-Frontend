@@ -17,7 +17,8 @@ const DELIVERY_MODE_LABELS = {
   ship: 'Ship to address',
   pickup: 'Pickup from store',
 };
-const CHECKOUT_TAX_RATE = Number(process.env.REACT_APP_CHECKOUT_TAX_RATE ?? '0.1');
+const CHECKOUT_TAX_RATE = Number(process.env.REACT_APP_CHECKOUT_TAX_RATE ?? '0.2');
+const checkoutTaxLabel = `${Math.round(CHECKOUT_TAX_RATE * 100)}%`;
 const getUserStorageKey = (key, userId) => `${key}:${userId || 'guest'}`;
 
 function readLocalStorage(key, fallback) {
@@ -854,7 +855,7 @@ function CheckoutForm() {
               <span className="font-semibold text-green-600">Free</span>
             </div>
             <div className="flex justify-between text-gray-700">
-              <span>Tax (10%):</span>
+              <span>Tax ({checkoutTaxLabel}):</span>
               <span className="font-semibold">£{taxAmount.toFixed(2)}</span>
             </div>
           </div>
