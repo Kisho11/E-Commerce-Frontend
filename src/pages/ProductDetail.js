@@ -431,9 +431,12 @@ function ProductDetail() {
 
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{product.name}</h1>
-            <p className={`mt-4 text-3xl tracking-tight ${productType === PRODUCT_TYPES.CUSTOM ? 'text-slate-600' : 'text-slate-900'}`}>
-                  {selectedPriceText}
-                </p>
+            <p className={`mt-4 flex flex-wrap items-baseline gap-2 tracking-tight ${productType === PRODUCT_TYPES.CUSTOM ? 'text-slate-600' : 'text-slate-900'}`}>
+              <span className="text-3xl">{selectedPriceText}</span>
+              {productType !== PRODUCT_TYPES.CUSTOM && (
+                <span className="text-sm font-semibold uppercase tracking-normal text-slate-500">Exc. VAT</span>
+              )}
+            </p>
 
             <div className="mt-4 flex items-center">
                   <div className="flex items-center">
