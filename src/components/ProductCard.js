@@ -2,25 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
-import { PRODUCT_TYPES, resolveProductType } from '../utils/productType';
+import { getProductPriceDisplay, PRODUCT_TYPES, resolveProductType } from '../utils/productType';
 
 const formatPriceRange = (product) => {
-  const minPrice = Number(product.minPrice);
-  const maxPrice = Number(product.maxPrice);
-  const basePrice = Number(product.price);
-
-  if (Number.isFinite(minPrice) && Number.isFinite(maxPrice) && maxPrice >= minPrice) {
-    if (minPrice === maxPrice) {
-      return `£${minPrice}`;
-    }
-    return `£${minPrice} - £${maxPrice}`;
-  }
-
-  if (Number.isFinite(basePrice)) {
-    return `£${basePrice}`;
-  }
-
-  return '£0';
+  return getProductPriceDisplay(product).text;
 };
 
 function ProductCard({ product }) {

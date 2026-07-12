@@ -177,6 +177,12 @@ const parseVariantOptionMeta = (skuSuffix = '') => {
   }
 };
 
+const roundMoney = (value) => {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return 0;
+  return Math.round((amount + Number.EPSILON) * 100) / 100;
+};
+
 const mapVariantPricingFromApi = (variantGroups = [], basePrice = 0) =>
   (variantGroups || []).flatMap((group) =>
     (group.variants || []).map((variant) => {
@@ -186,7 +192,7 @@ const mapVariantPricingFromApi = (variantGroups = [], basePrice = 0) =>
         attribute: attributes ? '' : group.attribute || '',
         value: attributes ? '' : variant.value || '',
         attributes: attributes || undefined,
-        price: Number(basePrice || 0) + Number(variant.price_modifier || 0),
+        price: roundMoney(Number(basePrice || 0) + Number(variant.price_modifier || 0)),
         stock: Number(variant.stock_quantity || 0),
         sku: attributes ? '' : variant.sku_suffix || '',
       };
@@ -649,7 +655,7 @@ export function ProductProvider({ children }) {
         if (!acc[attribute]) acc[attribute] = [];
         acc[attribute].push({
           value,
-          price_modifier: Number(row.price || basePrice || 0) - Number(basePrice || 0),
+          price_modifier: roundMoney(Number(row.price || basePrice || 0) - Number(basePrice || 0)),
           stock_quantity: Number(row.stock || 0),
           sku_suffix: JSON.stringify(attributes),
         });
@@ -662,7 +668,7 @@ export function ProductProvider({ children }) {
       if (!acc[attribute]) acc[attribute] = [];
       acc[attribute].push({
         value,
-        price_modifier: Number(row.price || basePrice || 0) - Number(basePrice || 0),
+        price_modifier: roundMoney(Number(row.price || basePrice || 0) - Number(basePrice || 0)),
         stock_quantity: Number(row.stock || 0),
         sku_suffix: row.sku || null,
       });

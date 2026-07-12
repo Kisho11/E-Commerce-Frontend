@@ -18,6 +18,24 @@ const AI_CONTENT_FIELDS = [
   { key: 'additionalInformation', label: 'Additional Information', placeholder: 'Any additional information about this product...' },
 ];
 const AI_ALLOWED_HTML_TAGS = new Set(['P', 'UL', 'OL', 'LI', 'STRONG', 'BR']);
+const PRICE_FIELD_NAMES = new Set(['price', 'salePrice']);
+
+const normalizePriceInput = (value) => {
+  const raw = String(value ?? '').replace(/[^\d.]/g, '');
+  const [wholePart, ...decimalParts] = raw.split('.');
+  const decimalPart = decimalParts.join('').slice(0, 2);
+  return raw.includes('.') ? `${wholePart}.${decimalPart}` : wholePart;
+};
+
+const formatPriceInput = (value) => {
+  const normalized = normalizePriceInput(value);
+  if (!normalized || normalized === '.') return '';
+
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount) || amount < 0) return '';
+
+  return amount.toFixed(2);
+};
 
 const sanitizeGeneratedHtml = (html) => {
   const template = document.createElement('template');
@@ -293,7 +311,17 @@ function ProductManagement() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData({
+      ...formData,
+      [name]: PRICE_FIELD_NAMES.has(name) ? normalizePriceInput(value) : value,
+    });
+  };
+
+  const handlePriceBlur = (fieldName) => {
+    setFormData((prev) => ({
+      ...prev,
+      [fieldName]: formatPriceInput(prev[fieldName]),
+    }));
   };
 
   const handleCategoryToggle = (cat) => {
@@ -591,7 +619,18 @@ function ProductManagement() {
       const nextVariantPricing = [...prev.variantPricing];
       nextVariantPricing[rowIndex] = {
         ...nextVariantPricing[rowIndex],
-        price: value,
+        price: normalizePriceInput(value),
+      };
+      return { ...prev, variantPricing: nextVariantPricing };
+    });
+  };
+
+  const handleVariantGridPriceBlur = (rowIndex) => {
+    setFormData((prev) => {
+      const nextVariantPricing = [...prev.variantPricing];
+      nextVariantPricing[rowIndex] = {
+        ...nextVariantPricing[rowIndex],
+        price: formatPriceInput(nextVariantPricing[rowIndex]?.price),
       };
       return { ...prev, variantPricing: nextVariantPricing };
     });
@@ -611,8 +650,16 @@ function ProductManagement() {
     setSuccess('');
 
     const requiresPrice = formData.productType !== PRODUCT_TYPES.CUSTOM;
-    if (!formData.name.trim() || !formData.mainNote || (requiresPrice && !formData.price)) {
+    const normalizedPrice = formData.productType === PRODUCT_TYPES.CUSTOM ? '' : formatPriceInput(formData.price);
+    const normalizedSalePrice = formData.productType === PRODUCT_TYPES.CUSTOM ? '' : formatPriceInput(formData.salePrice);
+
+    if (!formData.name.trim() || !formData.mainNote || (requiresPrice && !normalizedPrice)) {
       setError('Please fill in all required fields');
+      return;
+    }
+
+    if ((formData.price && !normalizedPrice) || (formData.salePrice && !normalizedSalePrice)) {
+      setError('Prices must be valid numbers with no more than 2 decimal places');
       return;
     }
 
@@ -651,8 +698,17 @@ function ProductManagement() {
     const matrixVariantPricing = syncVariantPricingWithGroups(
       formData.variantPricing,
       completeVariantGroups,
-      formData.price
-    );
+      normalizedPrice
+    ).map((row) => ({
+      ...row,
+      price: row.price ? formatPriceInput(row.price) : '',
+    }));
+
+    const hasInvalidVariantPrice = matrixVariantPricing.some((row) => row.price && !formatPriceInput(row.price));
+    if (hasInvalidVariantPrice) {
+      setError('Variant prices must be valid numbers with no more than 2 decimal places');
+      return;
+    }
 
     if (formData.productType === PRODUCT_TYPES.VARIABLE) {
       if (cleanVariantOptions.length === 0) {
@@ -685,8 +741,8 @@ function ProductManagement() {
       whatsIncluded: formData.whatsIncluded,
       importantNotes: formData.importantNotes,
       additionalInformation: formData.additionalInformation,
-      price: formData.productType === PRODUCT_TYPES.CUSTOM ? '' : formData.price,
-      salePrice: formData.productType === PRODUCT_TYPES.CUSTOM ? '' : formData.salePrice,
+      price: normalizedPrice,
+      salePrice: normalizedSalePrice,
       productType: formData.productType,
       variantGroups: formData.productType === PRODUCT_TYPES.VARIABLE ? completeVariantGroups : [],
       variantPricing: formData.productType === PRODUCT_TYPES.VARIABLE ? matrixVariantPricing : [],
@@ -995,12 +1051,14 @@ function ProductManagement() {
                   Price £ {formData.productType === PRODUCT_TYPES.CUSTOM ? '(optional)' : '*'}
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   name="price"
                   value={formData.price}
                   onChange={handleInputChange}
+                  onBlur={() => handlePriceBlur('price')}
                   placeholder="0.00"
-                  step="0.01"
+                  pattern="^\d+(\.\d{1,2})?$"
                   className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
                   required={formData.productType !== PRODUCT_TYPES.CUSTOM}
                 />
@@ -1009,12 +1067,14 @@ function ProductManagement() {
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2">Sale Price £ (optional)</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     name="salePrice"
                     value={formData.salePrice}
                     onChange={handleInputChange}
+                    onBlur={() => handlePriceBlur('salePrice')}
                     placeholder="0.00"
-                    step="0.01"
+                    pattern="^\d+(\.\d{1,2})?$"
                     className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 focus:border-primary focus:outline-none"
                   />
                 </div>
@@ -1211,11 +1271,13 @@ function ProductManagement() {
                                 ))}
                                 <td className="border-b border-slate-100 px-4 py-3">
                                   <input
-                                    type="number"
+                                    type="text"
+                                    inputMode="decimal"
                                     value={row.price}
                                     onChange={(e) => handleVariantGridPriceChange(rowIndex, e.target.value)}
+                                    onBlur={() => handleVariantGridPriceBlur(rowIndex)}
                                     placeholder={formData.price ? `Default ${formData.price}` : 'Default price'}
-                                    step="0.01"
+                                    pattern="^\d+(\.\d{1,2})?$"
                                     className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                                   />
                                 </td>
