@@ -38,7 +38,7 @@ function Home() {
         </div>
       </section>
 
-      <section className="mt-10">
+      <section className="shell mt-10">
         <CategoryLanding />
       </section>
 
