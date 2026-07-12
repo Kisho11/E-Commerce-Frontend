@@ -209,7 +209,7 @@ function Login() {
 
   const subtitle =
     mode === 'customer-signup'
-      ? 'Create your Elamshelf customer account to save carts, request quotes, and order faster.'
+      ? 'Create your Elmshelf customer account to save carts, request quotes, and order faster.'
       : mode === 'staff-signin'
         ? 'Use your staff credentials to access the admin or manager workspace.'
         : 'Sign in to continue with your account, saved products, and checkout flow.';
@@ -263,9 +263,9 @@ function Login() {
           <div className="mx-auto w-full max-w-lg">
             <div className="mb-4 md:hidden">
               <div className="mb-3 flex items-center gap-3 text-slate-900">
-                <img src="/elms.png" alt="Elamshelf logo" className="h-12 w-auto max-w-[150px] object-contain" />
+                <img src="/elms.png" alt="Elmshelf logo" className="h-12 w-auto max-w-[150px] object-contain" />
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Elamshelf</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Elmshelf</p>
                   <h1 className="text-lg font-bold text-slate-900">Account access</h1>
                 </div>
               </div>
@@ -327,7 +327,7 @@ function Login() {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="john@elamshelf.com"
+                      placeholder="john@elmshelf.com"
                       className="w-full rounded-xl bg-white px-3 py-2.5 text-sm text-slate-900 outline outline-1 -outline-offset-1 outline-slate-300 transition focus:outline-2 focus:-outline-offset-2 focus:outline-blue-600"
                       required
                     />

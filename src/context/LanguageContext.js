@@ -86,7 +86,7 @@ const translations = {
       downloadPdf: 'Download PDF',
     },
     footer: {
-      brandName: 'Elamshelf',
+      brandName: 'Elmshelf',
       title: 'Modern retail fixtures',
       desc: 'We help stores deploy durable shelving and display systems with practical layouts that scale.',
       explore: 'Explore',
