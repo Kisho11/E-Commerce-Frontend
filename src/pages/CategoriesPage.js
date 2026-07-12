@@ -224,6 +224,7 @@ function CategoriesPage() {
           </aside>
 
           <div>
+            {/*
             <div className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <div className="h-52 bg-slate-100 sm:h-64">
                 {(selectedSubcategoryMeta?.image || selectedCategoryMeta?.image) ? (
@@ -237,6 +238,7 @@ function CategoriesPage() {
                 )}
               </div>
             </div>
+            */}
 
             {(selectedCategoryMeta?.subcategories || []).length > 0 && (
               <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4">
