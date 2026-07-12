@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import initialProducts from '../data/products';
+import { sortCategoriesByPreferredOrder } from '../utils/categoryOrder';
 
 const ProductContext = createContext();
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -438,7 +439,7 @@ const getLocalFallbackProducts = () =>
 
 export function ProductProvider({ children }) {
   const [products, setProducts] = useState(() => (API_BASE_URL ? [] : getLocalFallbackProducts()));
-  const [categories, setCategories] = useState(initialCategories);
+  const [categories, setCategories] = useState(() => sortCategoriesByPreferredOrder(initialCategories));
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState('');
 
@@ -451,7 +452,7 @@ export function ProductProvider({ children }) {
     }
 
     const data = await response.json();
-    const normalized = Array.isArray(data) ? data.map(mapCategoryFromApi) : [];
+    const normalized = sortCategoriesByPreferredOrder(Array.isArray(data) ? data.map(mapCategoryFromApi) : []);
     setCategories(normalized);
     return normalized;
   }, []);
@@ -470,7 +471,7 @@ export function ProductProvider({ children }) {
 
         const data = await response.json();
         if (!isMounted) return;
-        setCategories(Array.isArray(data) ? data.map(mapCategoryFromApi) : []);
+        setCategories(sortCategoriesByPreferredOrder(Array.isArray(data) ? data.map(mapCategoryFromApi) : []));
       } catch (error) {
         console.error('Unable to load backend categories:', error);
       }
@@ -945,7 +946,7 @@ export function ProductProvider({ children }) {
     }
 
     if (!API_BASE_URL) {
-      setCategories((prev) => [...prev, payload]);
+      setCategories((prev) => sortCategoriesByPreferredOrder([...prev, payload]));
       return payload;
     }
 
