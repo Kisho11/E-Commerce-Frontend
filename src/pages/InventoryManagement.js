@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useProducts } from '../context/ProductContext';
 import UiIcon from '../components/UiIcon';
+import { PRODUCT_TYPES, resolveProductType } from '../utils/productType';
 
 const ROW_COUNT_OPTIONS = [50, 100, 200, 500, 1000, 2000];
 
@@ -33,6 +34,23 @@ const normalizeSearchText = (value) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const getVariantPricingKey = (attributes = {}) =>
+  Object.entries(attributes || {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([attribute, value]) => `${attribute}::${value}`)
+    .join('||');
+
+const formatVariantLabel = (attributes = {}) =>
+  Object.entries(attributes || {})
+    .map(([attribute, value]) => `${attribute}: ${value}`)
+    .join(' / ');
+
+const getStockStatus = (onHand, reorderLevel = 0) => {
+  if (onHand <= 0) return 'Out of Stock';
+  if (onHand <= reorderLevel) return 'Low Stock';
+  return 'Healthy';
+};
+
 function SummaryCard({ label, value, color }) {
   const colors = {
     blue: 'bg-blue-50 text-blue-700',
@@ -51,7 +69,7 @@ function SummaryCard({ label, value, color }) {
 
 function InventoryManagement() {
   const { authFetch } = useAuth();
-  const { products } = useProducts();
+  const { products, loadAllProducts } = useProducts();
 
   const productMap = useMemo(
     () => new Map(products.flatMap((p) => [[p.id, p], [Number(p.id), p], [String(p.id), p]])),
@@ -59,6 +77,7 @@ function InventoryManagement() {
   );
 
   const [inventory, setInventory] = useState([]);
+  const [variantInventory, setVariantInventory] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -90,6 +109,85 @@ function InventoryManagement() {
     [productMap]
   );
 
+  const stockRows = useMemo(() => {
+    const backendRowsByProductId = new Map(inventory.map((inv) => [Number(inv.product_id), inv]));
+    const variantInventoryByVariantId = new Map(variantInventory.map((inv) => [Number(inv.variant_id), inv]));
+    return products.flatMap((product) => {
+      const productType = resolveProductType(product);
+      const reorderLevel = Number(product.inventory?.reorderLevel ?? 0);
+
+      if (productType === PRODUCT_TYPES.VARIABLE) {
+        const variantRows = (product.variantPricing || [])
+          .filter((row) => row.attributes && typeof row.attributes === 'object' && Object.keys(row.attributes).length > 0)
+          .map((row) => {
+            const variantInv = variantInventoryByVariantId.get(Number(row.variantId));
+            const onHand = Math.max(Number(variantInv?.on_hand ?? row.stock ?? 0), 0);
+            const reserved = Math.max(Number(variantInv?.reserved ?? 0), 0);
+            const available = Math.max(Number(variantInv?.available ?? onHand - reserved), 0);
+            const variantReorderLevel = Number(variantInv?.reorder_level ?? product.inventory?.reorderLevel ?? 0);
+            const variantKey = getVariantPricingKey(row.attributes);
+            return {
+              id: variantInv?.id ? `variant-inventory-${variantInv.id}` : `variant-${product.id}-${variantKey}`,
+              product_id: product.id,
+              variant_id: row.variantId,
+              product_name: product.name,
+              product,
+              rowType: 'variant',
+              variantKey,
+              variantAttributes: row.attributes,
+              variantLabel: formatVariantLabel(row.attributes),
+              sku: row.sku || '',
+              inventory_id: variantInv?.id,
+              on_hand: onHand,
+              reserved,
+              available,
+              reorder_level: variantReorderLevel,
+              reorder_qty: variantInv?.reorder_qty ?? product.inventory?.reorderQty ?? 0,
+              avg_daily_usage: variantInv?.avg_daily_usage ?? product.inventory?.averageDailyUsage ?? null,
+              location: variantInv?.location ?? product.inventory?.location ?? null,
+              supplier: variantInv?.supplier ?? product.inventory?.supplier ?? null,
+              lead_time_days: variantInv?.lead_time_days ?? product.inventory?.leadTimeDays ?? null,
+              status: variantInv?.status || getStockStatus(available, variantReorderLevel),
+              coverage_days: variantInv?.coverage_days ?? (product.inventory?.averageDailyUsage
+                ? Math.floor(available / Math.max(Number(product.inventory.averageDailyUsage), 0.1))
+                : null),
+              movements: variantInv?.movements || [],
+            };
+          });
+
+        if (variantRows.length > 0) return variantRows;
+      }
+
+      const inv = backendRowsByProductId.get(Number(product.id));
+      if (inv) {
+        return [{ ...inv, product, rowType: 'product' }];
+      }
+
+      const onHand = Number(product.inventory?.onHand || 0);
+      return [{
+        id: `product-${product.id}`,
+        product_id: product.id,
+        product_name: product.name,
+        product,
+        rowType: 'product',
+        on_hand: onHand,
+        reserved: Number(product.inventory?.reserved || 0),
+        available: Math.max(onHand - Number(product.inventory?.reserved || 0), 0),
+        reorder_level: reorderLevel,
+        reorder_qty: product.inventory?.reorderQty ?? 0,
+        avg_daily_usage: product.inventory?.averageDailyUsage ?? null,
+        location: product.inventory?.location ?? null,
+        supplier: product.inventory?.supplier ?? null,
+        lead_time_days: product.inventory?.leadTimeDays ?? null,
+        status: getStockStatus(Math.max(onHand - Number(product.inventory?.reserved || 0), 0), reorderLevel),
+        coverage_days: product.inventory?.averageDailyUsage
+          ? Math.floor(Math.max(onHand - Number(product.inventory?.reserved || 0), 0) / Math.max(Number(product.inventory.averageDailyUsage), 0.1))
+          : null,
+        movements: product.inventory?.movements || [],
+      }];
+    });
+  }, [inventory, products, variantInventory]);
+
   const flash = useCallback((type, msg) => {
     if (type === 'success') { setSuccess(msg); setError(''); }
     else { setError(msg); setSuccess(''); }
@@ -111,8 +209,6 @@ function InventoryManagement() {
           page: String(p),
           per_page: '200',
         });
-        if (statusFilter !== 'all') params.set('status', statusFilter);
-        if (search.trim()) params.set('search', search.trim());
 
         const res = await authFetch(`/inventory/?${params.toString()}`);
         if (!res.ok) throw new Error('Failed to load inventory');
@@ -121,26 +217,45 @@ function InventoryManagement() {
         if (batch.length < 200) break;
         p++;
       }
+      const allVariantInventory = [];
+      let variantPage = 1;
+      while (true) {
+        const params = new URLSearchParams({
+          page: String(variantPage),
+          per_page: '200',
+        });
+
+        const res = await authFetch(`/inventory/variants?${params.toString()}`);
+        if (!res.ok) throw new Error('Failed to load variant inventory');
+        const batch = await res.json();
+        allVariantInventory.push(...batch);
+        if (batch.length < 200) break;
+        variantPage++;
+      }
       setInventory(all);
+      setVariantInventory(allVariantInventory);
       await loadSummary();
     } catch {
       flash('error', 'Failed to load inventory data');
     } finally {
       setLoading(false);
     }
-  }, [authFetch, flash, loadSummary, search, statusFilter]);
+  }, [authFetch, flash, loadSummary]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
   const filtered = useMemo(() => {
     const terms = normalizeSearchText(search).split(' ').filter(Boolean);
-    return inventory.filter((inv) => {
+    return stockRows.filter((inv) => {
       if (statusFilter !== 'all' && inv.status !== statusFilter) return false;
       if (terms.length > 0) {
         const product = productMap.get(inv.product_id);
         const productName = inv.product_name || product?.name || '';
         const searchableText = normalizeSearchText([
           productName,
+          inv.variantLabel,
+          inv.sku,
+          inv.rowType,
           inv.product_id,
           `#${inv.product_id}`,
           inv.location,
@@ -151,7 +266,21 @@ function InventoryManagement() {
       }
       return true;
     });
-  }, [inventory, statusFilter, search, productMap]);
+  }, [stockRows, statusFilter, search, productMap]);
+
+  const rowSummary = useMemo(() => {
+    const lowRows = stockRows.filter((row) => row.status === 'Low Stock');
+    const outRows = stockRows.filter((row) => row.status === 'Out of Stock');
+    const healthyRows = stockRows.filter((row) => row.status === 'Healthy');
+    return {
+      total_products: products.length,
+      total_rows: stockRows.length,
+      low_stock_count: lowRows.length,
+      out_of_stock_count: outRows.length,
+      healthy_count: healthyRows.length,
+      total_on_hand: stockRows.reduce((total, row) => total + Number(row.on_hand || 0), 0),
+    };
+  }, [products.length, stockRows]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -185,6 +314,34 @@ function InventoryManagement() {
     }
     setAdjustSaving(true);
     try {
+      if (adjustTarget.rowType === 'variant') {
+        if (!adjustTarget.variant_id) throw new Error('Variant inventory is not ready yet');
+        const res = await authFetch(`/inventory/variants/${adjustTarget.variant_id}/adjust`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            change,
+            movement_type: adjustType,
+            reason: adjustReason.trim() || undefined,
+          }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          flash('error', body.detail || 'Failed to adjust variant stock');
+          return;
+        }
+        const updated = await res.json();
+        setVariantInventory((prev) => {
+          const exists = prev.some((item) => Number(item.variant_id) === Number(updated.variant_id));
+          if (!exists) return [...prev, updated];
+          return prev.map((item) => (Number(item.variant_id) === Number(updated.variant_id) ? updated : item));
+        });
+        await loadAllProducts();
+        setAdjustTarget(null);
+        flash('success', `Variant stock updated - ${updated.on_hand} on hand`);
+        return;
+      }
+
       const res = await authFetch(`/inventory/${adjustTarget.product_id}/adjust`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -236,14 +393,25 @@ function InventoryManagement() {
         supplier: settingsForm.supplier.trim() || null,
         lead_time_days: Number(settingsForm.lead_time_days),
       };
-      const res = await authFetch(`/inventory/${settingsTarget.product_id}`, {
+      const endpoint = settingsTarget.rowType === 'variant'
+        ? `/inventory/variants/${settingsTarget.variant_id}`
+        : `/inventory/${settingsTarget.product_id}`;
+      const res = await authFetch(endpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error();
       const updated = await res.json();
-      setInventory((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      if (settingsTarget.rowType === 'variant') {
+        setVariantInventory((prev) => {
+          const exists = prev.some((item) => Number(item.variant_id) === Number(updated.variant_id));
+          if (!exists) return [...prev, updated];
+          return prev.map((item) => (Number(item.variant_id) === Number(updated.variant_id) ? updated : item));
+        });
+      } else {
+        setInventory((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      }
       setSettingsTarget(null);
       flash('success', 'Inventory settings saved');
     } catch {
@@ -270,13 +438,14 @@ function InventoryManagement() {
       )}
 
       {/* Summary cards */}
-      {summary && (
-        <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          <SummaryCard label="Total Products" value={summary.total_products.toLocaleString()} color="blue" />
-          <SummaryCard label="Healthy" value={summary.healthy_count.toLocaleString()} color="green" />
-          <SummaryCard label="Low Stock" value={summary.low_stock_count.toLocaleString()} color="yellow" />
-          <SummaryCard label="Out of Stock" value={summary.out_of_stock_count.toLocaleString()} color="red" />
-          <SummaryCard label="Total On Hand" value={summary.total_on_hand.toLocaleString()} color="purple" />
+      {(summary || rowSummary) && (
+        <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          <SummaryCard label="Products" value={rowSummary.total_products.toLocaleString()} color="blue" />
+          <SummaryCard label="Stock Rows" value={rowSummary.total_rows.toLocaleString()} color="purple" />
+          <SummaryCard label="Healthy" value={rowSummary.healthy_count.toLocaleString()} color="green" />
+          <SummaryCard label="Low Stock" value={rowSummary.low_stock_count.toLocaleString()} color="yellow" />
+          <SummaryCard label="Out of Stock" value={rowSummary.out_of_stock_count.toLocaleString()} color="red" />
+          <SummaryCard label="Total On Hand" value={rowSummary.total_on_hand.toLocaleString()} color="purple" />
         </div>
       )}
 
@@ -336,6 +505,7 @@ function InventoryManagement() {
             <thead className="border-b border-gray-200 bg-gray-50">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Product</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Variant</th>
                 <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">On Hand</th>
                 <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Reserved</th>
                 <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Available</th>
@@ -349,7 +519,7 @@ function InventoryManagement() {
             <tbody className="divide-y divide-gray-100">
               {pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-14 text-center text-sm text-gray-400">
+                  <td colSpan={10} className="py-14 text-center text-sm text-gray-400">
                     {search || statusFilter !== 'all'
                       ? 'No records match your filters.'
                       : 'No inventory records found.'}
@@ -362,6 +532,16 @@ function InventoryManagement() {
                         {getInventoryProductName(inv)}
                       </p>
                       <p className="text-xs text-gray-400">#{inv.product_id}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      {inv.rowType === 'variant' ? (
+                        <div>
+                          <p className="text-sm font-semibold text-gray-700">{inv.variantLabel}</p>
+                          <p className="text-xs text-gray-400">{inv.sku || 'Variant SKU'}</p>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">Product stock</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-gray-800">{inv.on_hand}</td>
                     <td className="px-4 py-3 text-right text-sm text-gray-500">{inv.reserved}</td>
@@ -386,13 +566,15 @@ function InventoryManagement() {
                         </button>
                         <button
                           onClick={() => handleSettingsOpen(inv)}
-                          className="rounded px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100"
+                          disabled={inv.rowType === 'variant' && !inv.variant_id}
+                          className="rounded px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
                         >
                           Settings
                         </button>
                         <button
                           onClick={() => setHistoryTarget(inv)}
-                          className="rounded px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100"
+                          disabled={inv.rowType === 'variant' && !inv.variant_id}
+                          className="rounded px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
                         >
                           History
                         </button>
@@ -449,6 +631,7 @@ function InventoryManagement() {
               <h3 className="text-lg font-bold text-gray-800">Adjust Stock</h3>
               <p className="mt-0.5 text-sm text-gray-500">
                 {getInventoryProductName(adjustTarget)}
+                {adjustTarget.rowType === 'variant' && adjustTarget.variantLabel ? ` - ${adjustTarget.variantLabel}` : ''}
               </p>
             </div>
             <form onSubmit={handleAdjustSubmit} className="space-y-4 px-6 py-5">
@@ -548,6 +731,7 @@ function InventoryManagement() {
               <h3 className="text-lg font-bold text-gray-800">Inventory Settings</h3>
               <p className="mt-0.5 text-sm text-gray-500">
                 {getInventoryProductName(settingsTarget)}
+                {settingsTarget.rowType === 'variant' && settingsTarget.variantLabel ? ` - ${settingsTarget.variantLabel}` : ''}
               </p>
             </div>
             <form onSubmit={handleSettingsSave} className="space-y-4 px-6 py-5">
@@ -644,6 +828,7 @@ function InventoryManagement() {
                 <h3 className="text-lg font-bold text-gray-800">Movement History</h3>
                 <p className="mt-0.5 text-sm text-gray-500">
                   {getInventoryProductName(historyTarget)}
+                  {historyTarget.rowType === 'variant' && historyTarget.variantLabel ? ` - ${historyTarget.variantLabel}` : ''}
                   {' · '}On hand: <span className="font-semibold text-gray-700">{historyTarget.on_hand}</span>
                 </p>
               </div>

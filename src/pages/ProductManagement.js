@@ -37,6 +37,8 @@ const formatPriceInput = (value) => {
   return amount.toFixed(2);
 };
 
+const normalizeStockInput = (value) => String(value ?? '').replace(/[^\d]/g, '');
+
 const sanitizeGeneratedHtml = (html) => {
   const template = document.createElement('template');
   template.innerHTML = html;
@@ -77,9 +79,6 @@ const getFinalizedVariantGroups = (variantGroups = []) =>
       affectsPrice: group.affectsPrice !== false,
     }))
     .filter((group) => group.attribute && group.values.length > 0);
-
-const getPriceAffectingVariantGroups = (variantGroups = []) =>
-  getFinalizedVariantGroups(variantGroups).filter((group) => group.affectsPrice !== false);
 
 const buildVariantCombinations = (variantGroups = []) => {
   if (variantGroups.length === 0) return [];
@@ -128,7 +127,7 @@ const buildVariantGroupsFromPricing = (variantPricing = []) => {
 };
 
 const syncVariantPricingWithGroups = (variantPricing = [], variantGroups = [], basePrice = '') => {
-  const finalizedGroups = getPriceAffectingVariantGroups(variantGroups);
+  const finalizedGroups = getFinalizedVariantGroups(variantGroups);
   const combinations = buildVariantCombinations(finalizedGroups);
   const existingByKey = new Map(
     (variantPricing || [])
@@ -636,6 +635,17 @@ function ProductManagement() {
     });
   };
 
+  const handleVariantGridStockChange = (rowIndex, value) => {
+    setFormData((prev) => {
+      const nextVariantPricing = [...prev.variantPricing];
+      nextVariantPricing[rowIndex] = {
+        ...nextVariantPricing[rowIndex],
+        stock: normalizeStockInput(value),
+      };
+      return { ...prev, variantPricing: nextVariantPricing };
+    });
+  };
+
   const handleEditVariantGroup = (groupIndex) => {
     setFormData((prev) => {
       const nextGroups = [...prev.variantGroups];
@@ -702,6 +712,7 @@ function ProductManagement() {
     ).map((row) => ({
       ...row,
       price: row.price ? formatPriceInput(row.price) : '',
+      stock: Math.max(Number(row.stock || 0), 0),
     }));
 
     const hasInvalidVariantPrice = matrixVariantPricing.some((row) => row.price && !formatPriceInput(row.price));
@@ -1238,12 +1249,12 @@ function ProductManagement() {
                     )}
                   </div>
                 </div>
-                {getPriceAffectingVariantGroups(formData.variantGroups).length > 0 ? (
+                {getFinalizedVariantGroups(formData.variantGroups).length > 0 ? (
                   <div className="mt-5 rounded-xl border border-slate-200 bg-white">
                     <div className="border-b border-slate-200 px-4 py-3">
-                      <h6 className="text-base font-bold text-slate-900">Price Matrix</h6>
+                      <h6 className="text-base font-bold text-slate-900">Price & Stock Matrix</h6>
                       <p className="mt-1 text-sm text-slate-500">
-                        Leave a price blank to use the default product price. Only attributes marked as price-affecting are included.
+                        Leave a price blank to use the default product price. Stock is managed per exact attribute combination.
                       </p>
                     </div>
                     {formData.variantPricing.length > 0 ? (
@@ -1251,7 +1262,7 @@ function ProductManagement() {
                         <table className="min-w-full border-separate border-spacing-0">
                           <thead className="bg-slate-100">
                             <tr>
-                              {getPriceAffectingVariantGroups(formData.variantGroups).map((group) => (
+                              {getFinalizedVariantGroups(formData.variantGroups).map((group) => (
                                 <th key={group.attribute} className="border-b border-slate-200 px-4 py-3 text-left text-sm font-bold text-slate-700">
                                   {group.attribute}
                                 </th>
@@ -1259,12 +1270,15 @@ function ProductManagement() {
                               <th className="border-b border-slate-200 px-4 py-3 text-left text-sm font-bold text-slate-700">
                                 Price
                               </th>
+                              <th className="border-b border-slate-200 px-4 py-3 text-left text-sm font-bold text-slate-700">
+                                Stock
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
                             {formData.variantPricing.map((row, rowIndex) => (
                               <tr key={getVariantPricingKey(row.attributes || {}) || `inline-variant-row-${rowIndex}`} className="bg-white">
-                                {getPriceAffectingVariantGroups(formData.variantGroups).map((group) => (
+                                {getFinalizedVariantGroups(formData.variantGroups).map((group) => (
                                   <td key={`${rowIndex}-${group.attribute}`} className="border-b border-slate-100 px-4 py-3 text-sm text-slate-700">
                                     {row.attributes?.[group.attribute] || '-'}
                                   </td>
@@ -1281,6 +1295,16 @@ function ProductManagement() {
                                     className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
                                   />
                                 </td>
+                                <td className="border-b border-slate-100 px-4 py-3">
+                                  <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min="0"
+                                    value={row.stock ?? 0}
+                                    onChange={(e) => handleVariantGridStockChange(rowIndex, e.target.value)}
+                                    className="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                                  />
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -1294,7 +1318,7 @@ function ProductManagement() {
                   </div>
                 ) : (
                   <div className="mt-5 rounded-xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-500">
-                    No attributes are marked as price-affecting. All options will use the default product price.
+                    Finish at least one attribute group to create stock rows.
                   </div>
                 )}
               </div>

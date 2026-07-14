@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { getProductPriceDisplay, PRODUCT_TYPES, resolveProductType } from '../utils/productType';
@@ -11,15 +11,21 @@ const formatPriceRange = (product) => {
 function ProductCard({ product }) {
   const { addToCart } = useCart();
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const productUrl = `/product/${product.id}`;
+  const productType = resolveProductType(product);
   const availableStock = Math.max(
     Number(product.inventory?.onHand ?? 0) - Number(product.inventory?.reserved ?? 0),
     0
   );
-  const isOutOfStock = resolveProductType(product) !== PRODUCT_TYPES.CUSTOM && availableStock <= 0;
+  const isOutOfStock = productType !== PRODUCT_TYPES.CUSTOM && availableStock <= 0;
 
   const handleAddToCart = () => {
     if (isOutOfStock) return;
+    if (productType === PRODUCT_TYPES.VARIABLE) {
+      navigate(productUrl);
+      return;
+    }
     addToCart(product);
   };
 
@@ -54,7 +60,7 @@ function ProductCard({ product }) {
           disabled={isOutOfStock}
           className="w-full rounded-xl bg-slate-900 px-2 py-2.5 text-xs font-bold leading-none text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 sm:text-sm lg:py-1.5 lg:text-[10px]"
         >
-          {isOutOfStock ? 'Out of stock' : t('product.addToCart')}
+          {isOutOfStock ? 'Out of stock' : productType === PRODUCT_TYPES.VARIABLE ? 'Choose options' : t('product.addToCart')}
         </button>
       </div>
     </article>

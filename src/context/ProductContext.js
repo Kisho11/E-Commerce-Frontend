@@ -190,6 +190,7 @@ const mapVariantPricingFromApi = (variantGroups = [], basePrice = 0) =>
       if (parseVariantOptionMeta(variant.sku_suffix)) return null;
       const attributes = parseVariantAttributes(group.attribute, variant.value, variant.sku_suffix);
       return {
+        variantId: variant.id,
         attribute: attributes ? '' : group.attribute || '',
         value: attributes ? '' : variant.value || '',
         attributes: attributes || undefined,
@@ -256,6 +257,11 @@ const deriveVariantValues = (variantPricing = [], attributeNames = []) => {
   ];
 };
 
+const deriveVariantStockTotal = (variantPricing = []) =>
+  (variantPricing || [])
+    .filter((row) => row.attributes && typeof row.attributes === 'object' && Object.keys(row.attributes).length > 0)
+    .reduce((total, row) => total + Math.max(Number(row.stock || 0), 0), 0);
+
 const mapProductFromApi = (product = {}) => {
   const categories = Array.isArray(product.categories) ? product.categories : [];
   const parentCategories = categories.filter((category) => category.parent_id == null);
@@ -269,6 +275,10 @@ const mapProductFromApi = (product = {}) => {
   const variantPricing = mapVariantPricingFromApi(product.variant_groups, product.price);
   const variantGroups = mapVariantGroupsFromApi(product.variant_groups);
   const { minPrice, maxPrice } = deriveVariantPriceRange(variantPricing);
+  const variantStockTotal = deriveVariantStockTotal(variantPricing);
+  const usesVariantStock = product.product_type === 'variable' && variantPricing.some(
+    (row) => row.attributes && typeof row.attributes === 'object' && Object.keys(row.attributes).length > 0
+  );
 
   return {
     id: product.id,
@@ -298,7 +308,8 @@ const mapProductFromApi = (product = {}) => {
     colors: deriveVariantValues(variantPricing, ['color', 'colour']),
     additionalInformation: product.additional_information || '',
     inventory: {
-      onHand: Number(product.stock_quantity || 0),
+      onHand: usesVariantStock ? variantStockTotal : Number(product.stock_quantity || 0),
+      reserved: 0,
     },
     imageVariantTags: images.map(img => img.variant_tag || ''),
     _apiImages: images,
@@ -792,7 +803,7 @@ export function ProductProvider({ children }) {
       additional_information: productWithId.additionalInformation || '',
       price: Number(productWithId.price || 0),
       sale_price: productWithId.salePrice === '' ? null : (productWithId.salePrice != null ? Number(productWithId.salePrice) : null),
-      stock_quantity: Number(productWithId.inventory?.onHand || 0),
+      stock_quantity: productWithId.productType === 'variable' ? 0 : Number(productWithId.inventory?.onHand || 0),
       sku: sanitizeInventorySku(productWithId.inventory?.sku),
       product_type: productWithId.productType || 'simple',
       industries: productWithId.industries || [],
@@ -871,7 +882,7 @@ export function ProductProvider({ children }) {
       additional_information: merged.additionalInformation || '',
       price: Number(merged.price || 0),
       sale_price: merged.salePrice === '' ? null : (merged.salePrice != null ? Number(merged.salePrice) : null),
-      stock_quantity: Number(merged.inventory?.onHand || 0),
+      stock_quantity: merged.productType === 'variable' ? 0 : Number(merged.inventory?.onHand || 0),
       sku: sanitizeInventorySku(merged.inventory?.sku),
       product_type: merged.productType || 'simple',
       industries: merged.industries || [],

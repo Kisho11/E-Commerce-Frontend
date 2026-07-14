@@ -91,6 +91,31 @@ const findSelectedVariantPrice = (product = {}, selectedAttributes = {}) => {
   return Number.isFinite(price) ? price : null;
 };
 
+const findSelectedVariantStock = (product = {}, selectedAttributes = {}) => {
+  const rows = (product.variantPricing || [])
+    .filter((row) => row.attributes && typeof row.attributes === 'object' && Object.keys(row.attributes).length > 0)
+    .sort((left, right) => Object.keys(right.attributes || {}).length - Object.keys(left.attributes || {}).length);
+
+  const selected = Object.fromEntries(
+    Object.entries(selectedAttributes || {})
+      .map(([key, value]) => [`${key || ''}`.trim(), `${value || ''}`.trim()])
+      .filter(([key, value]) => key && value)
+  );
+
+  const match = rows.find((row) => {
+    const attributes = row.attributes || {};
+    return (
+      Object.keys(attributes).length > 0 &&
+      Object.keys(attributes).length === Object.keys(selected).length &&
+      Object.entries(attributes).every(([attribute, value]) => selected[attribute] === `${value || ''}`)
+    );
+  });
+
+  if (!match) return null;
+  const stock = Number(match.stock || 0);
+  return Number.isFinite(stock) ? Math.max(stock, 0) : 0;
+};
+
 function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -124,19 +149,22 @@ function ProductDetail() {
       return { onHand: null, reserved: 0, available: null, isOutOfStock: false, isLowStock: false };
     }
 
-    const onHand = Number(product.inventory?.onHand ?? 0);
+    const variantStock = productType === PRODUCT_TYPES.VARIABLE
+      ? findSelectedVariantStock(product, selectedAttributes)
+      : null;
+    const onHand = variantStock == null ? Number(product.inventory?.onHand ?? 0) : variantStock;
     const reserved = Number(product.inventory?.reserved ?? 0);
     const reorderLevel = Number(product.inventory?.reorderLevel ?? 0);
-    const available = Math.max(onHand - reserved, 0);
+    const available = Math.max(onHand - (variantStock == null ? reserved : 0), 0);
 
     return {
       onHand,
-      reserved,
+      reserved: variantStock == null ? reserved : 0,
       available,
       isOutOfStock: available <= 0,
       isLowStock: available > 0 && available <= reorderLevel,
     };
-  }, [product, productType]);
+  }, [product, productType, selectedAttributes]);
 
   const relatedProducts = useMemo(() => {
     if (!product) return [];
@@ -214,6 +242,11 @@ function ProductDetail() {
       }
     }
   }, [selectedAttributes, product?.imageVariantTags, product?.image, product?.galleryImages]);
+
+  useEffect(() => {
+    if (stockInfo.available == null) return;
+    setQuantity((current) => Math.min(Math.max(1, current), Math.max(1, stockInfo.available)));
+  }, [stockInfo.available]);
 
   if (!product && resolvedProductId !== id) {
     return (
