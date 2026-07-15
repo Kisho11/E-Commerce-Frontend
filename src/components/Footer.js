@@ -68,8 +68,8 @@ function Footer() {
                     <path d="M6.62 10.79a15.06 15.06 0 0 0 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.56 0 1 .45 1 1V20a1 1 0 0 1-1 1C10.85 21 3 13.15 3 3a1 1 0 0 1 1-1h3.5c.55 0 1 .44 1 1 0 1.24.2 2.45.57 3.57.11.35.03.75-.25 1.02l-2.2 2.2Z" />
                   </svg>
                 </span>
-                <a href="tel:01708594024" className="flex-1 text-left text-2xl font-extrabold text-primary no-underline transition hover:text-red-400 hover:no-underline sm:text-3xl">
-                  01708 594024
+                <a href="tel:+447584682048" className="flex-1 text-left text-2xl font-extrabold text-primary no-underline transition hover:text-red-400 hover:no-underline sm:text-3xl">
+                  +44 7584682048
                 </a>
               </div>
 

@@ -1,7 +1,7 @@
 import React from 'react';
 
-const BUSINESS_PHONE = '+12345678900';
-const WHATSAPP_PHONE = '12345678900';
+const BUSINESS_PHONE = '+447584682048';
+const WHATSAPP_PHONE = '447584682048';
 const WHATSAPP_MESSAGE = 'Hi, I need help with a product enquiry.';
 
 function QuickContactActions() {

@@ -39,7 +39,7 @@ function Slider() {
               </h1>
               <p className="mb-6 max-w-xl text-sm leading-7 text-slate-100 sm:mb-8 sm:text-base lg:text-lg">{t('slider.subtitle')}</p>
               <a
-                href="tel:01708594024"
+                href="tel:+447584682048"
                 className="phone-glow mb-5 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-extrabold tracking-[0.04em] text-white shadow-xl sm:mb-6 sm:px-5 sm:py-2.5 sm:text-sm"
               >
                 <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
