@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="300" viewBox="0 0 980 300" role="img" aria-labelledby="title desc">
+  <title id="title">ELM SHELF</title>
+  <desc id="desc">ELM SHELF logo with better quality tagline and elm-shelf.co.uk website address.</desc>
+  <rect width="980" height="300" fill="#ffffff"/>
+
+  <defs>
+    <linearGradient id="shelfFace" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#1f1f1f"/>
+      <stop offset="0.45" stop-color="#4a4a4a"/>
+      <stop offset="1" stop-color="#202020"/>
+    </linearGradient>
+    <linearGradient id="shelfEdge" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#595959"/>
+      <stop offset="1" stop-color="#181818"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#000000" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#softShadow)">
+    <g transform="translate(28 78)">
+      <polygon points="0,0 78,0 78,142 0,128" fill="url(#shelfFace)"/>
+      <polygon points="78,0 94,8 94,132 78,142" fill="url(#shelfEdge)"/>
+      <polygon points="0,0 78,0 94,8 16,8" fill="#3f3f3f"/>
+      <polygon points="0,128 78,142 94,132 16,118" fill="#242424"/>
+      <rect x="10" y="28" width="74" height="6" fill="#676767"/>
+      <rect x="10" y="58" width="74" height="6" fill="#686868"/>
+      <rect x="10" y="88" width="74" height="6" fill="#666666"/>
+      <rect x="10" y="118" width="74" height="6" fill="#5d5d5d"/>
+    </g>
+
+    <g transform="translate(952 78) scale(-1 1)">
+      <polygon points="0,0 78,0 78,142 0,128" fill="url(#shelfFace)"/>
+      <polygon points="78,0 94,8 94,132 78,142" fill="url(#shelfEdge)"/>
+      <polygon points="0,0 78,0 94,8 16,8" fill="#3f3f3f"/>
+      <polygon points="0,128 78,142 94,132 16,118" fill="#242424"/>
+      <rect x="10" y="28" width="74" height="6" fill="#676767"/>
+      <rect x="10" y="58" width="74" height="6" fill="#686868"/>
+      <rect x="10" y="88" width="74" height="6" fill="#666666"/>
+      <rect x="10" y="118" width="74" height="6" fill="#5d5d5d"/>
+    </g>
+  </g>
+
+  <g font-family="Arial Black, Impact, Haettenschweiler, sans-serif" font-weight="900">
+    <text x="150" y="125" fill="#ff0000" font-size="86">ELM</text>
+    <text x="410" y="125" fill="#050505" font-size="86">SHELF</text>
+  </g>
+
+  <line x1="148" y1="156" x2="832" y2="156" stroke="#050505" stroke-width="7" stroke-linecap="square"/>
+
+  <text x="490" y="207" fill="#050505" font-family="Arial Black, Impact, sans-serif" font-size="31" font-weight="900" text-anchor="middle">BETTER QUALITY</text>
+  <text x="490" y="258" fill="#050505" font-family="Arial Black, Impact, sans-serif" font-size="27" font-weight="900" letter-spacing="13" text-anchor="middle">ELM-SHELF.CO.UK</text>
+</svg>

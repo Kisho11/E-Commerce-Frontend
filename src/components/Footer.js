@@ -75,7 +75,7 @@ function Footer() {
 
               <div className="flex justify-center pt-2 lg:justify-end">
                 <img
-                  src="/elms.png"
+                  src="/elms-logo.svg"
                   alt="Elmshelf logo"
                   className="h-16 w-auto max-w-[260px] object-contain sm:h-20 sm:max-w-[320px]"
                 />

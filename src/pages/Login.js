@@ -225,7 +225,7 @@ function Login() {
             <div className="w-full">
               <div className={`${mode === 'staff-signin' ? 'mx-auto max-w-xs' : 'mx-auto max-w-sm'}`}>
                 <img
-                  src="/elms.png"
+                  src="/elms-logo.svg"
                   className="aspect-[1.08/1] w-full object-contain"
                   alt="Elmshelf logo"
                 />
@@ -263,7 +263,7 @@ function Login() {
           <div className="mx-auto w-full max-w-lg">
             <div className="mb-4 md:hidden">
               <div className="mb-3 flex items-center gap-3 text-slate-900">
-                <img src="/elms.png" alt="Elmshelf logo" className="h-12 w-auto max-w-[150px] object-contain" />
+                <img src="/elms-logo.svg" alt="Elmshelf logo" className="h-12 w-auto max-w-[150px] object-contain" />
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Elmshelf</p>
                   <h1 className="text-lg font-bold text-slate-900">Account access</h1>

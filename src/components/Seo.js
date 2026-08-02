@@ -62,7 +62,7 @@ function Seo({
       '@type': 'Organization',
       name: SITE_NAME,
       url: window.location.origin,
-      logo: new URL('/elms.png', window.location.origin).toString(),
+      logo: new URL('/elms-logo.svg', window.location.origin).toString(),
     };
 
     const websiteSchema = {
