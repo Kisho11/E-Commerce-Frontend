@@ -1,7 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import {
+  Elements,
+  CardElement,
+  ExpressCheckoutElement,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from '@stripe/react-stripe-js';
 import { useCart } from '../context/CartContext';
 import { useOrders } from '../context/OrderContext';
 import { useAuth } from '../context/AuthContext';
@@ -18,8 +25,10 @@ const DELIVERY_MODE_LABELS = {
   pickup: 'Pickup from store',
 };
 const CHECKOUT_TAX_RATE = Number(process.env.REACT_APP_CHECKOUT_TAX_RATE ?? '0.2');
+const PAYMENT_CURRENCY = (process.env.REACT_APP_PAYMENT_CURRENCY || 'gbp').toLowerCase();
 const checkoutTaxLabel = `${Math.round(CHECKOUT_TAX_RATE * 100)}%`;
 const getUserStorageKey = (key, userId) => `${key}:${userId || 'guest'}`;
+const getStripeCheckoutStorageKey = (orderId) => `stripeCheckout:${orderId}`;
 
 function readLocalStorage(key, fallback) {
   try {
@@ -114,21 +123,57 @@ function FieldError({ message }) {
     : null;
 }
 
-const CARD_ELEMENT_OPTIONS = {
-  hidePostalCode: true,
-  style: {
-    base: {
-      fontSize: '16px',
-      color: '#374151',
-      fontFamily: 'inherit',
-      '::placeholder': { color: '#9ca3af' },
-    },
-    invalid: { color: '#ef4444', iconColor: '#ef4444' },
+const stripeAppearance = {
+  theme: 'stripe',
+  variables: {
+    colorPrimary: '#991b1b',
+    colorText: '#374151',
+    colorDanger: '#ef4444',
+    borderRadius: '8px',
+    fontFamily: 'inherit',
+  },
+};
+
+const EXPRESS_CHECKOUT_OPTIONS = {
+  buttonHeight: 48,
+  buttonType: {
+    applePay: 'check-out',
+    googlePay: 'checkout',
+    paypal: 'checkout',
+  },
+  layout: {
+    maxColumns: 2,
+    maxRows: 3,
+    overflow: 'auto',
+  },
+  paymentMethodOrder: ['apple_pay', 'google_pay', 'link', 'paypal', 'klarna'],
+  paymentMethods: {
+    applePay: 'auto',
+    googlePay: 'auto',
+    link: 'auto',
+    paypal: 'auto',
+    klarna: 'auto',
+    amazonPay: 'never',
+  },
+};
+
+const PAYMENT_ELEMENT_OPTIONS = {
+  layout: {
+    type: 'accordion',
+    defaultCollapsed: false,
+    radios: 'always',
+    visibleAccordionItemsCount: 6,
+  },
+  paymentMethodOrder: ['card', 'link', 'paypal', 'klarna', 'afterpay_clearpay', 'pay_by_bank'],
+  wallets: {
+    applePay: 'never',
+    googlePay: 'never',
   },
 };
 
 function CheckoutForm() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { getSelectedCartItems, getSelectedTotalPrice, removeFromCart, loadCart } = useCart();
   const { placeOrder, loadOrders } = useOrders();
   const { user, authFetch } = useAuth();
@@ -159,7 +204,9 @@ function CheckoutForm() {
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [shippingErrors, setShippingErrors] = useState(emptyShippingErrors);
-  const [cardComplete, setCardComplete] = useState(false);
+  const [paymentElementReady, setPaymentElementReady] = useState(false);
+  const [expressCheckoutReady, setExpressCheckoutReady] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
 
   const checkoutItems = getSelectedCartItems();
   const subtotal = getSelectedTotalPrice();
@@ -199,6 +246,62 @@ function CheckoutForm() {
     loadSavedAddress();
     return () => { cancelled = true; };
   }, [authFetch, requiresBackendCheckout, user]);
+
+  useEffect(() => {
+    if (!requiresBackendCheckout || !user || !stripe) return;
+
+    const orderId = searchParams.get('order_id');
+    const paymentIntentId = searchParams.get('payment_intent');
+    const redirectStatus = searchParams.get('redirect_status');
+    if (!orderId || !paymentIntentId) return;
+
+    let cancelled = false;
+    const completeRedirectPayment = async () => {
+      setSubmitting(true);
+      setSubmitError('');
+
+      try {
+        if (redirectStatus === 'failed') {
+          await authFetch(`/payments/mark-payment-failed/${orderId}`, { method: 'POST' }).catch(() => {});
+          throw new Error('Payment failed. Please try another payment method.');
+        }
+
+        const storedCheckout = readLocalStorage(getStripeCheckoutStorageKey(orderId), {});
+        const confirmResponse = await authFetch(`/payments/confirm-order/${orderId}`, {
+          method: 'POST',
+        });
+        const confirmedOrderData = await confirmResponse.json().catch(() => null);
+
+        if (!confirmResponse.ok) {
+          const detail = confirmedOrderData?.detail || 'Unable to confirm your payment yet.';
+          if (confirmResponse.status === 409 || /processing/i.test(detail)) {
+            throw new Error('Your payment is still processing. We will confirm the order as soon as Stripe completes it.');
+          }
+          throw new Error(detail);
+        }
+
+        if (cancelled) return;
+        await finalizePaidCheckout(
+          confirmedOrderData,
+          storedCheckout.orderData || confirmedOrderData,
+          storedCheckout.orderPayload || buildOrderPayload()
+        );
+        localStorage.removeItem(getStripeCheckoutStorageKey(orderId));
+        setSearchParams({}, { replace: true });
+      } catch (error) {
+        if (!cancelled) {
+          setSubmitError(error.message || 'Unable to confirm your payment.');
+        }
+      } finally {
+        if (!cancelled) setSubmitting(false);
+      }
+    };
+
+    completeRedirectPayment();
+    return () => { cancelled = true; };
+    // Redirect completion intentionally runs only when Stripe returns these query params.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authFetch, requiresBackendCheckout, searchParams, setSearchParams, stripe, user]);
 
   if (requiresBackendCheckout && !user && checkoutItems.length > 0) return null;
 
@@ -257,7 +360,7 @@ function CheckoutForm() {
     }
   };
 
-  const buildOrderPayload = () => {
+  function buildOrderPayload() {
     const fullName = `${formData.firstName} ${formData.lastName}`.trim();
     return {
       customerId: user?.id ?? null,
@@ -289,10 +392,312 @@ function CheckoutForm() {
         selectedSize: item.selectedSize || null,
       })),
     };
+  }
+
+  function validateReadyForPayment({ showAlert = false } = {}) {
+    const shippingValidation = validateCheckoutShipping(formData);
+    setShippingErrors(shippingValidation.errors);
+    if (!shippingValidation.valid) {
+      const firstError = Object.values(shippingValidation.errors).find(Boolean);
+      const message = firstError || 'Please complete all required checkout fields.';
+      setSubmitError(message);
+      if (showAlert) window.alert(message);
+      return false;
+    }
+
+    if (requiresBackendCheckout && (!user || user.role !== 'user')) {
+      setSubmitError('Please sign in with a customer account before checking out.');
+      navigate('/login?mode=customer-signin');
+      return false;
+    }
+
+    return true;
+  }
+
+  function persistCustomerProfile(orderPayload) {
+    const savedProfile = readLocalStorage(profileStorageKey, {});
+    localStorage.setItem(profileStorageKey, JSON.stringify({
+      ...savedProfile,
+      fullName: orderPayload.customer,
+      email: orderPayload.customerEmail,
+      phone: orderPayload.customerPhone,
+      ...(orderPayload.deliveryMode === 'ship'
+        ? {
+            address: orderPayload.shippingAddress.address,
+            city: orderPayload.shippingAddress.city,
+            state: orderPayload.shippingAddress.state,
+            zipCode: orderPayload.shippingAddress.zipCode,
+          }
+        : {}),
+      updatedAt: new Date().toISOString(),
+    }));
+  }
+
+  function getStripeReturnUrl(orderId) {
+    const returnUrl = new URL(window.location.href);
+    returnUrl.search = '';
+    returnUrl.searchParams.set('order_id', orderId);
+    return returnUrl.toString();
+  }
+
+  function getStripeLineItems() {
+    return checkoutItems.map((item) => ({
+      name: `${item.name} x ${item.quantity}`,
+      amount: Math.round((item.salePrice || item.price) * item.quantity * 100),
+    }));
+  }
+
+  async function createBackendCheckout(orderPayload) {
+    const addressResponse = await authFetch('/users/me/addresses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        full_name: orderPayload.customer,
+        phone: orderPayload.customerPhone || 'N/A',
+        address_line1: orderPayload.deliveryMode === 'pickup'
+          ? 'Pickup from store'
+          : orderPayload.shippingAddress.address,
+        address_line2: null,
+        city: orderPayload.deliveryMode === 'pickup'
+          ? 'Store pickup'
+          : (orderPayload.shippingAddress.city || '-'),
+        state: orderPayload.deliveryMode === 'pickup'
+          ? '-'
+          : (orderPayload.shippingAddress.state || '-'),
+        postal_code: orderPayload.deliveryMode === 'pickup'
+          ? '-'
+          : (orderPayload.shippingAddress.zipCode || '-'),
+        country: 'GB',
+        is_default: false,
+      }),
+    });
+    const addressData = await addressResponse.json().catch(() => null);
+    if (!addressResponse.ok) {
+      throw new Error(addressData?.detail || 'Unable to save your shipping address');
+    }
+
+    const orderResponse = await authFetch('/orders/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        address_id: addressData.id,
+        delivery_mode: orderPayload.deliveryMode,
+        delivery_note: orderPayload.deliveryNote || null,
+        notes: orderPayload.notes,
+        cart_item_ids: checkoutItems.map((item) => item.cartItemId),
+      }),
+    });
+    const orderData = await orderResponse.json().catch(() => null);
+    if (!orderResponse.ok) {
+      throw new Error(orderData?.detail || 'Unable to place your order');
+    }
+
+    const intentResponse = await authFetch(`/payments/create-payment-intent/${orderData.id}`, {
+      method: 'POST',
+    });
+    const intentData = await intentResponse.json().catch(() => null);
+    if (!intentResponse.ok) {
+      throw new Error(intentData?.detail || 'Unable to initialize payment');
+    }
+
+    localStorage.setItem(getStripeCheckoutStorageKey(orderData.id), JSON.stringify({
+      orderData,
+      orderPayload,
+      storedAt: new Date().toISOString(),
+    }));
+
+    return { orderData, intentData };
+  }
+
+  async function finalizePaidCheckout(confirmedOrderData, orderData, orderPayload) {
+    const backendOrderTotal = Number(confirmedOrderData?.total_amount ?? orderData?.total_amount ?? orderPayload.amount);
+    const finalizedOrderPayload = {
+      ...orderPayload,
+      amount: backendOrderTotal,
+      pricing: {
+        ...orderPayload.pricing,
+        total: backendOrderTotal,
+      },
+    };
+    const createdOrder = placeOrder({ ...finalizedOrderPayload, id: confirmedOrderData?.id || orderData?.id });
+    const displayOrder = {
+      ...createdOrder,
+      id: confirmedOrderData?.id || orderData?.id || createdOrder.id,
+      deliveryMode: finalizedOrderPayload.deliveryMode,
+      deliveryNote: finalizedOrderPayload.deliveryNote,
+    };
+
+    persistCustomerProfile(orderPayload);
+    await loadCart().catch(() => {});
+    await loadOrders().catch(() => {});
+    setPlacedOrder(displayOrder);
+    setOrderPlaced(true);
+  }
+
+  async function markBackendCheckoutFailed(orderId, paymentIntentCreated) {
+    if (!orderId) return;
+    if (paymentIntentCreated) {
+      await authFetch(`/payments/mark-payment-failed/${orderId}`, {
+        method: 'POST',
+      }).catch(() => {});
+      return;
+    }
+    await authFetch(`/orders/${orderId}/cancel`, {
+      method: 'PUT',
+    }).catch(() => {});
+  }
+
+  async function confirmStripeCheckout({ expressEvent = null, paymentMethod = 'Stripe' } = {}) {
+    setSubmitError('');
+    if (!validateReadyForPayment({ showAlert: !expressEvent })) {
+      expressEvent?.paymentFailed?.({ reason: 'invalid_shipping_address' });
+      return;
+    }
+
+    if (!stripe || !elements) {
+      const message = 'Payment form is not ready. Please try again.';
+      setSubmitError(message);
+      expressEvent?.paymentFailed?.({ reason: 'fail', message });
+      return;
+    }
+
+    setSubmitting(true);
+    let pendingOrderId = null;
+    let paymentIntentCreated = false;
+    let paymentSucceeded = false;
+
+    try {
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        throw new Error(submitError.message || 'Please complete your payment details.');
+      }
+
+      const orderPayload = {
+        ...buildOrderPayload(),
+        payment: { method: paymentMethod },
+      };
+      const { orderData, intentData } = await createBackendCheckout(orderPayload);
+      pendingOrderId = orderData.id;
+      paymentIntentCreated = true;
+
+      const { error: stripeError, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        clientSecret: intentData.client_secret,
+        confirmParams: {
+          return_url: getStripeReturnUrl(orderData.id),
+          payment_method_data: {
+            billing_details: {
+              name: orderPayload.customer,
+              email: orderPayload.customerEmail,
+              phone: orderPayload.customerPhone,
+              address: {
+                country: 'GB',
+                line1: orderPayload.shippingAddress.address,
+                city: orderPayload.shippingAddress.city || undefined,
+                state: orderPayload.shippingAddress.state || undefined,
+                postal_code: orderPayload.shippingAddress.zipCode || undefined,
+              },
+            },
+          },
+        },
+        redirect: 'if_required',
+      });
+
+      if (stripeError) {
+        throw new Error(stripeError.message || 'Payment failed. Please try another method.');
+      }
+
+      if (!paymentIntent) {
+        return;
+      }
+
+      if (paymentIntent.status === 'processing') {
+        setSubmitError('Your payment is processing. We will confirm the order as soon as Stripe completes it.');
+        return;
+      }
+
+      if (paymentIntent.status !== 'succeeded') {
+        throw new Error('Payment is not complete yet. Please finish authentication or try another method.');
+      }
+
+      paymentSucceeded = true;
+      const confirmResponse = await authFetch(`/payments/confirm-order/${orderData.id}`, {
+        method: 'POST',
+      });
+      const confirmedOrderData = await confirmResponse.json().catch(() => null);
+      if (!confirmResponse.ok) {
+        throw new Error(confirmedOrderData?.detail || 'Unable to confirm your payment');
+      }
+
+      await finalizePaidCheckout(confirmedOrderData, orderData, orderPayload);
+      localStorage.removeItem(getStripeCheckoutStorageKey(orderData.id));
+    } catch (error) {
+      if (!paymentSucceeded) {
+        await markBackendCheckoutFailed(pendingOrderId, paymentIntentCreated);
+      }
+      const message = error.message || 'Unable to place your order';
+      setSubmitError(message);
+      expressEvent?.paymentFailed?.({ reason: 'fail', message });
+      if (message === 'Cart is empty') {
+        window.alert('Your cart is empty. Please add at least one item before placing an order.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleUnifiedSubmit() {
+    if (requiresBackendCheckout) {
+      await confirmStripeCheckout({
+        paymentMethod: selectedPaymentMethod ? `Stripe ${selectedPaymentMethod}` : 'Stripe Payment Element',
+      });
+      return;
+    }
+
+    if (!validateReadyForPayment({ showAlert: true })) return;
+    const orderPayload = buildOrderPayload();
+    const createdOrder = placeOrder(orderPayload);
+    persistCustomerProfile(orderPayload);
+    setPlacedOrder(createdOrder);
+    setOrderPlaced(true);
+    for (const item of checkoutItems) {
+      await removeFromCart(item.lineId);
+    }
+  }
+
+  const handleExpressCheckoutClick = (event) => {
+    setSelectedPaymentMethod(event.expressPaymentType || 'Express Checkout');
+    setSubmitError('');
+    if (!validateReadyForPayment()) {
+      event.reject();
+      return;
+    }
+
+    event.resolve({
+      lineItems: getStripeLineItems(),
+      shippingRates: [{
+        id: 'free-shipping',
+        amount: 0,
+        displayName: 'Free shipping',
+      }],
+    });
   };
+
+  const handleExpressCheckoutConfirm = async (event) => {
+    await confirmStripeCheckout({
+      expressEvent: event,
+      paymentMethod: `Stripe ${event.expressPaymentType || 'Express Checkout'}`,
+    });
+  };
+
+  const cardComplete = true;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (requiresBackendCheckout || !requiresBackendCheckout) {
+      await handleUnifiedSubmit();
+      return;
+    }
     setSubmitError('');
 
     const shippingValidation = validateCheckoutShipping(formData);
@@ -540,7 +945,7 @@ function CheckoutForm() {
     );
   }
 
-  const isSubmitDisabled = submitting || (requiresBackendCheckout && (!stripe || !cardComplete));
+  const isSubmitDisabled = submitting || (requiresBackendCheckout && (!stripe || !elements || !paymentElementReady));
 
   return (
     <div className="container mx-auto px-4 py-8 sm:px-8">
@@ -761,12 +1166,32 @@ function CheckoutForm() {
 
             {requiresBackendCheckout ? (
               <>
-                <label className="block text-gray-700 font-semibold mb-2">Card Details *</label>
-                <div className="rounded-lg border-2 border-gray-300 px-4 py-4 focus-within:border-primary transition-colors">
-                  <CardElement
-                    options={CARD_ELEMENT_OPTIONS}
-                    onChange={(e) => {
-                      setCardComplete(e.complete);
+                <div
+                  className={`mb-5 transition ${expressCheckoutReady ? 'block' : 'hidden'}`}
+                  aria-hidden={!expressCheckoutReady}
+                >
+                  <ExpressCheckoutElement
+                    options={EXPRESS_CHECKOUT_OPTIONS}
+                    onClick={handleExpressCheckoutClick}
+                    onConfirm={handleExpressCheckoutConfirm}
+                    onReady={({ availablePaymentMethods }) => {
+                      setExpressCheckoutReady(Boolean(availablePaymentMethods));
+                    }}
+                  />
+                  <div className="my-5 flex items-center gap-3 text-xs font-semibold uppercase text-gray-400">
+                    <span className="h-px flex-1 bg-gray-200" />
+                    <span>or pay another way</span>
+                    <span className="h-px flex-1 bg-gray-200" />
+                  </div>
+                </div>
+
+                <label className="block text-gray-700 font-semibold mb-3">Choose payment method *</label>
+                <div className="rounded-lg border-2 border-gray-300 p-4 focus-within:border-primary transition-colors">
+                  <PaymentElement
+                    options={PAYMENT_ELEMENT_OPTIONS}
+                    onReady={() => setPaymentElementReady(true)}
+                    onChange={(event) => {
+                      setSelectedPaymentMethod(event?.value?.type || '');
                       if (submitError) setSubmitError('');
                     }}
                   />
@@ -776,7 +1201,7 @@ function CheckoutForm() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
-                  Secured by Stripe. Your card details are never stored on our servers.
+                  Secured by Stripe. Card, wallet, PayPal, Klarna/Clearpay and Pay by Bank details are never stored on our servers.
                 </p>
               </>
             ) : (
@@ -871,8 +1296,19 @@ function CheckoutForm() {
 }
 
 function Checkout() {
+  const { getSelectedTotalPrice } = useCart();
+  const subtotal = getSelectedTotalPrice();
+  const totalWithTax = subtotal + (subtotal * CHECKOUT_TAX_RATE);
+  const stripeAmount = Math.max(50, Math.round(totalWithTax * 100) || 50);
+  const elementsOptions = {
+    mode: 'payment',
+    amount: stripeAmount,
+    currency: PAYMENT_CURRENCY,
+    appearance: stripeAppearance,
+  };
+
   return (
-    <Elements stripe={stripePromise}>
+    <Elements stripe={stripePromise} options={elementsOptions} key={`${PAYMENT_CURRENCY}-${stripeAmount}`}>
       <CheckoutForm />
     </Elements>
   );

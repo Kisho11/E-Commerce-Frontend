@@ -637,7 +637,7 @@ function AdminDashboard() {
                       <tr key={order.id} className="border-b border-gray-200 hover:bg-gray-50">
                         <td className="px-6 py-4 font-bold text-primary">#{order.id}</td>
                         <td className="px-6 py-4">{customerLookup.get(Number(order.customerId || order.userId || 0))?.name || order.customer || 'Unknown Customer'}</td>
-                        <td className="px-6 py-4 font-semibold">${order.amount.toFixed(2)}</td>
+                        <td className="px-6 py-4 font-semibold">£{order.amount.toFixed(2)}</td>
                         <td className="px-6 py-4">
                           <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                             order.status === 'Delivered' ? 'bg-green-100 text-green-800' :
@@ -770,7 +770,7 @@ function AdminDashboard() {
                       </td>
                       <td className="px-6 py-4 font-bold text-primary">#{order.id}</td>
                       <td className="px-6 py-4">{customerLookup.get(Number(order.customerId || order.userId || 0))?.name || order.customer || 'Unknown Customer'}</td>
-                      <td className="px-6 py-4 font-semibold">${order.amount.toFixed(2)}</td>
+                      <td className="px-6 py-4 font-semibold">£{order.amount.toFixed(2)}</td>
                       <td className="px-6 py-4">
                         <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                           order.status === 'Delivered' ? 'bg-green-100 text-green-800' :
@@ -1221,7 +1221,7 @@ function AdminDashboard() {
                             <td className="px-4 py-2 text-sm font-semibold text-primary">#{order.id}</td>
                             <td className="px-4 py-2 text-sm text-gray-600">{order.date}</td>
                             <td className="px-4 py-2 text-sm text-gray-700">{order.status}</td>
-                            <td className="px-4 py-2 text-sm font-semibold text-gray-800">${Number(order.amount || 0).toFixed(2)}</td>
+                            <td className="px-4 py-2 text-sm font-semibold text-gray-800">£{Number(order.amount || 0).toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>
