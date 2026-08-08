@@ -62,6 +62,24 @@ function Footer() {
                 </a>
               </div>
 
+              <div className="flex w-full items-start gap-3">
+                <span className="mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-red-300">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
+                  </svg>
+                </span>
+                <div className="flex-1 text-left">
+                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-400">Opening Hours</p>
+                  <p className="mt-1 text-sm font-semibold leading-relaxed text-white">
+                    Monday-Saturday: 8:00 AM - 7:00 PM
+                  </p>
+                  <p className="text-sm font-semibold leading-relaxed text-slate-300">
+                    Sunday: 9:00 AM - 5:00 PM
+                  </p>
+                </div>
+              </div>
+
               <div className="flex w-full items-center gap-3">
                 <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-red-300">
                   <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
