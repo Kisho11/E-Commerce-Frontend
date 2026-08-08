@@ -3,7 +3,7 @@ import { useProducts } from '../context/ProductContext';
 import UiIcon from '../components/UiIcon';
 
 function CategoryManagement() {
-  const { categories, addCategory, deleteCategory, updateCategory, addSubcategory, updateSubcategory, deleteSubcategory } = useProducts();
+  const { categories, categoriesLoading, addCategory, deleteCategory, updateCategory, addSubcategory, updateSubcategory, deleteSubcategory } = useProducts();
 
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryImage, setNewCategoryImage] = useState('');
@@ -445,7 +445,13 @@ function CategoryManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white">
-                {visibleCategories.length === 0 ? (
+                {categoriesLoading ? (
+                  <tr>
+                    <td colSpan="4" className="px-5 py-10 text-center text-sm text-slate-500">
+                      Loading categories...
+                    </td>
+                  </tr>
+                ) : visibleCategories.length === 0 ? (
                   <tr>
                     <td colSpan="4" className="px-5 py-10 text-center text-sm text-slate-500">
                       {normalizedSearch ? 'No matching categories found.' : 'No categories added yet.'}

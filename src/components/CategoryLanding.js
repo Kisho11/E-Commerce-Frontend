@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ProductCard from './ProductCard';
+import CategoryImageFrame from './CategoryImageFrame';
 import { useLanguage } from '../context/LanguageContext';
 import { useProducts } from '../context/ProductContext';
 import { categoryPath } from '../utils/categoryRoutes';
@@ -9,7 +10,7 @@ const FEATURED_CATEGORY = 'Shop Shelving';
 
 function CategoryLanding({ searchQuery = '', showSearch = false, onSearchChange = null }) {
   const navigate = useNavigate();
-  const { categories, products, productsLoading } = useProducts();
+  const { categories, categoriesLoading, categoriesError, isBackendEnabled, products, productsLoading } = useProducts();
   const { t } = useLanguage();
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
@@ -17,9 +18,9 @@ function CategoryLanding({ searchQuery = '', showSearch = false, onSearchChange 
     () =>
       categories.map((category) => ({
         ...category,
-        image: category.image || products.find((item) => item.categories?.includes(category.name))?.image || '',
+        image: category.image || (!isBackendEnabled ? products.find((item) => item.categories?.includes(category.name))?.image : '') || '',
       })),
-    [categories, products]
+    [categories, isBackendEnabled, products]
   );
 
   const categoryCounts = useMemo(() => {
@@ -95,7 +96,20 @@ function CategoryLanding({ searchQuery = '', showSearch = false, onSearchChange 
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+        {categoriesLoading ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+            {Array.from({ length: 10 }).map((_, index) => (
+              <div key={`category-loading-${index}`} className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+                <CategoryImageFrame loading className="mb-2 h-28 w-full rounded-lg sm:h-32" />
+                <div className="h-4 w-3/4 animate-pulse rounded bg-slate-200" />
+                <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-slate-100" />
+              </div>
+            ))}
+          </div>
+        ) : categoriesError ? (
+          <p className="py-10 text-center text-sm text-red-600">{categoriesError}</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
           {visibleCategories.map((category) => (
             <button
               key={category.name}
@@ -103,11 +117,7 @@ function CategoryLanding({ searchQuery = '', showSearch = false, onSearchChange 
               onClick={() => navigate(categoryPath(category.name))}
               className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:bg-slate-50 sm:p-4"
             >
-              <div className="mb-2 h-28 w-full overflow-hidden rounded-lg bg-slate-100 sm:h-32">
-                {category.image ? (
-                  <img src={category.image} alt={category.name} className="h-full w-full object-cover" />
-                ) : null}
-              </div>
+              <CategoryImageFrame src={category.image} alt={category.name} className="mb-2 h-28 w-full rounded-lg sm:h-32" />
               <div className="flex items-center gap-2">
                 <p className="truncate text-sm font-bold text-slate-900 sm:text-base">{category.name}</p>
                 {(category.subcategories || []).length > 0 && (
@@ -125,9 +135,10 @@ function CategoryLanding({ searchQuery = '', showSearch = false, onSearchChange 
               </p>
             </button>
           ))}
-        </div>
+          </div>
+        )}
 
-        {!productsLoading && visibleCategories.length === 0 && (
+        {!categoriesLoading && !categoriesError && !productsLoading && visibleCategories.length === 0 && (
           <p className="py-10 text-center text-sm text-slate-500">No categories match your search.</p>
         )}
       </div>

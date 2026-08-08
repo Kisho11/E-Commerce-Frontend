@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import CategoryLanding from '../components/CategoryLanding';
+import CategoryImageFrame from '../components/CategoryImageFrame';
 import ProductCard from '../components/ProductCard';
 import Seo from '../components/Seo';
 import { useLanguage } from '../context/LanguageContext';
@@ -11,7 +12,7 @@ function CategoriesPage() {
   const { categorySlug } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { categories, products, fetchProductsPage } = useProducts();
+  const { categories, categoriesLoading, isBackendEnabled, products, fetchProductsPage } = useProducts();
   const { t } = useLanguage();
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
@@ -33,17 +34,18 @@ function CategoriesPage() {
     () =>
       categories.map((category) => ({
         ...category,
-        image: category.image || products.find((item) => item.categories?.includes(category.name))?.image || '',
+        image: category.image || (!isBackendEnabled ? products.find((item) => item.categories?.includes(category.name))?.image : '') || '',
         subcategories: (category.subcategories || []).map((subcategory) => ({
           ...subcategory,
           image:
             subcategory.image ||
-            products.find((item) => item.subcategories?.includes(subcategory.name))?.image ||
-            category.image ||
+            (!isBackendEnabled
+              ? products.find((item) => item.subcategories?.includes(subcategory.name))?.image || category.image
+              : '') ||
             '',
         })),
       })),
-    [categories, products]
+    [categories, isBackendEnabled, products]
   );
 
   const selectedCategoryMeta = useMemo(
@@ -202,11 +204,12 @@ function CategoriesPage() {
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                          {category.image ? (
-                            <img src={category.image} alt={category.name} className="h-full w-full object-cover" />
-                          ) : null}
-                        </div>
+                        <CategoryImageFrame
+                          src={category.image}
+                          alt={category.name}
+                          loading={categoriesLoading}
+                          className="h-10 w-10 shrink-0 rounded-lg"
+                        />
                         <div className="min-w-0 flex-1">
                           <p className={`truncate text-[13px] font-bold ${isActive ? 'text-white' : 'text-slate-900'}`}>
                             {category.name}
@@ -254,11 +257,12 @@ function CategoriesPage() {
                     }`}
                   >
                     <div className="h-20 bg-slate-100">
-                      {selectedCategoryMeta.image ? (
-                        <img src={selectedCategoryMeta.image} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-xs text-slate-500">No image</div>
-                      )}
+                      <CategoryImageFrame
+                        src={selectedCategoryMeta.image}
+                        alt=""
+                        loading={categoriesLoading}
+                        className="h-full w-full"
+                      />
                     </div>
                     <p className={`p-2 text-xs font-bold sm:text-sm ${!selectedSubcategory ? 'text-primary' : 'text-slate-800'}`}>
                       All {selectedCategory.name}
@@ -276,11 +280,12 @@ function CategoriesPage() {
                       }`}
                     >
                       <div className="h-20 bg-slate-100">
-                        {subcategory.image ? (
-                          <img src={subcategory.image} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-xs text-slate-500">No image</div>
-                        )}
+                        <CategoryImageFrame
+                          src={subcategory.image}
+                          alt=""
+                          loading={categoriesLoading}
+                          className="h-full w-full"
+                        />
                       </div>
                       <p className={`truncate p-2 text-xs font-bold sm:text-sm ${
                         selectedSubcategory === subcategory.name ? 'text-primary' : 'text-slate-800'

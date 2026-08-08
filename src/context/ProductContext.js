@@ -4,6 +4,7 @@ import { sortCategoriesByPreferredOrder } from '../utils/categoryOrder';
 
 const ProductContext = createContext();
 const API_BASE_URL = process.env.REACT_APP_API_URL;
+const IS_BACKEND_ENABLED = Boolean(API_BASE_URL);
 const API_ORIGIN = API_BASE_URL ? new URL(API_BASE_URL).origin : '';
 const AUTH_EXPIRED_EVENT = 'app:auth-expired';
 const VARIANT_OPTION_META_KEY = '__option';
@@ -151,7 +152,7 @@ const mapCategoryFromApi = (category = {}) => ({
     ? category.children.map((child) => ({
         id: child.id,
         name: child.name || '',
-        image: resolveMediaUrl(child.image_url || category.image_url || ''),
+        image: resolveMediaUrl(child.image_url || ''),
       }))
     : [],
 });
@@ -450,22 +451,33 @@ const getLocalFallbackProducts = () =>
 
 export function ProductProvider({ children }) {
   const [products, setProducts] = useState(() => (API_BASE_URL ? [] : getLocalFallbackProducts()));
-  const [categories, setCategories] = useState(() => sortCategoriesByPreferredOrder(initialCategories));
+  const [categories, setCategories] = useState(() => (API_BASE_URL ? [] : sortCategoriesByPreferredOrder(initialCategories)));
+  const [categoriesLoading, setCategoriesLoading] = useState(IS_BACKEND_ENABLED);
+  const [categoriesError, setCategoriesError] = useState('');
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState('');
 
   const refreshCategoriesFromApi = useCallback(async () => {
     if (!API_BASE_URL) return null;
 
-    const response = await performRequest(`${API_BASE_URL}/categories/`, {}, 'Unable to load categories');
-    if (!response.ok) {
-      throw new Error('Failed to load categories');
-    }
+    setCategoriesLoading(true);
+    setCategoriesError('');
+    try {
+      const response = await performRequest(`${API_BASE_URL}/categories/`, {}, 'Unable to load categories');
+      if (!response.ok) {
+        throw new Error('Failed to load categories');
+      }
 
-    const data = await response.json();
-    const normalized = sortCategoriesByPreferredOrder(Array.isArray(data) ? data.map(mapCategoryFromApi) : []);
-    setCategories(normalized);
-    return normalized;
+      const data = await response.json();
+      const normalized = sortCategoriesByPreferredOrder(Array.isArray(data) ? data.map(mapCategoryFromApi) : []);
+      setCategories(normalized);
+      return normalized;
+    } catch (error) {
+      setCategoriesError(error.message || 'Unable to load categories');
+      throw error;
+    } finally {
+      setCategoriesLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -474,6 +486,8 @@ export function ProductProvider({ children }) {
     let isMounted = true;
 
     const loadCategories = async () => {
+      setCategoriesLoading(true);
+      setCategoriesError('');
       try {
         const response = await performRequest(`${API_BASE_URL}/categories/`, {}, 'Unable to load categories');
         if (!response.ok) {
@@ -485,6 +499,14 @@ export function ProductProvider({ children }) {
         setCategories(sortCategoriesByPreferredOrder(Array.isArray(data) ? data.map(mapCategoryFromApi) : []));
       } catch (error) {
         console.error('Unable to load backend categories:', error);
+        if (isMounted) {
+          setCategories([]);
+          setCategoriesError(error.message || 'Unable to load categories');
+        }
+      } finally {
+        if (isMounted) {
+          setCategoriesLoading(false);
+        }
       }
     };
 
@@ -1443,6 +1465,9 @@ export function ProductProvider({ children }) {
       productsLoading,
       productsError,
       categories,
+      categoriesLoading,
+      categoriesError,
+      isBackendEnabled: IS_BACKEND_ENABLED,
       categoryNames,
       fetchProductsPage,
       loadAllProducts,
@@ -1466,6 +1491,8 @@ export function ProductProvider({ children }) {
       productsLoading,
       productsError,
       categories,
+      categoriesLoading,
+      categoriesError,
       categoryNames,
       fetchProductsPage,
       loadAllProducts,
