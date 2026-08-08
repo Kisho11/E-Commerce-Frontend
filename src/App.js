@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
 import { ProductProvider } from './context/ProductContext';
@@ -14,6 +14,7 @@ import CookieConsentBanner from './components/CookieConsentBanner';
 import AdvertPopup from './components/AdvertPopup';
 import QuickContactActions from './components/QuickContactActions';
 import ScrollToTop from './components/ScrollToTop';
+import { recordSiteVisit } from './utils/analytics';
 
 const Home = lazy(() => import('./pages/Home'));
 const About = lazy(() => import('./pages/About'));
@@ -52,6 +53,19 @@ function CustomerLayout() {
   );
 }
 
+function AnalyticsTracker() {
+  const location = useLocation();
+
+  React.useEffect(() => {
+    const path = `${location.pathname}${location.search || ''}`;
+    if (path.startsWith('/admin') || path.startsWith('/manager')) return;
+
+    recordSiteVisit(path);
+  }, [location.pathname, location.search]);
+
+  return null;
+}
+
 function App() {
   return (
     <LanguageProvider>
@@ -61,6 +75,7 @@ function App() {
             <CartProvider>
               <Router>
                 <ScrollToTop />
+                <AnalyticsTracker />
                 <Suspense fallback={null}>
                   <Routes>
                     <Route path="/login" element={<Login />} />

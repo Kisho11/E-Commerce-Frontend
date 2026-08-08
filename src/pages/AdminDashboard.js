@@ -66,6 +66,9 @@ function AdminDashboard() {
   const [salesReportPeriod, setSalesReportPeriod] = useState('month');
   const [salesReport, setSalesReport] = useState(null);
   const [topCategoriesReport, setTopCategoriesReport] = useState([]);
+  const [mostViewedProductsReport, setMostViewedProductsReport] = useState([]);
+  const [bestSellingProductsReport, setBestSellingProductsReport] = useState([]);
+  const [visitorReport, setVisitorReport] = useState(null);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState('');
 
@@ -267,12 +270,24 @@ function AdminDashboard() {
       setReportsError('');
 
       try {
-        const [salesResponse, categoriesResponse] = await Promise.all([
+        const [
+          salesResponse,
+          categoriesResponse,
+          mostViewedResponse,
+          bestSellingResponse,
+          visitorsResponse,
+        ] = await Promise.all([
           authFetch(`/admin/reports/sales?period=${encodeURIComponent(salesReportPeriod)}`),
           authFetch('/admin/reports/top-categories?limit=5'),
+          authFetch('/admin/reports/most-viewed-products?limit=10'),
+          authFetch('/admin/reports/best-selling-products?limit=10'),
+          authFetch('/admin/reports/visitors'),
         ]);
         const salesData = await salesResponse.json().catch(() => null);
         const categoriesData = await categoriesResponse.json().catch(() => []);
+        const mostViewedData = await mostViewedResponse.json().catch(() => []);
+        const bestSellingData = await bestSellingResponse.json().catch(() => []);
+        const visitorsData = await visitorsResponse.json().catch(() => null);
 
         if (!salesResponse.ok) {
           throw new Error(salesData?.detail || 'Unable to load sales report.');
@@ -280,15 +295,30 @@ function AdminDashboard() {
         if (!categoriesResponse.ok) {
           throw new Error(categoriesData?.detail || 'Unable to load category report.');
         }
+        if (!mostViewedResponse.ok) {
+          throw new Error(mostViewedData?.detail || 'Unable to load most viewed products.');
+        }
+        if (!bestSellingResponse.ok) {
+          throw new Error(bestSellingData?.detail || 'Unable to load best selling products.');
+        }
+        if (!visitorsResponse.ok) {
+          throw new Error(visitorsData?.detail || 'Unable to load visitor statistics.');
+        }
 
         if (!cancelled) {
           setSalesReport(salesData || null);
           setTopCategoriesReport(Array.isArray(categoriesData) ? categoriesData : []);
+          setMostViewedProductsReport(Array.isArray(mostViewedData) ? mostViewedData : []);
+          setBestSellingProductsReport(Array.isArray(bestSellingData) ? bestSellingData : []);
+          setVisitorReport(visitorsData || null);
         }
       } catch (error) {
         if (!cancelled) {
           setSalesReport(null);
           setTopCategoriesReport([]);
+          setMostViewedProductsReport([]);
+          setBestSellingProductsReport([]);
+          setVisitorReport(null);
           setReportsError(error.message || 'Unable to load reports.');
         }
       } finally {
@@ -355,6 +385,8 @@ function AdminDashboard() {
     lowStockProducts: dashboardStats?.low_stock_count ?? 0,
   };
   const maxCategoryUnits = Math.max(...topCategoriesReport.map((category) => Number(category.units_sold || 0)), 1);
+  const maxProductViews = Math.max(...mostViewedProductsReport.map((product) => Number(product.total_views || 0)), 1);
+  const maxProductUnitsSold = Math.max(...bestSellingProductsReport.map((product) => Number(product.units_sold || 0)), 1);
 
   const handleLogout = () => {
     if (!window.confirm('Are you sure you want to logout?')) return;
@@ -950,7 +982,6 @@ function AdminDashboard() {
               >
                 <option value="week">Last 7 days</option>
                 <option value="month">Last 30 days</option>
-                <option value="year">Last 365 days</option>
               </select>
             </div>
 
@@ -963,7 +994,7 @@ function AdminDashboard() {
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div className="border-2 border-gray-200 rounded-lg p-6">
                 <h4 className="font-bold text-lg text-gray-800 mb-4">
-                  Sales {salesReportPeriod === 'week' ? 'This Week' : salesReportPeriod === 'year' ? 'This Year' : 'This Month'}
+                  Sales {salesReportPeriod === 'week' ? 'This Week' : 'This Month'}
                 </h4>
                 <div className="space-y-3">
                   <div className="flex justify-between">
@@ -1020,6 +1051,119 @@ function AdminDashboard() {
                     <p className="text-sm text-gray-500">No category sales found for this report.</p>
                   )}
                 </div>
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+              <div className="border-2 border-gray-200 rounded-lg p-6">
+                <h4 className="font-bold text-lg text-gray-800 mb-4">Top 10 Most Viewed Products</h4>
+                <div className="space-y-3">
+                  {reportsLoading ? (
+                    <p className="text-sm text-gray-500">Loading product views...</p>
+                  ) : mostViewedProductsReport.length > 0 ? (
+                    mostViewedProductsReport.map((product, index) => {
+                      const totalViews = Number(product.total_views || 0);
+                      const width = Math.max(8, Math.round((totalViews / maxProductViews) * 100));
+
+                      return (
+                        <div key={product.product_id} className="space-y-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-gray-600">
+                              <span className="mr-2 font-bold text-primary">#{index + 1}</span>
+                              {product.product_name}
+                            </span>
+                            <span className="shrink-0 text-xs font-semibold text-gray-500">
+                              {totalViews.toLocaleString()} views
+                            </span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-gray-200">
+                            <div className="h-2 rounded-full bg-blue-600" style={{ width: `${width}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-gray-500">No product views have been recorded yet.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-2 border-gray-200 rounded-lg p-6">
+                <h4 className="font-bold text-lg text-gray-800 mb-4">Top 10 Best Selling Products</h4>
+                <div className="space-y-3">
+                  {reportsLoading ? (
+                    <p className="text-sm text-gray-500">Loading best sellers...</p>
+                  ) : bestSellingProductsReport.length > 0 ? (
+                    bestSellingProductsReport.map((product, index) => {
+                      const unitsSold = Number(product.units_sold || 0);
+                      const width = Math.max(8, Math.round((unitsSold / maxProductUnitsSold) * 100));
+
+                      return (
+                        <div key={product.product_id} className="space-y-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="text-gray-600">
+                              <span className="mr-2 font-bold text-primary">#{index + 1}</span>
+                              {product.product_name}
+                            </span>
+                            <span className="shrink-0 text-xs font-semibold text-gray-500">
+                              {unitsSold.toLocaleString()} units | £{Number(product.revenue || 0).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-gray-200">
+                            <div className="h-2 rounded-full bg-green-600" style={{ width: `${width}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-gray-500">No paid product sales have been recorded yet.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 border-2 border-gray-200 rounded-lg p-6">
+              <h4 className="font-bold text-lg text-gray-800 mb-4">Website Visitors</h4>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {['last_7_days', 'last_30_days'].map((periodKey) => {
+                  const statsForPeriod = visitorReport?.[periodKey] || {};
+                  const label = periodKey === 'last_7_days' ? 'Last 7 Days' : 'Last 30 Days';
+
+                  return (
+                    <div key={periodKey} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                      <h5 className="mb-3 font-bold text-gray-800">{label}</h5>
+                      {reportsLoading ? (
+                        <p className="text-sm text-gray-500">Loading visitors...</p>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Unique Visitors</span>
+                            <span className="font-bold text-primary">
+                              {Number(statsForPeriod.unique_visitors || 0).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Sessions</span>
+                            <span className="font-bold text-primary">
+                              {Number(statsForPeriod.unique_sessions || 0).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Total Visits</span>
+                            <span className="font-bold text-accent">
+                              {Number(statsForPeriod.total_visits || 0).toLocaleString()}
+                            </span>
+                          </div>
+                          {statsForPeriod.start_date ? (
+                            <p className="pt-2 text-xs text-gray-500">
+                              From {formatDisplayDate(statsForPeriod.start_date)}
+                            </p>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

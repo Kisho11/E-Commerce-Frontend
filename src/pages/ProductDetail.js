@@ -8,6 +8,7 @@ import ProductCard from '../components/ProductCard';
 import Seo from '../components/Seo';
 import { getProductPriceDisplay, PRODUCT_TYPES, resolveProductType } from '../utils/productType';
 import { categoryPath } from '../utils/categoryRoutes';
+import { recordProductView } from '../utils/analytics';
 
 const uiConfig = {
   rating: 4,
@@ -247,6 +248,11 @@ function ProductDetail() {
     if (stockInfo.available == null) return;
     setQuantity((current) => Math.min(Math.max(1, current), Math.max(1, stockInfo.available)));
   }, [stockInfo.available]);
+
+  useEffect(() => {
+    if (!product?.id) return;
+    recordProductView(product.id);
+  }, [product?.id]);
 
   if (!product && resolvedProductId !== id) {
     return (
