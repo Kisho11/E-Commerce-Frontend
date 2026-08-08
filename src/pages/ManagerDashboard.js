@@ -30,6 +30,8 @@ function ManagerDashboard() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [selectedOrderStatus, setSelectedOrderStatus] = useState('');
+  const [orderSortBy, setOrderSortBy] = useState('date');
+  const [orderSortDir, setOrderSortDir] = useState('desc');
   const [orderActionMessage, setOrderActionMessage] = useState('');
   const [orderActionError, setOrderActionError] = useState('');
   const [isUpdatingOrder, setIsUpdatingOrder] = useState(false);
@@ -67,9 +69,36 @@ function ManagerDashboard() {
     loadTasks();
   }, [loadTasks]);
 
-  const recentOrders = [...orders].sort(
-    (a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)
-  );
+  const getOrderCustomerName = useCallback((order) => (
+    order.customer ||
+    [order.customerFirstName, order.customerLastName].filter(Boolean).join(' ') ||
+    order.customerEmail ||
+    'Unknown Customer'
+  ), []);
+
+  const sortedOrders = useMemo(() => {
+    const getDateValue = (order) => {
+      const parsed = new Date(order.createdAt || order.date);
+      return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+    };
+
+    return [...orders].sort((left, right) => {
+      let result = 0;
+      if (orderSortBy === 'id') {
+        result = (Number(left.id) || 0) - (Number(right.id) || 0);
+      } else if (orderSortBy === 'customer') {
+        result = getOrderCustomerName(left).localeCompare(getOrderCustomerName(right));
+      } else if (orderSortBy === 'amount') {
+        result = (Number(left.amount) || 0) - (Number(right.amount) || 0);
+      } else if (orderSortBy === 'status') {
+        result = String(left.status || '').localeCompare(String(right.status || ''));
+      } else {
+        result = getDateValue(left) - getDateValue(right);
+      }
+
+      return orderSortDir === 'asc' ? result : -result;
+    });
+  }, [getOrderCustomerName, orderSortBy, orderSortDir, orders]);
 
   const filteredInventory = useMemo(() => {
     return products
@@ -129,9 +158,30 @@ function ManagerDashboard() {
     navigate('/');
   };
 
-  const selectedOrderForAction = recentOrders.find((order) => Number(order.id) === Number(selectedOrderId));
+  const selectedOrderForAction = orders.find((order) => Number(order.id) === Number(selectedOrderId));
   const selectedOrderForActionId = selectedOrderForAction?.id;
   const selectedOrderForActionStatus = selectedOrderForAction?.status || '';
+
+  const handleOrderSort = (column) => {
+    if (orderSortBy === column) {
+      setOrderSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setOrderSortBy(column);
+    setOrderSortDir('asc');
+  };
+
+  const renderOrderSortArrow = (column) => {
+    if (orderSortBy !== column) {
+      return <span className="text-base font-black leading-none text-gray-400">↕</span>;
+    }
+
+    return (
+      <span className="text-lg font-black leading-none text-primary">
+        {orderSortDir === 'asc' ? '↑' : '↓'}
+      </span>
+    );
+  };
 
   useEffect(() => {
     if (!selectedOrderForActionId) {
@@ -337,17 +387,17 @@ function ManagerDashboard() {
 
         {activeTab === 'orders' && (
           <div className="bg-white rounded-xl shadow-md p-6">
-            <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-center lg:justify-between">
-              <h3 className="flex items-center gap-2 text-2xl font-bold text-blue-700">
+            <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <h3 className="flex items-center gap-2 text-2xl font-bold text-primary">
                 <UiIcon name="list" className="h-6 w-6" />
-                Order Management
+                All Orders
               </h3>
               <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={selectedOrderStatus}
                   onChange={(event) => setSelectedOrderStatus(event.target.value)}
                   disabled={!selectedOrderForAction || isUpdatingOrder}
-                  className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                  className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 outline-none transition focus:border-primary focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                   aria-label="Choose order status"
                 >
                   <option value="" disabled>Choose status</option>
@@ -366,7 +416,7 @@ function ManagerDashboard() {
                     isUpdatingOrder ||
                     selectedOrderStatus === selectedOrderForAction.status
                   }
-                  className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition disabled:cursor-not-allowed disabled:bg-gray-300"
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
                   <UiIcon name="save" className="h-4 w-4" />
                   Apply Status
@@ -387,21 +437,41 @@ function ManagerDashboard() {
                     <th className="w-12 px-3 py-3 text-left">
                       <span className="sr-only">Select order</span>
                     </th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-700">Order ID</th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-700">Customer</th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-700">Amount</th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-700">Date</th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-700" aria-sort={orderSortBy === 'id' ? (orderSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => handleOrderSort('id')} className="inline-flex items-center gap-2 hover:text-primary">
+                        Order ID {renderOrderSortArrow('id')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-700" aria-sort={orderSortBy === 'customer' ? (orderSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => handleOrderSort('customer')} className="inline-flex items-center gap-2 hover:text-primary">
+                        Customer {renderOrderSortArrow('customer')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-700" aria-sort={orderSortBy === 'amount' ? (orderSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => handleOrderSort('amount')} className="inline-flex items-center gap-2 hover:text-primary">
+                        Amount {renderOrderSortArrow('amount')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-700" aria-sort={orderSortBy === 'status' ? (orderSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => handleOrderSort('status')} className="inline-flex items-center gap-2 hover:text-primary">
+                        Status {renderOrderSortArrow('status')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-700" aria-sort={orderSortBy === 'date' ? (orderSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => handleOrderSort('date')} className="inline-flex items-center gap-2 hover:text-primary">
+                        Date {renderOrderSortArrow('date')}
+                      </button>
+                    </th>
                     <th className="px-6 py-3 text-left font-semibold text-gray-700">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {recentOrders.map((order) => (
-                    <tr key={order.id} className={`border-b border-gray-200 hover:bg-gray-50 ${Number(selectedOrderId) === Number(order.id) ? 'bg-blue-50' : ''}`}>
+                  {sortedOrders.map((order) => (
+                    <tr key={order.id} className={`border-b border-gray-200 hover:bg-gray-50 ${Number(selectedOrderId) === Number(order.id) ? 'bg-red-50' : ''}`}>
                       <td className="px-3 py-4">
                         <input
                           type="radio"
-                          name="selected-order"
+                          name="manager-selected-order"
                           checked={Number(selectedOrderId) === Number(order.id)}
                           onChange={() => {
                             setSelectedOrderId(order.id);
@@ -410,11 +480,11 @@ function ManagerDashboard() {
                             setOrderActionError('');
                           }}
                           aria-label={`Select order ${order.id}`}
-                          className="h-4 w-4 cursor-pointer accent-blue-600"
+                          className="h-4 w-4 cursor-pointer accent-primary"
                         />
                       </td>
-                      <td className="px-6 py-4 font-bold text-blue-700">#{order.id}</td>
-                      <td className="px-6 py-4">{order.customer}</td>
+                      <td className="px-6 py-4 font-bold text-primary">#{order.id}</td>
+                      <td className="px-6 py-4">{getOrderCustomerName(order)}</td>
                       <td className="px-6 py-4 font-semibold">£{order.amount.toFixed(2)}</td>
                       <td className="px-6 py-4">
                         <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
@@ -432,7 +502,7 @@ function ManagerDashboard() {
                           onClick={() => setSelectedOrder(order)}
                           className="text-blue-600 hover:text-blue-800 font-semibold"
                         >
-                          Details
+                          View
                         </button>
                       </td>
                     </tr>
