@@ -269,10 +269,16 @@ a {
   }
 
   .order-print-panel {
+    height: auto !important;
     max-width: none !important;
+    overflow: visible !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     padding: 0 !important;
+  }
+
+  .order-print-content {
+    overflow: visible !important;
   }
 
   .no-print {

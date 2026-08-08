@@ -4,6 +4,8 @@ import { useOrders } from '../context/OrderContext';
 import { useAuth } from '../context/AuthContext';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import Seo from '../components/Seo';
+import UiIcon from '../components/UiIcon';
+import { downloadInvoicePdf } from '../utils/invoicePdf';
 
 const PROFILE_KEY = 'customerProfile';
 const PAYMENT_KEY = 'customerPaymentMethods';
@@ -233,6 +235,22 @@ function CustomerPortal() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const isEditing = useMemo(() => editingId !== null, [editingId]);
+
+  const openOrderDetails = (order) => {
+    setSelectedOrder(order);
+  };
+
+  const downloadOrderInvoice = async (order) => {
+    try {
+      await downloadInvoicePdf(order);
+    } catch (error) {
+      window.alert(error.message || 'Unable to download invoice. Please try again.');
+    }
+  };
+
+  const closeOrderDetails = () => {
+    setSelectedOrder(null);
+  };
 
   useEffect(() => {
     const stored = readLocalStorage(profileStorageKey, {});
@@ -491,7 +509,7 @@ function CustomerPortal() {
       <Seo title="My Account" description="Manage your Elmshelf account, orders, and preferences." noindex />
 
       {selectedOrder && (
-        <OrderDetailsModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
+        <OrderDetailsModal order={selectedOrder} onClose={closeOrderDetails} />
       )}
 
       <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
@@ -538,12 +556,24 @@ function CustomerPortal() {
                       </span>
                     </td>
                     <td className="py-3 text-right">
-                      <button
-                        onClick={() => setSelectedOrder(order)}
-                        className="text-xs font-semibold text-blue-700 hover:underline"
-                      >
-                        View
-                      </button>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openOrderDetails(order)}
+                          className="text-xs font-semibold text-blue-700 hover:underline"
+                        >
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => downloadOrderInvoice(order)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-primary transition hover:border-primary hover:bg-red-50"
+                          aria-label={`Download invoice for order ${order.id}`}
+                          title="Download invoice"
+                        >
+                          <UiIcon name="download" className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -223,6 +223,13 @@ const iconPaths = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
     </>
   ),
+  download: (
+    <>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v10" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m8 10 4 4 4-4" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 20h14" />
+    </>
+  ),
   warehouse: (
     <>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 9.5 12 4l9 5.5V20H3V9.5Z" />
