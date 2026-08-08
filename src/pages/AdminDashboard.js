@@ -928,9 +928,12 @@ function AdminDashboard() {
               <div className="space-y-5">
                 <div>
                   <h4 className="text-lg font-bold text-gray-800">Promotional Banner</h4>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Upload a PNG or JPEG banner for the customer offer popup.
-                  </p>
+                  <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                    <p className="font-semibold">Upload requirements</p>
+                    <p>Recommended size: 1200 x 600 px</p>
+                    <p>Aspect ratio: 2:1</p>
+                    <p>Accepted formats: PNG or JPEG</p>
+                  </div>
                 </div>
 
                 <label className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
