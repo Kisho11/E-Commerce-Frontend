@@ -39,8 +39,11 @@ const formatTime = (date) => {
 const normalizeOrder = (order) => {
   const amount = Number(order.amount || order.pricing?.total || 0);
   const subtotal = Number(order.pricing?.subtotal ?? amount / 1.2);
+  const discountPercentage = Number(order.pricing?.discountPercentage ?? 0);
+  const discountAmount = Number(order.pricing?.discountAmount ?? 0);
+  const discountedSubtotal = Number(order.pricing?.discountedSubtotal ?? Math.max(subtotal - discountAmount, 0));
   const taxRate = Number(order.pricing?.taxRate ?? 0.2);
-  const taxAmount = Number(order.pricing?.taxAmount ?? subtotal * taxRate);
+  const taxAmount = Number(order.pricing?.taxAmount ?? discountedSubtotal * taxRate);
   const shippingFee = Number(order.pricing?.shippingFee ?? 0);
   const createdAt = order.createdAt || new Date(`${order.date || formatDate(new Date())}T12:00:00`).toISOString();
   const createdDate = new Date(createdAt);
@@ -63,6 +66,9 @@ const normalizeOrder = (order) => {
     amount,
     pricing: {
       subtotal,
+      discountPercentage,
+      discountAmount,
+      discountedSubtotal,
       taxRate,
       taxAmount,
       shippingFee,
@@ -107,10 +113,16 @@ const mapOrderFromApi = (order = {}) => {
     },
     amount: Number(order.total_amount || 0),
     pricing: {
-      subtotal: Number(order.total_amount || 0),
-      taxRate: 0,
-      taxAmount: 0,
-      shippingFee: 0,
+      subtotal: Number(order.subtotal_amount ?? order.total_amount ?? 0),
+      discountPercentage: Number(order.discount_percentage || 0),
+      discountAmount: Number(order.discount_amount || 0),
+      discountedSubtotal: Math.max(
+        Number(order.subtotal_amount ?? order.total_amount ?? 0) - Number(order.discount_amount || 0),
+        0
+      ),
+      taxRate: Number(order.tax_rate || 0),
+      taxAmount: Number(order.tax_amount || 0),
+      shippingFee: Number(order.shipping_fee || 0),
       total: Number(order.total_amount || 0),
     },
     payment: {

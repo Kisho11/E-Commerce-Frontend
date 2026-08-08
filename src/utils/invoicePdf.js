@@ -81,6 +81,9 @@ export async function downloadInvoicePdf(order) {
   const margin = 14;
   const pricing = order.pricing || {};
   const subtotal = pricing.subtotal ?? order.amount;
+  const discountPercentage = Number(pricing.discountPercentage || 0);
+  const discountAmount = Number(pricing.discountAmount || 0);
+  const discountedSubtotal = Number(pricing.discountedSubtotal ?? Math.max(Number(subtotal || 0) - discountAmount, 0));
   const taxRate = `${((Number(pricing.taxRate) || 0) * 100).toFixed(2)}%`;
   const deliveryNote = getDeliveryNote(order);
 
@@ -187,12 +190,19 @@ export async function downloadInvoicePdf(order) {
   const totalsX = pageWidth - margin - 68;
   const totalRows = [
     ['Subtotal', money(subtotal)],
+    ...(discountAmount > 0
+      ? [
+          [`Global Discount (${discountPercentage.toFixed(2)}%)`, `-${money(discountAmount)}`],
+          ['Discounted Subtotal', money(discountedSubtotal)],
+        ]
+      : []),
     [`Tax (${taxRate})`, money(pricing.taxAmount)],
     ['Shipping', money(pricing.shippingFee)],
   ];
+  const totalsBoxHeight = 18 + totalRows.length * 7;
 
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(totalsX, afterTableY - 4, 68, 38, 2, 2);
+  doc.roundedRect(totalsX, afterTableY - 4, 68, totalsBoxHeight, 2, 2);
   doc.setFontSize(9);
   totalRows.forEach(([label, value], index) => {
     const y = afterTableY + index * 7;
@@ -205,11 +215,12 @@ export async function downloadInvoicePdf(order) {
   });
 
   doc.setDrawColor(203, 213, 225);
-  doc.line(totalsX + 4, afterTableY + 20, pageWidth - margin - 4, afterTableY + 20);
+  const totalDividerY = afterTableY + totalRows.length * 7;
+  doc.line(totalsX + 4, totalDividerY, pageWidth - margin - 4, totalDividerY);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('Total', totalsX + 4, afterTableY + 29);
-  doc.text(money(order.amount), pageWidth - margin - 4, afterTableY + 29, { align: 'right' });
+  doc.text('Total', totalsX + 4, totalDividerY + 9);
+  doc.text(money(order.amount), pageWidth - margin - 4, totalDividerY + 9, { align: 'right' });
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);

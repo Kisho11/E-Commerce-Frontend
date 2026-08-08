@@ -26,9 +26,16 @@ const DELIVERY_MODE_LABELS = {
 };
 const CHECKOUT_TAX_RATE = Number(process.env.REACT_APP_CHECKOUT_TAX_RATE ?? '0.2');
 const PAYMENT_CURRENCY = (process.env.REACT_APP_PAYMENT_CURRENCY || 'gbp').toLowerCase();
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 const checkoutTaxLabel = `${Math.round(CHECKOUT_TAX_RATE * 100)}%`;
 const getUserStorageKey = (key, userId) => `${key}:${userId || 'guest'}`;
 const getStripeCheckoutStorageKey = (orderId) => `stripeCheckout:${orderId}`;
+
+const normalizeDiscountPercentage = (value) => {
+  const percentage = Number(value || 0);
+  if (!Number.isFinite(percentage)) return 0;
+  return Math.min(Math.max(percentage, 0), 100);
+};
 
 function readLocalStorage(key, fallback) {
   try {
@@ -171,7 +178,7 @@ const PAYMENT_ELEMENT_OPTIONS = {
   },
 };
 
-function CheckoutForm() {
+function CheckoutForm({ globalDiscountPercentage = 0 }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { getSelectedCartItems, getSelectedTotalPrice, removeFromCart, loadCart } = useCart();
@@ -210,11 +217,15 @@ function CheckoutForm() {
 
   const checkoutItems = getSelectedCartItems();
   const subtotal = getSelectedTotalPrice();
+  const discountPercentage = normalizeDiscountPercentage(globalDiscountPercentage);
+  const discountRate = discountPercentage / 100;
+  const discountAmount = subtotal * discountRate;
+  const discountedSubtotal = Math.max(subtotal - discountAmount, 0);
   const taxRate = CHECKOUT_TAX_RATE;
-  const taxAmount = subtotal * taxRate;
+  const taxAmount = discountedSubtotal * taxRate;
   const shippingFee = 0;
-  const totalWithTax = subtotal + taxAmount + shippingFee;
-  const requiresBackendCheckout = Boolean(process.env.REACT_APP_API_URL);
+  const totalWithTax = discountedSubtotal + taxAmount + shippingFee;
+  const requiresBackendCheckout = Boolean(API_BASE_URL);
 
   useEffect(() => {
     if (requiresBackendCheckout && !user && checkoutItems.length > 0) {
@@ -379,7 +390,16 @@ function CheckoutForm() {
       deliveryNote: formData.deliveryNote.trim(),
       notes: buildOrderNotes(formData.deliveryMode, formData.deliveryNote),
       amount: totalWithTax,
-      pricing: { subtotal, taxRate, taxAmount, shippingFee, total: totalWithTax },
+      pricing: {
+        subtotal,
+        discountPercentage,
+        discountAmount,
+        discountedSubtotal,
+        taxRate,
+        taxAmount,
+        shippingFee,
+        total: totalWithTax,
+      },
       payment: { method: 'Stripe' },
       items: checkoutItems.map((item) => ({
         lineId: item.lineId,
@@ -441,10 +461,17 @@ function CheckoutForm() {
   }
 
   function getStripeLineItems() {
-    return checkoutItems.map((item) => ({
+    const lineItems = checkoutItems.map((item) => ({
       name: `${item.name} x ${item.quantity}`,
       amount: Math.round((item.salePrice || item.price) * item.quantity * 100),
     }));
+    if (discountAmount > 0) {
+      lineItems.push({
+        name: `Global discount (${discountPercentage.toFixed(2)}%)`,
+        amount: -Math.round(discountAmount * 100),
+      });
+    }
+    return lineItems;
   }
 
   async function createBackendCheckout(orderPayload) {
@@ -1275,6 +1302,18 @@ function CheckoutForm() {
               <span>Subtotal:</span>
               <span className="font-semibold">£{subtotal.toFixed(2)}</span>
             </div>
+            {discountAmount > 0 && (
+              <>
+                <div className="flex justify-between text-green-700">
+                  <span>Global Discount ({discountPercentage.toFixed(2)}%):</span>
+                  <span className="font-semibold">-£{discountAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-gray-700">
+                  <span>Discounted Subtotal:</span>
+                  <span className="font-semibold">£{discountedSubtotal.toFixed(2)}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between text-gray-700">
               <span>Shipping:</span>
               <span className="font-semibold text-green-600">Free</span>
@@ -1297,8 +1336,40 @@ function CheckoutForm() {
 
 function Checkout() {
   const { getSelectedTotalPrice } = useCart();
+  const [globalDiscountPercentage, setGlobalDiscountPercentage] = useState(0);
+
+  useEffect(() => {
+    if (!API_BASE_URL) return undefined;
+
+    let cancelled = false;
+    const loadMarketingSettings = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/marketing/settings`, {
+          credentials: 'include',
+        });
+        const data = await response.json().catch(() => null);
+        if (!cancelled && response.ok) {
+          setGlobalDiscountPercentage(normalizeDiscountPercentage(data?.global_discount_percentage));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setGlobalDiscountPercentage(0);
+        }
+      }
+    };
+
+    loadMarketingSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const subtotal = getSelectedTotalPrice();
-  const totalWithTax = subtotal + (subtotal * CHECKOUT_TAX_RATE);
+  const discountPercentage = normalizeDiscountPercentage(globalDiscountPercentage);
+  const discountAmount = subtotal * (discountPercentage / 100);
+  const discountedSubtotal = Math.max(subtotal - discountAmount, 0);
+  const totalWithTax = discountedSubtotal + (discountedSubtotal * CHECKOUT_TAX_RATE);
   const stripeAmount = Math.max(50, Math.round(totalWithTax * 100) || 50);
   const elementsOptions = {
     mode: 'payment',
@@ -1309,7 +1380,7 @@ function Checkout() {
 
   return (
     <Elements stripe={stripePromise} options={elementsOptions} key={`${PAYMENT_CURRENCY}-${stripeAmount}`}>
-      <CheckoutForm />
+      <CheckoutForm globalDiscountPercentage={discountPercentage} />
     </Elements>
   );
 }

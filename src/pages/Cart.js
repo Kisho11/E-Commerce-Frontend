@@ -1,10 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import Seo from '../components/Seo';
 
 const CHECKOUT_TAX_RATE = Number(process.env.REACT_APP_CHECKOUT_TAX_RATE ?? '0.2');
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 const checkoutTaxLabel = `${Math.round(CHECKOUT_TAX_RATE * 100)}%`;
+
+const normalizeDiscountPercentage = (value) => {
+  const percentage = Number(value || 0);
+  if (!Number.isFinite(percentage)) return 0;
+  return Math.min(Math.max(percentage, 0), 100);
+};
 
 function formatSelectedAttributes(item) {
   if (item.selectedAttributes && Object.keys(item.selectedAttributes).length > 0) {
@@ -19,6 +26,7 @@ function formatSelectedAttributes(item) {
 
 function ShoppingCart() {
   const navigate = useNavigate();
+  const [globalDiscountPercentage, setGlobalDiscountPercentage] = useState(0);
   const {
     cartItems,
     removeFromCart,
@@ -31,9 +39,39 @@ function ShoppingCart() {
   } = useCart();
   const selectedCartItems = getSelectedCartItems();
   const selectedSubtotal = getSelectedTotalPrice();
-  const selectedTaxAmount = selectedSubtotal * CHECKOUT_TAX_RATE;
-  const selectedTotal = selectedSubtotal + selectedTaxAmount;
+  const discountPercentage = normalizeDiscountPercentage(globalDiscountPercentage);
+  const selectedDiscountAmount = selectedSubtotal * (discountPercentage / 100);
+  const selectedDiscountedSubtotal = Math.max(selectedSubtotal - selectedDiscountAmount, 0);
+  const selectedTaxAmount = selectedDiscountedSubtotal * CHECKOUT_TAX_RATE;
+  const selectedTotal = selectedDiscountedSubtotal + selectedTaxAmount;
   const allItemsSelected = selectedCartItems.length === cartItems.length;
+
+  useEffect(() => {
+    if (!API_BASE_URL) return undefined;
+
+    let cancelled = false;
+    const loadMarketingSettings = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/marketing/settings`, {
+          credentials: 'include',
+        });
+        const data = await response.json().catch(() => null);
+        if (!cancelled && response.ok) {
+          setGlobalDiscountPercentage(normalizeDiscountPercentage(data?.global_discount_percentage));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setGlobalDiscountPercentage(0);
+        }
+      }
+    };
+
+    loadMarketingSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (cartItems.length === 0) {
     return (
@@ -160,6 +198,18 @@ function ShoppingCart() {
               <span className="text-slate-600">Subtotal:</span>
               <span className="font-semibold text-slate-900">£{selectedSubtotal.toFixed(2)}</span>
             </div>
+            {selectedDiscountAmount > 0 && (
+              <>
+                <div className="flex justify-between text-green-700">
+                  <span>Global Discount ({discountPercentage.toFixed(2)}%):</span>
+                  <span className="font-semibold">-£{selectedDiscountAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Discounted Subtotal:</span>
+                  <span className="font-semibold text-slate-900">£{selectedDiscountedSubtotal.toFixed(2)}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between">
               <span className="text-slate-600">Shipping:</span>
               <span className="font-semibold text-green-600">Free</span>

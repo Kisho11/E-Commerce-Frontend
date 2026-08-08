@@ -87,8 +87,10 @@ function AdminDashboard() {
   const [marketingBannerFile, setMarketingBannerFile] = useState(null);
   const [marketingBannerEnabled, setMarketingBannerEnabled] = useState(false);
   const [marketingBannerCtaUrl, setMarketingBannerCtaUrl] = useState('/catalogue');
+  const [globalDiscountPercentage, setGlobalDiscountPercentage] = useState('0');
   const [marketingLoading, setMarketingLoading] = useState(false);
   const [marketingSaving, setMarketingSaving] = useState(false);
+  const [marketingDiscountSaving, setMarketingDiscountSaving] = useState(false);
   const [marketingMessage, setMarketingMessage] = useState('');
   const [marketingError, setMarketingError] = useState('');
 
@@ -434,6 +436,7 @@ function AdminDashboard() {
           setMarketingBanner(data || null);
           setMarketingBannerEnabled(Boolean(data?.is_active));
           setMarketingBannerCtaUrl(data?.cta_url || '/catalogue');
+          setGlobalDiscountPercentage(String(Number(data?.global_discount_percentage || 0)));
           setMarketingBannerFile(null);
         }
       } catch (error) {
@@ -441,6 +444,7 @@ function AdminDashboard() {
           setMarketingBanner(null);
           setMarketingBannerEnabled(false);
           setMarketingBannerCtaUrl('/catalogue');
+          setGlobalDiscountPercentage('0');
           setMarketingError(error.message || 'Unable to load marketing banner.');
         }
       } finally {
@@ -559,12 +563,48 @@ function AdminDashboard() {
       setMarketingBanner(data || null);
       setMarketingBannerEnabled(Boolean(data?.is_active));
       setMarketingBannerCtaUrl(data?.cta_url || '/catalogue');
+      setGlobalDiscountPercentage(String(Number(data?.global_discount_percentage ?? globalDiscountPercentage ?? 0)));
       setMarketingBannerFile(null);
-      setMarketingMessage(data?.is_active ? 'Marketing banner is live.' : 'Marketing banner saved and disabled.');
+      setMarketingMessage(data?.is_active ? 'Banner saved and live.' : 'Banner saved and disabled.');
     } catch (error) {
       setMarketingError(error.message || 'Unable to save marketing banner.');
     } finally {
       setMarketingSaving(false);
+    }
+  };
+
+  const saveMarketingDiscount = async (event) => {
+    event.preventDefault();
+    if (marketingDiscountSaving) return;
+
+    const discountValue = Number(globalDiscountPercentage || 0);
+    if (!Number.isFinite(discountValue) || discountValue < 0 || discountValue > 100) {
+      setMarketingError('Global product discount must be between 0 and 100.');
+      return;
+    }
+
+    setMarketingDiscountSaving(true);
+    setMarketingError('');
+    setMarketingMessage('');
+
+    try {
+      const response = await authFetch('/marketing/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ global_discount_percentage: discountValue }),
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Unable to save global discount.');
+      }
+
+      setGlobalDiscountPercentage(String(Number(data?.global_discount_percentage || 0)));
+      setMarketingMessage('Global product discount saved.');
+    } catch (error) {
+      setMarketingError(error.message || 'Unable to save global discount.');
+    } finally {
+      setMarketingDiscountSaving(false);
     }
   };
 
@@ -995,9 +1035,40 @@ function AdminDashboard() {
                   </div>
                 ) : (
                   <div className="flex min-h-[240px] items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white px-6 text-center text-sm font-semibold text-gray-500">
-                    No uploaded banner. Customers see the normal default offer popup.
+                    No uploaded banner. Customers will not see an offer popup until a banner is enabled.
                   </div>
                 )}
+              </div>
+            </form>
+
+            <form onSubmit={saveMarketingDiscount} className="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
+              <div className="mb-4">
+                <h4 className="text-lg font-bold text-gray-800">Global Product Discount</h4>
+                <p className="mt-1 text-sm text-gray-500">
+                  Apply a promotional percentage to product subtotal only. Shipping and tax are not discounted.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,260px)_auto] sm:items-end">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Discount (%)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={globalDiscountPercentage}
+                    onChange={(event) => setGlobalDiscountPercentage(event.target.value)}
+                    placeholder="0"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={marketingDiscountSaving || marketingLoading}
+                  className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-5 py-2.5 font-semibold text-white transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {marketingDiscountSaving ? 'Saving...' : 'Save Discount'}
+                </button>
               </div>
             </form>
           </div>
