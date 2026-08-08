@@ -13,6 +13,8 @@ import UiIcon from '../components/UiIcon';
 
 const ORDER_STATUS_OPTIONS = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
 const ADMIN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const API_BASE_URL = process.env.REACT_APP_API_URL;
+const API_ORIGIN = API_BASE_URL ? new URL(API_BASE_URL).origin : '';
 const emptyCustomerEditForm = {
   fullName: '',
   email: '',
@@ -24,6 +26,14 @@ const emptyCustomerEditForm = {
   state: '',
   postalCode: '',
   country: 'US',
+};
+
+const resolveDashboardMediaUrl = (value) => {
+  if (!value) return '';
+  if (/^(data:|blob:|https?:)/i.test(value)) return value;
+  if (!API_ORIGIN) return value;
+  if (value.startsWith('/')) return `${API_ORIGIN}${value}`;
+  return `${API_ORIGIN}/${value}`;
 };
 
 const formatDisplayDate = (value) => {
@@ -73,6 +83,14 @@ function AdminDashboard() {
   const [visitorReport, setVisitorReport] = useState(null);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState('');
+  const [marketingBanner, setMarketingBanner] = useState(null);
+  const [marketingBannerFile, setMarketingBannerFile] = useState(null);
+  const [marketingBannerEnabled, setMarketingBannerEnabled] = useState(false);
+  const [marketingBannerCtaUrl, setMarketingBannerCtaUrl] = useState('/catalogue');
+  const [marketingLoading, setMarketingLoading] = useState(false);
+  const [marketingSaving, setMarketingSaving] = useState(false);
+  const [marketingMessage, setMarketingMessage] = useState('');
+  const [marketingError, setMarketingError] = useState('');
 
   const customerLookup = useMemo(
     () => new Map(registeredCustomers.map((customer) => [Number(customer.id), customer])),
@@ -117,6 +135,10 @@ function AdminDashboard() {
   const selectedOrderForAction = orders.find((order) => Number(order.id) === Number(selectedOrderId));
   const selectedOrderForActionId = selectedOrderForAction?.id;
   const selectedOrderForActionStatus = selectedOrderForAction?.status || '';
+  const marketingPreviewUrl = useMemo(() => {
+    if (marketingBannerFile) return URL.createObjectURL(marketingBannerFile);
+    return resolveDashboardMediaUrl(marketingBanner?.image_url || '');
+  }, [marketingBanner, marketingBannerFile]);
 
   const customerOrderStats = useMemo(() => {
     const grouped = new Map();
@@ -388,6 +410,54 @@ function AdminDashboard() {
   }, [activeTab, authFetch, salesReportPeriod, user]);
 
   useEffect(() => {
+    if (!marketingBannerFile || !marketingPreviewUrl.startsWith('blob:')) return undefined;
+    return () => URL.revokeObjectURL(marketingPreviewUrl);
+  }, [marketingBannerFile, marketingPreviewUrl]);
+
+  useEffect(() => {
+    if (user?.role !== 'admin' || activeTab !== 'marketing') return undefined;
+
+    let cancelled = false;
+    const loadMarketingBanner = async () => {
+      setMarketingLoading(true);
+      setMarketingError('');
+      setMarketingMessage('');
+
+      try {
+        const response = await authFetch('/marketing/admin/banner');
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(data?.detail || 'Unable to load marketing banner.');
+        }
+
+        if (!cancelled) {
+          setMarketingBanner(data || null);
+          setMarketingBannerEnabled(Boolean(data?.is_active));
+          setMarketingBannerCtaUrl(data?.cta_url || '/catalogue');
+          setMarketingBannerFile(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setMarketingBanner(null);
+          setMarketingBannerEnabled(false);
+          setMarketingBannerCtaUrl('/catalogue');
+          setMarketingError(error.message || 'Unable to load marketing banner.');
+        }
+      } finally {
+        if (!cancelled) {
+          setMarketingLoading(false);
+        }
+      }
+    };
+
+    loadMarketingBanner();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, authFetch, user]);
+
+  useEffect(() => {
     if (!selectedOrderForActionId) {
       setSelectedOrderStatus('');
       return;
@@ -439,6 +509,64 @@ function AdminDashboard() {
   const maxCategoryUnits = Math.max(...topCategoriesReport.map((category) => Number(category.units_sold || 0)), 1);
   const maxProductViews = Math.max(...mostViewedProductsReport.map((product) => Number(product.total_views || 0)), 1);
   const maxProductUnitsSold = Math.max(...bestSellingProductsReport.map((product) => Number(product.units_sold || 0)), 1);
+
+  const handleMarketingFileChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    setMarketingMessage('');
+
+    if (!file) {
+      setMarketingBannerFile(null);
+      return;
+    }
+
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setMarketingBannerFile(null);
+      setMarketingError('Please upload a PNG or JPEG banner image.');
+      event.target.value = '';
+      return;
+    }
+
+    setMarketingError('');
+    setMarketingBannerFile(file);
+  };
+
+  const saveMarketingBanner = async (event) => {
+    event.preventDefault();
+    if (marketingSaving) return;
+
+    setMarketingSaving(true);
+    setMarketingError('');
+    setMarketingMessage('');
+
+    try {
+      const formData = new FormData();
+      formData.append('is_active', marketingBannerEnabled ? 'true' : 'false');
+      formData.append('cta_url', marketingBannerCtaUrl.trim() || '/catalogue');
+      if (marketingBannerFile) {
+        formData.append('file', marketingBannerFile);
+      }
+
+      const response = await authFetch('/marketing/admin/banner', {
+        method: 'PUT',
+        body: formData,
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Unable to save marketing banner.');
+      }
+
+      setMarketingBanner(data || null);
+      setMarketingBannerEnabled(Boolean(data?.is_active));
+      setMarketingBannerCtaUrl(data?.cta_url || '/catalogue');
+      setMarketingBannerFile(null);
+      setMarketingMessage(data?.is_active ? 'Marketing banner is live.' : 'Marketing banner saved and disabled.');
+    } catch (error) {
+      setMarketingError(error.message || 'Unable to save marketing banner.');
+    } finally {
+      setMarketingSaving(false);
+    }
+  };
 
   const handleLogout = () => {
     if (!window.confirm('Are you sure you want to logout?')) return;
@@ -618,7 +746,7 @@ function AdminDashboard() {
       <div className="container mx-auto px-4 py-8 sm:px-8">
         {/* Tabs */}
         <div className="flex gap-4 mb-8 overflow-x-auto border-b border-gray-300 pb-4">
-          {['overview', 'products', 'inventory', 'categories', 'industries', 'managers', 'orders', 'customers', 'reports'].map((tab) => (
+          {['overview', 'products', 'inventory', 'categories', 'industries', 'marketing', 'managers', 'orders', 'customers', 'reports'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -766,6 +894,110 @@ function AdminDashboard() {
         {/* Industries Tab */}
         {activeTab === 'industries' && (
           <IndustryManagement />
+        )}
+
+        {/* Marketing Tab */}
+        {activeTab === 'marketing' && (
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="flex items-center gap-2 text-2xl font-bold text-primary">
+                <UiIcon name="image" className="h-6 w-6" />
+                Marketing
+              </h3>
+              <span className={`rounded-full px-3 py-1 text-sm font-semibold ${
+                marketingBannerEnabled && marketingBanner?.image_url
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-gray-100 text-gray-600'
+              }`}>
+                {marketingBannerEnabled && marketingBanner?.image_url ? 'Live offer' : 'Default offer'}
+              </span>
+            </div>
+
+            {marketingError ? (
+              <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                {marketingError}
+              </div>
+            ) : null}
+            {marketingMessage ? (
+              <div className="mb-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+                {marketingMessage}
+              </div>
+            ) : null}
+
+            <form onSubmit={saveMarketingBanner} className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+              <div className="space-y-5">
+                <div>
+                  <h4 className="text-lg font-bold text-gray-800">Promotional Banner</h4>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Upload a PNG or JPEG banner for the customer offer popup.
+                  </p>
+                </div>
+
+                <label className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                  <span>
+                    <span className="block font-semibold text-gray-800">Enable banner</span>
+                    <span className="block text-sm text-gray-500">Customers see this uploaded image when active.</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={marketingBannerEnabled}
+                    onChange={(event) => setMarketingBannerEnabled(event.target.checked)}
+                    className="h-5 w-5 accent-primary"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Banner image</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                    onChange={handleMarketingFileChange}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:font-semibold file:text-white"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Click-through URL</span>
+                  <input
+                    type="text"
+                    value={marketingBannerCtaUrl}
+                    onChange={(event) => setMarketingBannerCtaUrl(event.target.value)}
+                    placeholder="/catalogue"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={marketingSaving || marketingLoading}
+                  className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {marketingSaving ? 'Saving...' : 'Save Banner'}
+                </button>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="font-bold text-gray-800">Preview</h4>
+                  {marketingLoading ? <span className="text-sm text-gray-500">Loading...</span> : null}
+                </div>
+
+                {marketingPreviewUrl ? (
+                  <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+                    <img
+                      src={marketingPreviewUrl}
+                      alt="Marketing banner preview"
+                      className="h-auto max-h-[420px] w-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex min-h-[240px] items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white px-6 text-center text-sm font-semibold text-gray-500">
+                    No uploaded banner. Customers see the normal default offer popup.
+                  </div>
+                )}
+              </div>
+            </form>
+          </div>
         )}
 
         {/* Managers Tab */}
