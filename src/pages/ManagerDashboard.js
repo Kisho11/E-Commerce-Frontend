@@ -6,6 +6,7 @@ import { useProducts } from '../context/ProductContext';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import UiIcon from '../components/UiIcon';
 import InventoryManagement from './InventoryManagement';
+import ProductManagement from './ProductManagement';
 
 const ORDER_STATUS_OPTIONS = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
 
@@ -319,7 +320,7 @@ function ManagerDashboard() {
         </div>
 
         <div className="flex gap-4 mb-8 overflow-x-auto border-b border-gray-300 pb-4">
-          {['orders', 'inventory', 'tasks'].map((tab) => (
+          {['orders', 'products', 'inventory', 'tasks'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -439,6 +440,12 @@ function ManagerDashboard() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'products' && (
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <ProductManagement />
           </div>
         )}
 

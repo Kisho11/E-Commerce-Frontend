@@ -165,6 +165,7 @@ function ProductManagement() {
   const [statusPopup, setStatusPopup] = useState({ visible: false, title: '', message: '', id: null });
   const [isPreparingEdit, setIsPreparingEdit] = useState(false);
   const [pendingDeleteProduct, setPendingDeleteProduct] = useState(null);
+  const [relatedProductSearch, setRelatedProductSearch] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -181,6 +182,7 @@ function ProductManagement() {
     categories: [],
     subcategories: [],
     industries: [],
+    relatedProductIds: [],
     imageSlots: Array.from({ length: MIN_IMAGE_COUNT }, () => ({ url: '', variantTag: '' })),
     videoUrls: Array(MIN_VIDEO_COUNT).fill(''),
   });
@@ -205,9 +207,31 @@ function ProductManagement() {
       categories
         .filter((category) => formData.categories.includes(category.name))
         .flatMap((category) => category.subcategories || [])
-        .map((subcategory) => [subcategory.name, subcategory])
+      .map((subcategory) => [subcategory.name, subcategory])
     ).values()
   );
+  const selectedRelatedProducts = useMemo(() => (
+    (formData.relatedProductIds || [])
+      .map((productId) => products.find((product) => Number(product.id) === Number(productId)))
+      .filter(Boolean)
+  ), [formData.relatedProductIds, products]);
+  const relatedProductOptions = useMemo(() => {
+    const query = relatedProductSearch.trim().toLowerCase();
+    const selectedIds = new Set((formData.relatedProductIds || []).map((id) => Number(id)));
+    return products
+      .filter((product) => Number(product.id) !== Number(editingId || 0))
+      .filter((product) => !selectedIds.has(Number(product.id)))
+      .filter((product) => {
+        if (!query) return true;
+        return (
+          product.name.toLowerCase().includes(query) ||
+          String(product.id).includes(query) ||
+          (product.categories || []).join(' ').toLowerCase().includes(query)
+        );
+      })
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .slice(0, 8);
+  }, [editingId, formData.relatedProductIds, products, relatedProductSearch]);
 
   const variantAttributeGroups = useMemo(() => {
     if (formData.productType !== PRODUCT_TYPES.VARIABLE) return [];
@@ -244,6 +268,7 @@ function ProductManagement() {
       categories: [],
       subcategories: [],
       industries: [],
+      relatedProductIds: [],
       imageSlots: Array.from({ length: MIN_IMAGE_COUNT }, () => ({ url: '', variantTag: '' })),
       videoUrls: Array(MIN_VIDEO_COUNT).fill(''),
     });
@@ -251,6 +276,7 @@ function ProductManagement() {
     setError('');
     setSuccess('');
     setIsPreparingEdit(false);
+    setRelatedProductSearch('');
     setStatusPopup((prev) => ({ ...prev, visible: false }));
   };
 
@@ -354,6 +380,36 @@ function ProductManagement() {
       industries: formData.industries.includes(ind)
         ? formData.industries.filter(i => i !== ind)
         : [...formData.industries, ind]
+    });
+  };
+
+  const handleAddRelatedProduct = (productId) => {
+    const numericId = Number(productId);
+    if (!Number.isFinite(numericId) || numericId <= 0 || numericId === Number(editingId || 0)) return;
+    setFormData((prev) => {
+      const existingIds = (prev.relatedProductIds || []).map((id) => Number(id));
+      if (existingIds.includes(numericId)) return prev;
+      return { ...prev, relatedProductIds: [...existingIds, numericId] };
+    });
+    setRelatedProductSearch('');
+  };
+
+  const handleRemoveRelatedProduct = (productId) => {
+    setFormData((prev) => ({
+      ...prev,
+      relatedProductIds: (prev.relatedProductIds || []).filter((id) => Number(id) !== Number(productId)),
+    }));
+  };
+
+  const handleMoveRelatedProduct = (productId, direction) => {
+    setFormData((prev) => {
+      const currentIds = [...(prev.relatedProductIds || [])];
+      const currentIndex = currentIds.findIndex((id) => Number(id) === Number(productId));
+      const nextIndex = currentIndex + direction;
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= currentIds.length) return prev;
+      const [movedId] = currentIds.splice(currentIndex, 1);
+      currentIds.splice(nextIndex, 0, movedId);
+      return { ...prev, relatedProductIds: currentIds };
     });
   };
 
@@ -765,6 +821,13 @@ function ProductManagement() {
       categories: formData.categories,
       subcategories: formData.subcategories,
       industries: formData.industries,
+      relatedProductIds: (formData.relatedProductIds || [])
+        .map((relatedProductId) => Number(relatedProductId))
+        .filter((relatedProductId) => (
+          Number.isFinite(relatedProductId)
+          && relatedProductId > 0
+          && relatedProductId !== Number(editingId || 0)
+        )),
       image: uploadedImageUrls[0],
       galleryImages: uploadedImageUrls.slice(1),
       imageCount: uploadedImageUrls.length,
@@ -852,10 +915,14 @@ function ProductManagement() {
           categories: product.categories || [],
           subcategories: product.subcategories || [],
           industries: product.industries || [],
+          relatedProductIds: (product.relatedProductIds || [])
+            .map((relatedProductId) => Number(relatedProductId))
+            .filter((relatedProductId) => Number.isFinite(relatedProductId) && relatedProductId !== Number(product.id)),
           imageSlots,
           videoUrls: safeVideoUrls,
         });
         setIsPreparingEdit(false);
+        setRelatedProductSearch('');
       });
     }, 0);
   };
@@ -1666,6 +1733,125 @@ function ProductManagement() {
                     <span className="text-gray-700 text-sm">{ind}</span>
                   </label>
                 ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/60 p-4 sm:p-5">
+              <div className="mb-4 flex flex-col gap-1">
+                <label className="block text-gray-700 font-semibold">Related Products (optional)</label>
+                <p className="text-sm text-slate-500">
+                  Selected products appear first on the storefront. If none are selected, same-category products are shown automatically.
+                </p>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]">
+                <div>
+                  <div className="relative">
+                    <UiIcon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={relatedProductSearch}
+                      onChange={(event) => setRelatedProductSearch(event.target.value)}
+                      placeholder="Search products by name, ID or category"
+                      className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-red-100"
+                    />
+                  </div>
+
+                  <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
+                    {relatedProductOptions.length > 0 ? (
+                      relatedProductOptions.map((relatedProduct) => (
+                        <div
+                          key={relatedProduct.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-800">{relatedProduct.name}</p>
+                            <p className="truncate text-xs text-slate-500">
+                              #{relatedProduct.id}
+                              {(relatedProduct.categories || []).length > 0 ? ` | ${(relatedProduct.categories || []).join(', ')}` : ''}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleAddRelatedProduct(relatedProduct.id)}
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100"
+                            aria-label={`Add ${relatedProduct.name} as related product`}
+                            title="Add related product"
+                          >
+                            <UiIcon name="plus" className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-6 text-center text-sm text-slate-500">
+                        No matching products available.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-sm font-bold text-slate-800">Selected Order</p>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">
+                      {selectedRelatedProducts.length}
+                    </span>
+                  </div>
+
+                  {selectedRelatedProducts.length > 0 ? (
+                    <ol className="space-y-2">
+                      {selectedRelatedProducts.map((relatedProduct, index) => (
+                        <li
+                          key={relatedProduct.id}
+                          className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                        >
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+                            {index + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-slate-800">{relatedProduct.name}</p>
+                            <p className="text-xs text-slate-500">#{relatedProduct.id}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveRelatedProduct(relatedProduct.id, -1)}
+                              disabled={index === 0}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                              aria-label={`Move ${relatedProduct.name} up`}
+                              title="Move up"
+                            >
+                              <UiIcon name="arrowUp" className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveRelatedProduct(relatedProduct.id, 1)}
+                              disabled={index === selectedRelatedProducts.length - 1}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                              aria-label={`Move ${relatedProduct.name} down`}
+                              title="Move down"
+                            >
+                              <UiIcon name="arrowDown" className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveRelatedProduct(relatedProduct.id)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100"
+                              aria-label={`Remove ${relatedProduct.name}`}
+                              title="Remove"
+                            >
+                              <UiIcon name="trash" className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
+                      Same-category fallback will be used.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

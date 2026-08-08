@@ -313,6 +313,9 @@ const mapProductFromApi = (product = {}) => {
       reserved: 0,
     },
     imageVariantTags: images.map(img => img.variant_tag || ''),
+    relatedProductIds: Array.isArray(product.related_product_ids)
+      ? product.related_product_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+      : [],
     _apiImages: images,
     _apiVideos: videos,
   };
@@ -831,6 +834,7 @@ export function ProductProvider({ children }) {
       industries: productWithId.industries || [],
       category_ids: getCategoryIdsByNames(productWithId.categories || [], productWithId.subcategories || []),
       variant_groups: buildVariantGroupsPayload(productWithId.price, productWithId.variantPricing, productWithId.variantGroups),
+      related_product_ids: (productWithId.relatedProductIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0),
     };
 
     const createResponse = await performRequest(`${API_BASE_URL}/products/`, {
@@ -910,6 +914,7 @@ export function ProductProvider({ children }) {
       industries: merged.industries || [],
       category_ids: getCategoryIdsByNames(merged.categories || [], merged.subcategories || []),
       variant_groups: buildVariantGroupsPayload(merged.price, merged.variantPricing, merged.variantGroups),
+      related_product_ids: (merged.relatedProductIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0 && id !== Number(productId)),
     };
 
     const updateResponse = await performRequest(`${API_BASE_URL}/products/${productId}`, {

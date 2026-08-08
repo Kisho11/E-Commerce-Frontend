@@ -170,20 +170,34 @@ function ProductDetail() {
   const relatedProducts = useMemo(() => {
     if (!product) return [];
     const productCategories = new Set(product.categories || []);
+    const manualRelatedIds = (product.relatedProductIds || [])
+      .map((relatedProductId) => Number(relatedProductId))
+      .filter((relatedProductId) => Number.isFinite(relatedProductId) && relatedProductId > 0);
+    const manualRelatedIdSet = new Set(manualRelatedIds);
+    const productById = new Map(products.map((candidate) => [Number(candidate.id), candidate]));
+    const isAvailable = (candidate) => {
+      if (resolveProductType(candidate) === PRODUCT_TYPES.CUSTOM) return true;
+      return Number(candidate.inventory?.onHand ?? 0) - Number(candidate.inventory?.reserved ?? 0) > 0;
+    };
+    const isEligibleRelatedProduct = (candidate) => (
+      candidate
+      && Number(candidate.id) !== Number(product.id)
+      && candidate.isActive !== false
+    );
 
-    return products
+    const manualRelatedProducts = manualRelatedIds
+      .map((relatedProductId) => productById.get(relatedProductId))
+      .filter(isEligibleRelatedProduct);
+
+    const fallbackRelatedProducts = products
       .filter((candidate) => (
-        candidate.id !== product.id
-        && candidate.isActive !== false
+        isEligibleRelatedProduct(candidate)
+        && !manualRelatedIdSet.has(Number(candidate.id))
         && (candidate.categories || []).some((category) => productCategories.has(category))
       ))
-      .sort((left, right) => {
-        const isAvailable = (candidate) => {
-          if (resolveProductType(candidate) === PRODUCT_TYPES.CUSTOM) return true;
-          return Number(candidate.inventory?.onHand ?? 0) - Number(candidate.inventory?.reserved ?? 0) > 0;
-        };
-        return Number(isAvailable(right)) - Number(isAvailable(left));
-      })
+      .sort((left, right) => Number(isAvailable(right)) - Number(isAvailable(left)));
+
+    return [...manualRelatedProducts, ...fallbackRelatedProducts]
       .slice(0, 12);
   }, [product, products]);
 
