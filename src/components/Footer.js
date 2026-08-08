@@ -2,6 +2,37 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 
+const socialLinks = [
+  {
+    label: 'Instagram',
+    href: 'https://www.instagram.com/elmshelf?utm_source=qr&igsh=MXB0bnZiNmpycXl5Yw==',
+    icon: (
+      <>
+        <rect x="4" y="4" width="16" height="16" rx="5" />
+        <circle cx="12" cy="12" r="3.5" />
+        <circle cx="16.8" cy="7.2" r="0.8" fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+  {
+    label: 'TikTok',
+    href: 'https://www.tiktok.com/@elm.shelf3?_r=1&_t=ZG-98HMUamVZR2',
+    icon: (
+      <>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13 4v10.2a4 4 0 1 1-4-4" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13 4c.8 3.1 2.5 4.8 5 5" />
+      </>
+    ),
+  },
+  {
+    label: 'Facebook',
+    href: 'https://www.facebook.com/share/1E6mzNzJBC/',
+    icon: (
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14 8h2V4h-2.6C10.8 4 9 5.8 9 8.4V11H7v4h2v5h4v-5h2.6l.4-4h-3V8.8c0-.5.4-.8 1-.8Z" />
+    ),
+  },
+];
+
 function Footer() {
   const { t } = useLanguage();
   const mapUrl = 'https://www.google.com/maps/search/?api=1&query=Elmshelf%2C%203%20Langley%20Cl%2C%20Romford%20RM3%208XB';
@@ -89,6 +120,27 @@ function Footer() {
                 <a href="tel:+447584682048" className="flex-1 text-left text-2xl font-extrabold text-primary no-underline transition hover:text-red-400 hover:no-underline sm:text-3xl">
                   +44 7584682048
                 </a>
+              </div>
+
+              <div className="flex w-full items-center gap-3">
+                <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-400">Follow us</p>
+                <div className="flex items-center gap-2">
+                  {socialLinks.map((item) => (
+                    <a
+                      key={item.label}
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Follow Elmshelf on ${item.label}`}
+                      title={item.label}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-red-300 transition hover:bg-red-600 hover:text-white"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        {item.icon}
+                      </svg>
+                    </a>
+                  ))}
+                </div>
               </div>
 
               <div className="flex justify-center pt-2 lg:justify-end">
