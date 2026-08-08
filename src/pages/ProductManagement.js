@@ -193,6 +193,7 @@ function ProductManagement() {
   const [productSearch, setProductSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [idSortDir, setIdSortDir] = useState('asc');
 
   const industriesOptions = [
     'Tech shops', 'DIY', 'Greengrocer', 'Pound shop', 'Pet shop', 'Vape shop',
@@ -878,18 +879,26 @@ function ProductManagement() {
     }
   };
 
-  const filteredProducts = products.filter((p) => {
-    const q = productSearch.trim().toLowerCase();
-    if (q && !p.name.toLowerCase().includes(q) && !String(p.id).includes(q)) return false;
-    if (typeFilter !== 'all' && resolveProductType(p) !== typeFilter) return false;
-    if (statusFilter !== 'all') {
-      const avail = Math.max((p.inventory?.onHand ?? 0) - (p.inventory?.reserved ?? 0), 0);
-      if (statusFilter === 'out' && avail > 0) return false;
-      if (statusFilter === 'low' && !(avail > 0 && avail <= (p.inventory?.reorderLevel ?? 0))) return false;
-      if (statusFilter === 'healthy' && avail <= (p.inventory?.reorderLevel ?? 0)) return false;
-    }
-    return true;
-  });
+  const filteredProducts = useMemo(() => {
+    const filtered = products.filter((p) => {
+      const q = productSearch.trim().toLowerCase();
+      if (q && !p.name.toLowerCase().includes(q) && !String(p.id).includes(q)) return false;
+      if (typeFilter !== 'all' && resolveProductType(p) !== typeFilter) return false;
+      if (statusFilter !== 'all') {
+        const avail = Math.max((p.inventory?.onHand ?? 0) - (p.inventory?.reserved ?? 0), 0);
+        if (statusFilter === 'out' && avail > 0) return false;
+        if (statusFilter === 'low' && !(avail > 0 && avail <= (p.inventory?.reorderLevel ?? 0))) return false;
+        if (statusFilter === 'healthy' && avail <= (p.inventory?.reorderLevel ?? 0)) return false;
+      }
+      return true;
+    });
+
+    return filtered.sort((left, right) => {
+      const leftId = Number(left.id) || 0;
+      const rightId = Number(right.id) || 0;
+      return idSortDir === 'asc' ? leftId - rightId : rightId - leftId;
+    });
+  }, [idSortDir, productSearch, products, statusFilter, typeFilter]);
 
   return (
     <div className="space-y-6">
@@ -1746,7 +1755,19 @@ function ProductManagement() {
             <table className="w-full table-fixed">
               <thead className="bg-gray-100">
                 <tr>
-                  <th className="w-[5%] px-3 py-3 text-left text-sm font-semibold text-gray-700">ID</th>
+                  <th className="w-[5%] px-3 py-3 text-left text-sm font-semibold text-gray-700" aria-sort={idSortDir === 'asc' ? 'ascending' : 'descending'}>
+                    <button
+                      type="button"
+                      onClick={() => setIdSortDir((current) => (current === 'asc' ? 'desc' : 'asc'))}
+                      className="inline-flex items-center gap-2 rounded px-1 py-0.5 font-semibold text-gray-700 transition hover:bg-gray-200 hover:text-primary"
+                      title={`Sort ID ${idSortDir === 'asc' ? 'descending' : 'ascending'}`}
+                    >
+                      <span>ID</span>
+                      <span aria-hidden="true" className="text-lg font-black leading-none text-primary">
+                        {idSortDir === 'asc' ? '↑' : '↓'}
+                      </span>
+                    </button>
+                  </th>
                   <th className="w-[16%] px-3 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
                   <th className="w-[9%] px-3 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
                   <th className="w-[10%] px-3 py-3 text-left text-sm font-semibold text-gray-700">Price</th>

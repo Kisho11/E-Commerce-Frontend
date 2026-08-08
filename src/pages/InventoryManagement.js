@@ -88,6 +88,7 @@ function InventoryManagement() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(1);
+  const [productIdSortDir, setProductIdSortDir] = useState('asc');
 
   // Modals
   const [adjustTarget, setAdjustTarget] = useState(null);
@@ -246,7 +247,7 @@ function InventoryManagement() {
 
   const filtered = useMemo(() => {
     const terms = normalizeSearchText(search).split(' ').filter(Boolean);
-    return stockRows.filter((inv) => {
+    const rows = stockRows.filter((inv) => {
       if (statusFilter !== 'all' && inv.status !== statusFilter) return false;
       if (terms.length > 0) {
         const product = productMap.get(inv.product_id);
@@ -266,7 +267,15 @@ function InventoryManagement() {
       }
       return true;
     });
-  }, [stockRows, statusFilter, search, productMap]);
+    return rows.sort((left, right) => {
+      const leftId = Number(left.product_id) || 0;
+      const rightId = Number(right.product_id) || 0;
+      if (leftId !== rightId) {
+        return productIdSortDir === 'asc' ? leftId - rightId : rightId - leftId;
+      }
+      return String(left.variantLabel || '').localeCompare(String(right.variantLabel || ''));
+    });
+  }, [stockRows, statusFilter, search, productMap, productIdSortDir]);
 
   const rowSummary = useMemo(() => {
     const lowRows = stockRows.filter((row) => row.status === 'Low Stock');
@@ -501,9 +510,22 @@ function InventoryManagement() {
         {loading ? (
           <div className="py-20 text-center text-sm text-gray-400">Loading inventory…</div>
         ) : (
-          <table className="w-full min-w-[860px]">
+          <table className="w-full min-w-[940px]">
             <thead className="border-b border-gray-200 bg-gray-50">
               <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700" aria-sort={productIdSortDir === 'asc' ? 'ascending' : 'descending'}>
+                  <button
+                    type="button"
+                    onClick={() => setProductIdSortDir((current) => (current === 'asc' ? 'desc' : 'asc'))}
+                    className="inline-flex items-center gap-2 rounded px-1 py-0.5 font-semibold text-gray-700 transition hover:bg-gray-100 hover:text-primary"
+                    title={`Sort Product ID ${productIdSortDir === 'asc' ? 'descending' : 'ascending'}`}
+                  >
+                    <span>Product ID</span>
+                    <span aria-hidden="true" className="text-lg font-black leading-none text-primary">
+                      {productIdSortDir === 'asc' ? '↑' : '↓'}
+                    </span>
+                  </button>
+                </th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Product</th>
                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Variant</th>
                 <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">On Hand</th>
@@ -519,7 +541,7 @@ function InventoryManagement() {
             <tbody className="divide-y divide-gray-100">
               {pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-14 text-center text-sm text-gray-400">
+                  <td colSpan={11} className="py-14 text-center text-sm text-gray-400">
                     {search || statusFilter !== 'all'
                       ? 'No records match your filters.'
                       : 'No inventory records found.'}
@@ -527,11 +549,11 @@ function InventoryManagement() {
                 </tr>
               ) : pageRows.map((inv) => (
                   <tr key={inv.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-bold text-primary">#{inv.product_id}</td>
                     <td className="px-4 py-3">
                       <p className="text-sm font-semibold leading-tight text-gray-800">
                         {getInventoryProductName(inv)}
                       </p>
-                      <p className="text-xs text-gray-400">#{inv.product_id}</p>
                     </td>
                     <td className="px-4 py-3">
                       {inv.rowType === 'variant' ? (

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
@@ -48,6 +48,8 @@ function AdminDashboard() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [selectedOrderStatus, setSelectedOrderStatus] = useState('');
+  const [orderSortBy, setOrderSortBy] = useState('date');
+  const [orderSortDir, setOrderSortDir] = useState('desc');
   const [orderActionMessage, setOrderActionMessage] = useState('');
   const [orderActionError, setOrderActionError] = useState('');
   const [isUpdatingOrder, setIsUpdatingOrder] = useState(false);
@@ -72,20 +74,49 @@ function AdminDashboard() {
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState('');
 
-  const sortedOrders = [...orders].sort(
-    (a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)
-  );
-  const recentOrders = sortedOrders.slice(0, 5);
-  const totalRevenue = orders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
-  const pendingOrders = orders.filter((order) => order.status === 'Pending').length;
-  const selectedOrderForAction = sortedOrders.find((order) => Number(order.id) === Number(selectedOrderId));
-  const selectedOrderForActionId = selectedOrderForAction?.id;
-  const selectedOrderForActionStatus = selectedOrderForAction?.status || '';
-
   const customerLookup = useMemo(
     () => new Map(registeredCustomers.map((customer) => [Number(customer.id), customer])),
     [registeredCustomers]
   );
+
+  const getOrderCustomerName = useCallback((order) => (
+    customerLookup.get(Number(order.customerId || order.userId || 0))?.name ||
+    order.customer ||
+    'Unknown Customer'
+  ), [customerLookup]);
+
+  const sortedOrders = useMemo(() => {
+    const getDateValue = (order) => {
+      const parsed = new Date(order.createdAt || order.date);
+      return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+    };
+
+    return [...orders].sort((left, right) => {
+      let result = 0;
+      if (orderSortBy === 'id') {
+        result = (Number(left.id) || 0) - (Number(right.id) || 0);
+      } else if (orderSortBy === 'customer') {
+        result = getOrderCustomerName(left).localeCompare(getOrderCustomerName(right));
+      } else if (orderSortBy === 'amount') {
+        result = (Number(left.amount) || 0) - (Number(right.amount) || 0);
+      } else if (orderSortBy === 'status') {
+        result = String(left.status || '').localeCompare(String(right.status || ''));
+      } else {
+        result = getDateValue(left) - getDateValue(right);
+      }
+
+      return orderSortDir === 'asc' ? result : -result;
+    });
+  }, [getOrderCustomerName, orderSortBy, orderSortDir, orders]);
+  const recentOrders = useMemo(
+    () => [...orders].sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)).slice(0, 5),
+    [orders]
+  );
+  const totalRevenue = orders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
+  const pendingOrders = orders.filter((order) => order.status === 'Pending').length;
+  const selectedOrderForAction = orders.find((order) => Number(order.id) === Number(selectedOrderId));
+  const selectedOrderForActionId = selectedOrderForAction?.id;
+  const selectedOrderForActionStatus = selectedOrderForAction?.status || '';
 
   const customerOrderStats = useMemo(() => {
     const grouped = new Map();
@@ -190,6 +221,27 @@ function AdminDashboard() {
     }
     setCustomerSortBy(column);
     setCustomerSortDir('asc');
+  };
+
+  const handleOrderSort = (column) => {
+    if (orderSortBy === column) {
+      setOrderSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setOrderSortBy(column);
+    setOrderSortDir('asc');
+  };
+
+  const renderOrderSortArrow = (column) => {
+    if (orderSortBy !== column) {
+      return <span className="text-base font-black leading-none text-gray-400">↕</span>;
+    }
+
+    return (
+      <span className="text-lg font-black leading-none text-primary">
+        {orderSortDir === 'asc' ? '↑' : '↓'}
+      </span>
+    );
   };
 
   const renderSortIcon = (column) => {
@@ -668,7 +720,7 @@ function AdminDashboard() {
                     {recentOrders.map((order) => (
                       <tr key={order.id} className="border-b border-gray-200 hover:bg-gray-50">
                         <td className="px-6 py-4 font-bold text-primary">#{order.id}</td>
-                        <td className="px-6 py-4">{customerLookup.get(Number(order.customerId || order.userId || 0))?.name || order.customer || 'Unknown Customer'}</td>
+                        <td className="px-6 py-4">{getOrderCustomerName(order)}</td>
                         <td className="px-6 py-4 font-semibold">£{order.amount.toFixed(2)}</td>
                         <td className="px-6 py-4">
                           <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
@@ -774,11 +826,31 @@ function AdminDashboard() {
                     <th className="w-12 px-3 py-3 text-left">
                       <span className="sr-only">Select order</span>
                     </th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-700">Order ID</th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-700">Customer</th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-700">Amount</th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
-                    <th className="px-6 py-3 text-left font-semibold text-gray-700">Date</th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-700" aria-sort={orderSortBy === 'id' ? (orderSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => handleOrderSort('id')} className="inline-flex items-center gap-2 hover:text-primary">
+                        Order ID {renderOrderSortArrow('id')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-700" aria-sort={orderSortBy === 'customer' ? (orderSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => handleOrderSort('customer')} className="inline-flex items-center gap-2 hover:text-primary">
+                        Customer {renderOrderSortArrow('customer')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-700" aria-sort={orderSortBy === 'amount' ? (orderSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => handleOrderSort('amount')} className="inline-flex items-center gap-2 hover:text-primary">
+                        Amount {renderOrderSortArrow('amount')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-700" aria-sort={orderSortBy === 'status' ? (orderSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => handleOrderSort('status')} className="inline-flex items-center gap-2 hover:text-primary">
+                        Status {renderOrderSortArrow('status')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3 text-left font-semibold text-gray-700" aria-sort={orderSortBy === 'date' ? (orderSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => handleOrderSort('date')} className="inline-flex items-center gap-2 hover:text-primary">
+                        Date {renderOrderSortArrow('date')}
+                      </button>
+                    </th>
                     <th className="px-6 py-3 text-left font-semibold text-gray-700">Actions</th>
                   </tr>
                 </thead>
@@ -801,7 +873,7 @@ function AdminDashboard() {
                         />
                       </td>
                       <td className="px-6 py-4 font-bold text-primary">#{order.id}</td>
-                      <td className="px-6 py-4">{customerLookup.get(Number(order.customerId || order.userId || 0))?.name || order.customer || 'Unknown Customer'}</td>
+                      <td className="px-6 py-4">{getOrderCustomerName(order)}</td>
                       <td className="px-6 py-4 font-semibold">£{order.amount.toFixed(2)}</td>
                       <td className="px-6 py-4">
                         <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
