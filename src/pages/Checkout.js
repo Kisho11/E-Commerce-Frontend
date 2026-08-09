@@ -12,8 +12,10 @@ import {
 import { useCart } from '../context/CartContext';
 import { useOrders } from '../context/OrderContext';
 import { useAuth } from '../context/AuthContext';
+import { useProducts } from '../context/ProductContext';
 import UiIcon from '../components/UiIcon';
 import Seo from '../components/Seo';
+import { calculateShippingFee, formatShippingFee } from '../utils/shipping';
 
 const stripePromise = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY)
@@ -184,6 +186,7 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
   const { getSelectedCartItems, getSelectedTotalPrice, removeFromCart, loadCart } = useCart();
   const { placeOrder, loadOrders } = useOrders();
   const { user, authFetch } = useAuth();
+  const { categories } = useProducts();
   const stripe = useStripe();
   const elements = useElements();
 
@@ -223,7 +226,9 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
   const discountedSubtotal = Math.max(subtotal - discountAmount, 0);
   const taxRate = CHECKOUT_TAX_RATE;
   const taxAmount = discountedSubtotal * taxRate;
-  const shippingFee = 0;
+  const shippingFee = checkoutItems.length > 0
+    ? calculateShippingFee(checkoutItems, formData.deliveryMode, categories)
+    : 0;
   const totalWithTax = discountedSubtotal + taxAmount + shippingFee;
   const requiresBackendCheckout = Boolean(API_BASE_URL);
 
@@ -703,9 +708,9 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
     event.resolve({
       lineItems: getStripeLineItems(),
       shippingRates: [{
-        id: 'free-shipping',
-        amount: 0,
-        displayName: 'Free shipping',
+        id: shippingFee >= 180 ? 'boards-shipping' : shippingFee > 0 ? 'standard-shipping' : 'pickup',
+        amount: Math.round(shippingFee * 100),
+        displayName: shippingFee >= 180 ? 'Boards shipping' : shippingFee > 0 ? 'Standard shipping' : 'Pickup',
       }],
     });
   };
@@ -1316,7 +1321,7 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
             )}
             <div className="flex justify-between text-gray-700">
               <span>Shipping:</span>
-              <span className="font-semibold text-green-600">Free</span>
+              <span className="font-semibold">{formatShippingFee(shippingFee)}</span>
             </div>
             <div className="flex justify-between text-gray-700">
               <span>Tax ({checkoutTaxLabel}):</span>
@@ -1335,7 +1340,8 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
 }
 
 function Checkout() {
-  const { getSelectedTotalPrice } = useCart();
+  const { getSelectedCartItems, getSelectedTotalPrice } = useCart();
+  const { categories } = useProducts();
   const [globalDiscountPercentage, setGlobalDiscountPercentage] = useState(0);
 
   useEffect(() => {
@@ -1366,10 +1372,12 @@ function Checkout() {
   }, []);
 
   const subtotal = getSelectedTotalPrice();
+  const checkoutItems = getSelectedCartItems();
   const discountPercentage = normalizeDiscountPercentage(globalDiscountPercentage);
   const discountAmount = subtotal * (discountPercentage / 100);
   const discountedSubtotal = Math.max(subtotal - discountAmount, 0);
-  const totalWithTax = discountedSubtotal + (discountedSubtotal * CHECKOUT_TAX_RATE);
+  const shippingFee = checkoutItems.length > 0 ? calculateShippingFee(checkoutItems, 'ship', categories) : 0;
+  const totalWithTax = discountedSubtotal + (discountedSubtotal * CHECKOUT_TAX_RATE) + shippingFee;
   const stripeAmount = Math.max(50, Math.round(totalWithTax * 100) || 50);
   const elementsOptions = {
     mode: 'payment',

@@ -147,12 +147,17 @@ const resolveMediaUrl = (value) => {
 const mapCategoryFromApi = (category = {}) => ({
   id: category.id,
   name: category.name || '',
+  slug: category.slug || '',
+  parentId: category.parent_id ?? null,
   image: resolveMediaUrl(category.image_url),
   subcategories: Array.isArray(category.children)
     ? category.children.map((child) => ({
         id: child.id,
         name: child.name || '',
+        slug: child.slug || '',
+        parentId: child.parent_id ?? category.id ?? null,
         image: resolveMediaUrl(child.image_url || ''),
+        subcategories: Array.isArray(child.children) ? child.children.map(mapCategoryFromApi) : [],
       }))
     : [],
 });
@@ -265,6 +270,12 @@ const deriveVariantStockTotal = (variantPricing = []) =>
 
 const mapProductFromApi = (product = {}) => {
   const categories = Array.isArray(product.categories) ? product.categories : [];
+  const categoryDetails = categories.map((category) => ({
+    id: category.id ?? null,
+    name: category.name || '',
+    slug: category.slug || '',
+    parentId: category.parent_id ?? null,
+  }));
   const parentCategories = categories.filter((category) => category.parent_id == null);
   const childCategories = categories.filter((category) => category.parent_id != null);
   const images = Array.isArray(product.images) ? [...product.images].sort((a, b) => a.sort_order - b.sort_order) : [];
@@ -294,6 +305,7 @@ const mapProductFromApi = (product = {}) => {
     productType: product.product_type || 'simple',
     categories: parentCategories.map((category) => category.name),
     subcategories: childCategories.map((category) => category.name),
+    categoryDetails,
     industries: product.industries || [],
     image: resolveMediaUrl(primaryImage?.image_url || ''),
     galleryImages,

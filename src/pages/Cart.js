@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useProducts } from '../context/ProductContext';
 import Seo from '../components/Seo';
+import { calculateShippingFee, formatShippingFee } from '../utils/shipping';
 
 const CHECKOUT_TAX_RATE = Number(process.env.REACT_APP_CHECKOUT_TAX_RATE ?? '0.2');
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -26,6 +28,7 @@ function formatSelectedAttributes(item) {
 
 function ShoppingCart() {
   const navigate = useNavigate();
+  const { categories } = useProducts();
   const [globalDiscountPercentage, setGlobalDiscountPercentage] = useState(0);
   const {
     cartItems,
@@ -43,7 +46,10 @@ function ShoppingCart() {
   const selectedDiscountAmount = selectedSubtotal * (discountPercentage / 100);
   const selectedDiscountedSubtotal = Math.max(selectedSubtotal - selectedDiscountAmount, 0);
   const selectedTaxAmount = selectedDiscountedSubtotal * CHECKOUT_TAX_RATE;
-  const selectedTotal = selectedDiscountedSubtotal + selectedTaxAmount;
+  const selectedShippingFee = selectedCartItems.length > 0
+    ? calculateShippingFee(selectedCartItems, 'ship', categories)
+    : 0;
+  const selectedTotal = selectedDiscountedSubtotal + selectedTaxAmount + selectedShippingFee;
   const allItemsSelected = selectedCartItems.length === cartItems.length;
 
   useEffect(() => {
@@ -212,7 +218,7 @@ function ShoppingCart() {
             )}
             <div className="flex justify-between">
               <span className="text-slate-600">Shipping:</span>
-              <span className="font-semibold text-green-600">Free</span>
+              <span className="font-semibold text-slate-900">{formatShippingFee(selectedShippingFee)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-600">Tax ({checkoutTaxLabel}):</span>

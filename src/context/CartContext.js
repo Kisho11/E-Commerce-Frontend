@@ -63,8 +63,18 @@ const resolveMediaUrl = (value) => {
   return `${API_ORIGIN}/${value}`;
 };
 
+const mapCategoryMeta = (category = {}) => ({
+  id: category.id ?? null,
+  name: category.name || '',
+  slug: category.slug || '',
+  parentId: category.parent_id ?? category.parentId ?? null,
+});
+
 const mapBackendCartItem = (item = {}) => {
   const product = item.product || {};
+  const categoryDetails = Array.isArray(product.categories) ? product.categories.map(mapCategoryMeta) : [];
+  const parentCategories = categoryDetails.filter((category) => category.parentId == null);
+  const childCategories = categoryDetails.filter((category) => category.parentId != null);
   const primaryImage = Array.isArray(product.images)
     ? [...product.images].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).find((image) => image.is_primary) || product.images[0]
     : null;
@@ -84,6 +94,9 @@ const mapBackendCartItem = (item = {}) => {
     selectedAttributes,
     selectedColor: selectedAttributes.Color || selectedAttributes.Colour || null,
     selectedSize: selectedAttributes.Size || null,
+    categories: parentCategories.map((category) => category.name),
+    subcategories: childCategories.map((category) => category.name),
+    categoryDetails,
   };
 };
 
