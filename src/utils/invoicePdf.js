@@ -94,21 +94,23 @@ export async function downloadInvoicePdf(order) {
     author: BUSINESS.name,
   });
 
-  const logoDataUrl = await imageToDataUrl('/elms.png');
+  const logoDataUrl = await imageToDataUrl('/elmshelf-logo.png');
 
   doc.setFillColor(249, 250, 251);
-  doc.rect(0, 0, pageWidth, 38, 'F');
+  doc.rect(0, 0, pageWidth, 44, 'F');
   doc.setTextColor(15, 23, 42);
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, 'PNG', margin, 8, 22, 22);
+    doc.addImage(logoDataUrl, 'PNG', margin, 7, 70, 22);
   }
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(24);
-  doc.text(BUSINESS.name, logoDataUrl ? margin + 28 : margin, 18);
+  doc.setFontSize(logoDataUrl ? 11 : 24);
+  if (!logoDataUrl) {
+    doc.text(BUSINESS.name, margin, 18);
+  }
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(BUSINESS.address, logoDataUrl ? margin + 28 : margin, 25);
-  doc.text(BUSINESS.phone, logoDataUrl ? margin + 28 : margin, 31);
+  doc.text(BUSINESS.address, margin, logoDataUrl ? 35 : 25);
+  doc.text(BUSINESS.phone, margin, logoDataUrl ? 41 : 31);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
@@ -119,7 +121,7 @@ export async function downloadInvoicePdf(order) {
   doc.text(`Placed: ${formatDateTime(order)}`, pageWidth - margin, 29, { align: 'right' });
   doc.text(`Status: ${order.status || '-'}`, pageWidth - margin, 35, { align: 'right' });
 
-  const sectionTop = 50;
+  const sectionTop = 56;
   const colWidth = (pageWidth - margin * 2 - 8) / 3;
   const sections = [
     {

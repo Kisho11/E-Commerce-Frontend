@@ -92,7 +92,7 @@ function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
         <div className="order-print-content overflow-y-scroll px-4 py-5 text-sm sm:px-6">
           <header className="flex flex-col gap-5 border-b-2 border-slate-900 pb-5 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-4">
-              <img src="/elms-logo.svg" alt="Elmshelf logo" className="h-16 w-auto object-contain sm:h-20" />
+              <img src="/elmshelf-logo.png" alt="Elmshelf logo" className="h-16 w-auto max-w-[240px] object-contain sm:h-20 sm:max-w-[300px]" />
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Invoice from</p>
                 <h1 className="mt-1 text-3xl font-extrabold text-slate-950">{BUSINESS.name}</h1>
