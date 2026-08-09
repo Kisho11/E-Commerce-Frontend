@@ -40,6 +40,24 @@ const socialLinks = [
   },
 ];
 
+const deliveryPartners = [
+  {
+    name: 'DPD',
+    logo: '/delivery-partners/dpd.png',
+    href: null,
+  },
+  {
+    name: 'KS Logistics Solutions',
+    logo: '/delivery-partners/ks-logistics-solutions.png',
+    href: 'https://kslogisticssolutions.co.uk/',
+  },
+  {
+    name: 'Palletforce',
+    logo: '/delivery-partners/palletforce.png',
+    href: null,
+  },
+];
+
 function Footer() {
   const { t } = useLanguage();
   const mapUrl = 'https://www.google.com/maps/search/?api=1&query=Elmshelf%2C%203%20Langley%20Cl%2C%20Romford%20RM3%208XB';
@@ -52,6 +70,55 @@ function Footer() {
   return (
     <footer className="mt-16 border-t border-slate-200 bg-slate-950 text-slate-200">
       <div className="shell py-12">
+        <div className="mb-10 border-b border-slate-800 pb-8">
+          <h4 className="text-sm font-bold uppercase tracking-[0.1em] text-slate-300">Our Delivery Partners</h4>
+          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+            {deliveryPartners.map((partner) => {
+              const content = (
+                <>
+                  <span className="flex h-16 w-full items-center justify-center rounded-md bg-white p-3">
+                    {partner.logo ? (
+                      <img
+                        src={partner.logo}
+                        alt={`${partner.name} logo`}
+                        className="h-full w-full object-contain"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="text-lg font-extrabold text-slate-700">{partner.name}</span>
+                    )}
+                  </span>
+                  <span className="mt-2 block text-sm font-semibold text-slate-300">{partner.name}</span>
+                </>
+              );
+
+              if (partner.href) {
+                return (
+                  <a
+                    key={partner.name}
+                    href={partner.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Visit ${partner.name}`}
+                    className="block rounded-md border border-slate-800 bg-slate-900/70 p-3 text-center transition hover:border-slate-600 hover:bg-slate-900 hover:text-white"
+                  >
+                    {content}
+                  </a>
+                );
+              }
+
+              return (
+                <div
+                  key={partner.name}
+                  className="rounded-md border border-slate-800 bg-slate-900/70 p-3 text-center"
+                >
+                  {content}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.12em] text-blue-300">{t('footer.brandName')}</p>
@@ -72,16 +139,8 @@ function Footer() {
             </div>
           </div>
 
-          <div>
-            <h4 className="text-sm font-bold uppercase tracking-[0.1em] text-slate-300">{t('footer.support')}</h4>
-            <div className="mt-4 space-y-2 text-sm">
-              <span className="block cursor-not-allowed text-slate-600" aria-disabled="true">{t('nav.clients')}</span>
-              <span className="block cursor-not-allowed text-slate-600" aria-disabled="true">{t('nav.reviews')}</span>
-              <span className="block cursor-not-allowed text-slate-600" aria-disabled="true">Partners</span>
-            </div>
-          </div>
-
-          <div>
+          <div className="lg:-ml-4 xl:-ml-6">
+            <h4 className="text-sm font-bold uppercase tracking-[0.1em] text-slate-300">Visit Us</h4>
             <div className="mt-4 space-y-4">
               <div className="flex w-full items-start gap-3">
                 <span className="mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-red-300">
@@ -95,7 +154,7 @@ function Footer() {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Open Elmshelf location in Google Maps"
-                  className="flex-1 text-left text-lg font-bold leading-relaxed text-white no-underline transition hover:text-red-300 hover:no-underline sm:text-xl"
+                  className="flex-1 text-left text-lg font-bold leading-relaxed text-white no-underline transition hover:text-red-300 hover:no-underline"
                 >
                   Elmshelf, 3 Langley Cl, Romford RM3 8XB
                 </a>
@@ -118,7 +177,12 @@ function Footer() {
                   </p>
                 </div>
               </div>
+            </div>
+          </div>
 
+          <div>
+            <h4 className="text-sm font-bold uppercase tracking-[0.1em] text-slate-300">Contact</h4>
+            <div className="mt-4 space-y-4">
               <div className="flex w-full items-center gap-3">
                 <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-800 text-red-300">
                   <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
@@ -168,13 +232,6 @@ function Footer() {
                 </div>
               </div>
 
-              <div className="flex justify-center pt-2 lg:justify-end">
-                <img
-                  src="/elms-logo.svg"
-                  alt="Elmshelf logo"
-                  className="h-16 w-auto max-w-[260px] object-contain sm:h-20 sm:max-w-[320px]"
-                />
-              </div>
             </div>
           </div>
         </div>
