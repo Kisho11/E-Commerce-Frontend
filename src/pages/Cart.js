@@ -17,6 +17,12 @@ const normalizeDiscountPercentage = (value) => {
 
 const roundMoney = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 
+const normalizeCartQuantity = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.floor(parsed));
+};
+
 function formatSelectedAttributes(item) {
   if (item.selectedAttributes && Object.keys(item.selectedAttributes).length > 0) {
     return Object.entries(item.selectedAttributes).map(([key, value]) => `${key}: ${value}`);
@@ -32,6 +38,7 @@ function ShoppingCart() {
   const navigate = useNavigate();
   const { categories } = useProducts();
   const [globalDiscountPercentage, setGlobalDiscountPercentage] = useState(0);
+  const [quantityDrafts, setQuantityDrafts] = useState({});
   const {
     cartItems,
     removeFromCart,
@@ -80,6 +87,24 @@ function ShoppingCart() {
       cancelled = true;
     };
   }, []);
+
+  const getCartQuantityDisplay = (item) => (
+    Object.hasOwn(quantityDrafts, item.lineId) ? quantityDrafts[item.lineId] : item.quantity
+  );
+
+  const handleCartQuantityChange = (item, value) => {
+    setQuantityDrafts((previous) => ({ ...previous, [item.lineId]: value }));
+  };
+
+  const commitCartQuantity = async (item, value) => {
+    const nextQuantity = normalizeCartQuantity(value);
+    setQuantityDrafts((previous) => {
+      const next = { ...previous };
+      delete next[item.lineId];
+      return next;
+    });
+    await updateQuantity(item.lineId, nextQuantity);
+  };
 
   if (cartItems.length === 0) {
     return (
@@ -160,15 +185,30 @@ function ShoppingCart() {
                 <div className="flex flex-col items-start justify-between gap-3 sm:items-end">
                   <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-lg sm:gap-3 sm:p-2">
                     <button
-                      onClick={() => updateQuantity(item.lineId, item.quantity - 1)}
+                      onClick={() => updateQuantity(item.lineId, normalizeCartQuantity(item.quantity - 1))}
                       className="px-2 py-1 bg-slate-300 rounded hover:bg-slate-400 font-bold sm:px-3"
+                      type="button"
                     >
                       −
                     </button>
-                    <span className="w-7 text-center font-bold text-sm sm:w-8 sm:text-base">{item.quantity}</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={getCartQuantityDisplay(item)}
+                      onChange={(event) => handleCartQuantityChange(item, event.target.value)}
+                      onBlur={(event) => commitCartQuantity(item, event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.currentTarget.blur();
+                        }
+                      }}
+                      className="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-center text-sm font-bold focus:border-primary focus:outline-none sm:w-24 sm:text-base"
+                      aria-label={`Quantity for ${item.name}`}
+                    />
                     <button
                       onClick={() => updateQuantity(item.lineId, item.quantity + 1)}
                       className="px-2 py-1 bg-slate-300 rounded hover:bg-slate-400 font-bold sm:px-3"
+                      type="button"
                     >
                       +
                     </button>

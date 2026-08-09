@@ -260,7 +260,9 @@ function ProductDetail() {
 
   useEffect(() => {
     if (stockInfo.available == null) return;
-    setQuantity((current) => Math.min(Math.max(1, current), Math.max(1, stockInfo.available)));
+    setQuantity((current) => (current === '' ? current : normalizeQuantity(current)));
+    // normalizeQuantity depends on stockInfo.available and is declared below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stockInfo.available]);
 
   useEffect(() => {
@@ -330,9 +332,11 @@ function ProductDetail() {
     if (stockInfo.isOutOfStock) {
       throw new Error('This product is currently out of stock.');
     }
+    const normalizedQuantity = normalizeQuantity(quantity);
+    setQuantity(normalizedQuantity);
     await addToCart(product, {
       attributes: selectedAttributes,
-      quantity,
+      quantity: normalizedQuantity,
       unitPrice: selectedVariantPrice,
     });
   };
@@ -358,8 +362,22 @@ function ProductDetail() {
   const normalizeQuantity = (next) => {
     const parsed = Number(next);
     if (!Number.isFinite(parsed)) return 1;
-    const maxQuantity = stockInfo.available == null ? 50 : Math.min(50, Math.max(1, stockInfo.available));
-    return Math.min(maxQuantity, Math.max(1, parsed));
+    const maxQuantity = stockInfo.available == null ? Number.MAX_SAFE_INTEGER : Math.max(1, stockInfo.available);
+    return Math.min(maxQuantity, Math.max(1, Math.floor(parsed)));
+  };
+
+  const handleQuantityChange = (event) => {
+    const nextValue = event.target.value;
+    if (nextValue === '') {
+      setQuantity('');
+      return;
+    }
+
+    setQuantity(normalizeQuantity(nextValue));
+  };
+
+  const handleQuantityBlur = () => {
+    setQuantity((current) => normalizeQuantity(current));
   };
 
   const handleImageMouseMove = (event) => {
@@ -572,15 +590,16 @@ function ProductDetail() {
                     <input
                       type="number"
                       min="1"
-                      max={stockInfo.available == null ? 50 : Math.min(50, Math.max(1, stockInfo.available))}
+                      max={stockInfo.available == null ? undefined : Math.max(1, stockInfo.available)}
                       value={quantity}
-                      onChange={(e) => setQuantity(normalizeQuantity(e.target.value))}
+                      onChange={handleQuantityChange}
+                      onBlur={handleQuantityBlur}
                       disabled={stockInfo.isOutOfStock}
-                      className="w-16 border-x border-slate-300 px-2 py-2 text-center focus:outline-none disabled:bg-slate-100 disabled:text-slate-400"
+                      className="w-24 border-x border-slate-300 px-2 py-2 text-center focus:outline-none disabled:bg-slate-100 disabled:text-slate-400"
                     />
                     <button
                       onClick={() => setQuantity((prev) => normalizeQuantity(prev + 1))}
-                      disabled={stockInfo.isOutOfStock || (stockInfo.available != null && quantity >= stockInfo.available)}
+                      disabled={stockInfo.isOutOfStock || (stockInfo.available != null && normalizeQuantity(quantity) >= stockInfo.available)}
                       className="px-3 py-2 text-slate-700 disabled:text-slate-300"
                       type="button"
                     >
