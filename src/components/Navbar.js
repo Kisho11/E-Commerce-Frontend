@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useProducts } from '../context/ProductContext';
+import { CALL_PHONE_DISPLAY, CALL_PHONE_TEL } from '../utils/contactDetails';
 import { categoryPath } from '../utils/categoryRoutes';
 
 function Navbar() {
@@ -359,8 +360,18 @@ function Navbar() {
             </form>
           </div>
 
-          <div className="hidden w-[360px] items-center justify-end gap-3 xl:flex">
+          <div className="hidden shrink-0 items-center justify-end gap-3 xl:flex">
               {/* Removed search form */}
+            <a
+              href={`tel:${CALL_PHONE_TEL}`}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-extrabold text-white transition hover:bg-red-700"
+              aria-label={`Call Elmshelf on ${CALL_PHONE_DISPLAY}`}
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                <path d="M6.62 10.79a15.06 15.06 0 0 0 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.56 0 1 .45 1 1V20a1 1 0 0 1-1 1C10.85 21 3 13.15 3 3a1 1 0 0 1 1-1h3.5c.55 0 1 .44 1 1 0 1.24.2 2.45.57 3.57.11.35.03.75-.25 1.02l-2.2 2.2Z" />
+              </svg>
+              {CALL_PHONE_DISPLAY}
+            </a>
             {!isAuthenticated ? (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
@@ -424,6 +435,15 @@ function Navbar() {
           </div>
 
           <div className="hidden items-center gap-2 md:flex xl:hidden">
+            <a
+              href={`tel:${CALL_PHONE_TEL}`}
+              className="inline-flex items-center justify-center rounded-lg p-2 text-white outline-none ring-0 transition hover:text-red-300 focus:outline-none focus:ring-0"
+              aria-label={`Call Elmshelf on ${CALL_PHONE_DISPLAY}`}
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden="true">
+                <path d="M6.62 10.79a15.06 15.06 0 0 0 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.56 0 1 .45 1 1V20a1 1 0 0 1-1 1C10.85 21 3 13.15 3 3a1 1 0 0 1 1-1h3.5c.55 0 1 .44 1 1 0 1.24.2 2.45.57 3.57.11.35.03.75-.25 1.02l-2.2 2.2Z" />
+              </svg>
+            </a>
             <Link
               to="/cart"
               className="relative inline-flex items-center justify-center rounded-lg p-2 text-white outline-none ring-0 focus:outline-none focus:ring-0"
@@ -455,6 +475,15 @@ function Navbar() {
           </div>
 
           <div className="flex items-center gap-2 md:hidden">
+            <a
+              href={`tel:${CALL_PHONE_TEL}`}
+              className="inline-flex items-center justify-center rounded-lg p-2 text-white outline-none ring-0 transition hover:text-red-300 focus:outline-none focus:ring-0"
+              aria-label={`Call Elmshelf on ${CALL_PHONE_DISPLAY}`}
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden="true">
+                <path d="M6.62 10.79a15.06 15.06 0 0 0 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.56 0 1 .45 1 1V20a1 1 0 0 1-1 1C10.85 21 3 13.15 3 3a1 1 0 0 1 1-1h3.5c.55 0 1 .44 1 1 0 1.24.2 2.45.57 3.57.11.35.03.75-.25 1.02l-2.2 2.2Z" />
+              </svg>
+            </a>
             <Link
               to="/cart"
               className="relative inline-flex items-center justify-center rounded-lg p-2 text-white outline-none ring-0 focus:outline-none focus:ring-0"
@@ -633,6 +662,16 @@ function Navbar() {
                 )}
 
                 <div className="pt-1">
+                  <a
+                    href={`tel:${CALL_PHONE_TEL}`}
+                    className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-center text-sm font-semibold text-white"
+                    onClick={handleNavigate}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                      <path d="M6.62 10.79a15.06 15.06 0 0 0 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.56 0 1 .45 1 1V20a1 1 0 0 1-1 1C10.85 21 3 13.15 3 3a1 1 0 0 1 1-1h3.5c.55 0 1 .44 1 1 0 1.24.2 2.45.57 3.57.11.35.03.75-.25 1.02l-2.2 2.2Z" />
+                    </svg>
+                    Call {CALL_PHONE_DISPLAY}
+                  </a>
                   <Link
                     to="/cart"
                     className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-center text-sm font-semibold text-slate-700"

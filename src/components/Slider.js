@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { CALL_PHONE_DISPLAY, CALL_PHONE_TEL } from '../utils/contactDetails';
 
 const stableSlide = {
   backgroundImage: 'url(/main.webp)',
@@ -39,13 +40,13 @@ function Slider() {
               </h1>
               <p className="mb-6 max-w-xl text-sm leading-7 text-slate-100 sm:mb-8 sm:text-base lg:text-lg">{t('slider.subtitle')}</p>
               <a
-                href="tel:+447584682048"
+                href={`tel:${CALL_PHONE_TEL}`}
                 className="phone-glow mb-5 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-extrabold tracking-[0.04em] text-white shadow-xl sm:mb-6 sm:px-5 sm:py-2.5 sm:text-sm"
               >
                 <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
                   <path d="M6.62 10.79a15.06 15.06 0 0 0 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.56 0 1 .45 1 1V20a1 1 0 0 1-1 1C10.85 21 3 13.15 3 3a1 1 0 0 1 1-1h3.5c.55 0 1 .44 1 1 0 1.24.2 2.45.57 3.57.11.35.03.75-.25 1.02l-2.2 2.2Z" />
                 </svg>
-                {t('slider.call')}
+                Call: {CALL_PHONE_DISPLAY}
               </a>
             </div>
           </div>

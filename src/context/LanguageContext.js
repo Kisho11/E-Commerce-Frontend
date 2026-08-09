@@ -50,7 +50,7 @@ const translations = {
       line2: 'Better Display.',
       line3: 'Better Business.',
       subtitle: 'Maximise every inch of your shop space with strong, practical, and high-quality shelving designed for everyday retail use.',
-      call: 'Call: +44 7584682048',
+      call: 'Call: 01708 594 024',
       searchPlaceholder: 'Search products, categories, or industries...',
       search: 'Search',
       visitShowroom: 'Visit Showroom',

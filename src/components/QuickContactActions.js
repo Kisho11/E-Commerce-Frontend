@@ -1,11 +1,8 @@
 import React from 'react';
-
-const BUSINESS_PHONE = '+447584682048';
-const WHATSAPP_PHONE = '447584682048';
-const WHATSAPP_MESSAGE = 'Hi, I need help with a product enquiry.';
+import { CALL_PHONE_TEL, WHATSAPP_MESSAGE, WHATSAPP_PHONE_WA } from '../utils/contactDetails';
 
 function QuickContactActions() {
-  const whatsappUrl = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
+  const whatsappUrl = `https://wa.me/${WHATSAPP_PHONE_WA}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
 
   return (
     <div className="fixed bottom-24 right-4 z-40 flex flex-col gap-3 sm:bottom-8 sm:right-6">
@@ -22,7 +19,7 @@ function QuickContactActions() {
       </a>
 
       <a
-        href={`tel:${BUSINESS_PHONE}`}
+        href={`tel:${CALL_PHONE_TEL}`}
         aria-label="Call us now"
         className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-lg transition hover:scale-105 hover:bg-red-700 hover:shadow-xl"
       >

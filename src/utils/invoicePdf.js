@@ -1,10 +1,11 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { CALL_PHONE_DISPLAY } from './contactDetails';
 
 const BUSINESS = {
   name: 'Elmshelf',
   address: '3, Langley Close, Romford, RM3 8XB',
-  phone: '+44 7584682048',
+  phone: CALL_PHONE_DISPLAY,
   hoursWeekday: 'Monday-Saturday: 8:00 AM - 7:00 PM',
   hoursSunday: 'Sunday: 9:00 AM - 5:00 PM',
 };
