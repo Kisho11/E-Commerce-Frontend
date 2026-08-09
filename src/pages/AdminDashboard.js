@@ -1045,7 +1045,7 @@ function AdminDashboard() {
               <div className="mb-4">
                 <h4 className="text-lg font-bold text-gray-800">Global Product Discount</h4>
                 <p className="mt-1 text-sm text-gray-500">
-                  Apply a promotional percentage to product subtotal only. Shipping and tax are not discounted.
+                  Apply a promotional percentage to product subtotal only. Shipping and VAT are not discounted.
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-[minmax(0,260px)_auto] sm:items-end">

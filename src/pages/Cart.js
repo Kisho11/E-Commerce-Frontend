@@ -7,13 +7,15 @@ import { calculateShippingFee, formatShippingFee } from '../utils/shipping';
 
 const CHECKOUT_TAX_RATE = Number(process.env.REACT_APP_CHECKOUT_TAX_RATE ?? '0.2');
 const API_BASE_URL = process.env.REACT_APP_API_URL;
-const checkoutTaxLabel = `${Math.round(CHECKOUT_TAX_RATE * 100)}%`;
+const checkoutVatLabel = `${Math.round(CHECKOUT_TAX_RATE * 100)}%`;
 
 const normalizeDiscountPercentage = (value) => {
   const percentage = Number(value || 0);
   if (!Number.isFinite(percentage)) return 0;
   return Math.min(Math.max(percentage, 0), 100);
 };
+
+const roundMoney = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 
 function formatSelectedAttributes(item) {
   if (item.selectedAttributes && Object.keys(item.selectedAttributes).length > 0) {
@@ -43,13 +45,13 @@ function ShoppingCart() {
   const selectedCartItems = getSelectedCartItems();
   const selectedSubtotal = getSelectedTotalPrice();
   const discountPercentage = normalizeDiscountPercentage(globalDiscountPercentage);
-  const selectedDiscountAmount = selectedSubtotal * (discountPercentage / 100);
-  const selectedDiscountedSubtotal = Math.max(selectedSubtotal - selectedDiscountAmount, 0);
-  const selectedTaxAmount = selectedDiscountedSubtotal * CHECKOUT_TAX_RATE;
+  const selectedDiscountAmount = roundMoney(selectedSubtotal * (discountPercentage / 100));
+  const selectedDiscountedSubtotal = roundMoney(Math.max(selectedSubtotal - selectedDiscountAmount, 0));
   const selectedShippingFee = selectedCartItems.length > 0
     ? calculateShippingFee(selectedCartItems, 'ship', categories)
     : 0;
-  const selectedTotal = selectedDiscountedSubtotal + selectedTaxAmount + selectedShippingFee;
+  const selectedTaxAmount = roundMoney((selectedDiscountedSubtotal + selectedShippingFee) * CHECKOUT_TAX_RATE);
+  const selectedTotal = roundMoney(selectedDiscountedSubtotal + selectedTaxAmount + selectedShippingFee);
   const allItemsSelected = selectedCartItems.length === cartItems.length;
 
   useEffect(() => {
@@ -221,7 +223,7 @@ function ShoppingCart() {
               <span className="font-semibold text-slate-900">{formatShippingFee(selectedShippingFee)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-600">Tax ({checkoutTaxLabel}):</span>
+              <span className="text-slate-600">VAT ({checkoutVatLabel}):</span>
               <span className="font-semibold text-slate-900">£{selectedTaxAmount.toFixed(2)}</span>
             </div>
           </div>

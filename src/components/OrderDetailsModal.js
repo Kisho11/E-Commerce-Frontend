@@ -60,7 +60,7 @@ function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
   const discountPercentage = Number(pricing.discountPercentage || 0);
   const discountAmount = Number(pricing.discountAmount || 0);
   const discountedSubtotal = Number(pricing.discountedSubtotal ?? Math.max(Number(subtotal || 0) - discountAmount, 0));
-  const taxRate = `${((Number(pricing.taxRate) || 0) * 100).toFixed(2)}%`;
+  const vatRate = `${((Number(pricing.taxRate) || 0) * 100).toFixed(2)}%`;
   const deliveryNote = getDeliveryNote(order);
 
   return (
@@ -197,12 +197,12 @@ function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
                   </>
                 )}
                 <div className="flex justify-between gap-4">
-                  <span className="text-slate-600">Tax ({taxRate})</span>
-                  <span className="font-semibold">{formatCurrency(pricing.taxAmount)}</span>
-                </div>
-                <div className="flex justify-between gap-4">
                   <span className="text-slate-600">Shipping</span>
                   <span className="font-semibold">{formatCurrency(pricing.shippingFee)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-slate-600">VAT ({vatRate})</span>
+                  <span className="font-semibold">{formatCurrency(pricing.taxAmount)}</span>
                 </div>
                 <div className="mt-3 flex justify-between gap-4 border-t border-slate-200 pt-3 text-lg font-extrabold text-slate-950">
                   <span>Total</span>

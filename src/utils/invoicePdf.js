@@ -85,7 +85,7 @@ export async function downloadInvoicePdf(order) {
   const discountPercentage = Number(pricing.discountPercentage || 0);
   const discountAmount = Number(pricing.discountAmount || 0);
   const discountedSubtotal = Number(pricing.discountedSubtotal ?? Math.max(Number(subtotal || 0) - discountAmount, 0));
-  const taxRate = `${((Number(pricing.taxRate) || 0) * 100).toFixed(2)}%`;
+  const vatRate = `${((Number(pricing.taxRate) || 0) * 100).toFixed(2)}%`;
   const deliveryNote = getDeliveryNote(order);
 
   doc.setProperties({
@@ -199,8 +199,8 @@ export async function downloadInvoicePdf(order) {
           ['Discounted Subtotal', money(discountedSubtotal)],
         ]
       : []),
-    [`Tax (${taxRate})`, money(pricing.taxAmount)],
     ['Shipping', money(pricing.shippingFee)],
+    [`VAT (${vatRate})`, money(pricing.taxAmount)],
   ];
   const totalsBoxHeight = 18 + totalRows.length * 7;
 

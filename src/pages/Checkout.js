@@ -29,7 +29,7 @@ const DELIVERY_MODE_LABELS = {
 const CHECKOUT_TAX_RATE = Number(process.env.REACT_APP_CHECKOUT_TAX_RATE ?? '0.2');
 const PAYMENT_CURRENCY = (process.env.REACT_APP_PAYMENT_CURRENCY || 'gbp').toLowerCase();
 const API_BASE_URL = process.env.REACT_APP_API_URL;
-const checkoutTaxLabel = `${Math.round(CHECKOUT_TAX_RATE * 100)}%`;
+const checkoutVatLabel = `${Math.round(CHECKOUT_TAX_RATE * 100)}%`;
 const getUserStorageKey = (key, userId) => `${key}:${userId || 'guest'}`;
 const getStripeCheckoutStorageKey = (orderId) => `stripeCheckout:${orderId}`;
 
@@ -38,6 +38,8 @@ const normalizeDiscountPercentage = (value) => {
   if (!Number.isFinite(percentage)) return 0;
   return Math.min(Math.max(percentage, 0), 100);
 };
+
+const roundMoney = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 
 function readLocalStorage(key, fallback) {
   try {
@@ -222,14 +224,14 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
   const subtotal = getSelectedTotalPrice();
   const discountPercentage = normalizeDiscountPercentage(globalDiscountPercentage);
   const discountRate = discountPercentage / 100;
-  const discountAmount = subtotal * discountRate;
-  const discountedSubtotal = Math.max(subtotal - discountAmount, 0);
+  const discountAmount = roundMoney(subtotal * discountRate);
+  const discountedSubtotal = roundMoney(Math.max(subtotal - discountAmount, 0));
   const taxRate = CHECKOUT_TAX_RATE;
-  const taxAmount = discountedSubtotal * taxRate;
   const shippingFee = checkoutItems.length > 0
     ? calculateShippingFee(checkoutItems, formData.deliveryMode, categories)
     : 0;
-  const totalWithTax = discountedSubtotal + taxAmount + shippingFee;
+  const taxAmount = roundMoney((discountedSubtotal + shippingFee) * taxRate);
+  const totalWithTax = roundMoney(discountedSubtotal + taxAmount + shippingFee);
   const requiresBackendCheckout = Boolean(API_BASE_URL);
 
   useEffect(() => {
@@ -1324,7 +1326,7 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
               <span className="font-semibold">{formatShippingFee(shippingFee)}</span>
             </div>
             <div className="flex justify-between text-gray-700">
-              <span>Tax ({checkoutTaxLabel}):</span>
+              <span>VAT ({checkoutVatLabel}):</span>
               <span className="font-semibold">£{taxAmount.toFixed(2)}</span>
             </div>
           </div>
@@ -1374,10 +1376,11 @@ function Checkout() {
   const subtotal = getSelectedTotalPrice();
   const checkoutItems = getSelectedCartItems();
   const discountPercentage = normalizeDiscountPercentage(globalDiscountPercentage);
-  const discountAmount = subtotal * (discountPercentage / 100);
-  const discountedSubtotal = Math.max(subtotal - discountAmount, 0);
+  const discountAmount = roundMoney(subtotal * (discountPercentage / 100));
+  const discountedSubtotal = roundMoney(Math.max(subtotal - discountAmount, 0));
   const shippingFee = checkoutItems.length > 0 ? calculateShippingFee(checkoutItems, 'ship', categories) : 0;
-  const totalWithTax = discountedSubtotal + (discountedSubtotal * CHECKOUT_TAX_RATE) + shippingFee;
+  const taxAmount = roundMoney((discountedSubtotal + shippingFee) * CHECKOUT_TAX_RATE);
+  const totalWithTax = roundMoney(discountedSubtotal + taxAmount + shippingFee);
   const stripeAmount = Math.max(50, Math.round(totalWithTax * 100) || 50);
   const elementsOptions = {
     mode: 'payment',
