@@ -150,23 +150,30 @@ const EXPRESS_CHECKOUT_OPTIONS = {
   buttonType: {
     applePay: 'check-out',
     googlePay: 'checkout',
-    paypal: 'checkout',
   },
   layout: {
     maxColumns: 2,
     maxRows: 3,
     overflow: 'auto',
   },
-  paymentMethodOrder: ['apple_pay', 'google_pay', 'link', 'paypal', 'klarna'],
+  paymentMethodOrder: ['apple_pay', 'google_pay', 'link', 'amazon_pay', 'klarna'],
   paymentMethods: {
     applePay: 'auto',
     googlePay: 'auto',
     link: 'auto',
-    paypal: 'auto',
     klarna: 'auto',
-    amazonPay: 'never',
+    amazonPay: 'auto',
   },
 };
+
+const STRIPE_PAYMENT_METHOD_TYPES = [
+  'card',
+  'link',
+  'amazon_pay',
+  'klarna',
+  'afterpay_clearpay',
+  'revolut_pay',
+];
 
 const PAYMENT_ELEMENT_OPTIONS = {
   layout: {
@@ -175,7 +182,14 @@ const PAYMENT_ELEMENT_OPTIONS = {
     radios: 'always',
     visibleAccordionItemsCount: 6,
   },
-  paymentMethodOrder: ['card', 'link', 'paypal', 'klarna', 'afterpay_clearpay', 'pay_by_bank'],
+  paymentMethodOrder: [
+    'card',
+    'link',
+    'amazon_pay',
+    'klarna',
+    'afterpay_clearpay',
+    'revolut_pay',
+  ],
   wallets: {
     applePay: 'never',
     googlePay: 'never',
@@ -1209,6 +1223,7 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
                     onClick={handleExpressCheckoutClick}
                     onConfirm={handleExpressCheckoutConfirm}
                     onReady={({ availablePaymentMethods }) => {
+                      console.info('Stripe express checkout methods:', availablePaymentMethods);
                       setExpressCheckoutReady(Boolean(availablePaymentMethods));
                     }}
                   />
@@ -1386,6 +1401,7 @@ function Checkout() {
     mode: 'payment',
     amount: stripeAmount,
     currency: PAYMENT_CURRENCY,
+    paymentMethodTypes: STRIPE_PAYMENT_METHOD_TYPES,
     appearance: stripeAppearance,
   };
 
