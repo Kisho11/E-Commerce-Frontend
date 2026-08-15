@@ -124,6 +124,7 @@ function ProductDetail() {
   const { products, loadAllProducts } = useProducts();
   const product = products.find((p) => p.id === parseInt(id, 10));
   const relatedProductsRef = useRef(null);
+  const shareMenuRef = useRef(null);
   const [resolvedProductId, setResolvedProductId] = useState(null);
   const [visibleRelatedCount, setVisibleRelatedCount] = useState(4);
   const [canScrollRelatedLeft, setCanScrollRelatedLeft] = useState(false);
@@ -134,6 +135,8 @@ function ProductDetail() {
   const [isHoverZoomed, setIsHoverZoomed] = useState(false);
   const [zoomOrigin, setZoomOrigin] = useState('50% 50%');
   const [cartError, setCartError] = useState('');
+  const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState('');
 
   const productType = useMemo(() => resolveProductType(product), [product]);
   const priceDisplay = useMemo(() => getProductPriceDisplay(product), [product]);
@@ -224,7 +227,31 @@ function ProductDetail() {
     setSelectedImageIndex(0);
     setIsHoverZoomed(false);
     setZoomOrigin('50% 50%');
+    setIsShareMenuOpen(false);
+    setShareFeedback('');
   }, [product?.id]);
+
+  useEffect(() => {
+    if (!isShareMenuOpen) return undefined;
+
+    const handleOutsideClick = (event) => {
+      if (shareMenuRef.current && !shareMenuRef.current.contains(event.target)) {
+        setIsShareMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setIsShareMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isShareMenuOpen]);
 
   useEffect(() => {
     setVisibleRelatedCount(4);
@@ -326,6 +353,72 @@ function ProductDetail() {
           url: window.location.href,
         },
   };
+  const productUrl = window.location.href;
+  const shareTitle = productType === PRODUCT_TYPES.CUSTOM
+    ? product.name
+    : `${product.name} - ${selectedPriceText} Exc. VAT`;
+  const shareMessage = `${shareTitle}\n${productUrl}`;
+
+  const fallbackCopyShareLink = (text) => {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'fixed';
+    textArea.style.top = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.select();
+    const didCopy = document.execCommand('copy');
+    document.body.removeChild(textArea);
+    return didCopy;
+  };
+
+  const handleCopyShareLink = async () => {
+    setShareFeedback('');
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(productUrl);
+      } else if (!fallbackCopyShareLink(productUrl)) {
+        throw new Error('Copy command was not available.');
+      }
+      setShareFeedback('Link copied');
+      setIsShareMenuOpen(false);
+    } catch (err) {
+      setShareFeedback('Could not copy link');
+    }
+  };
+
+  const openShareWindow = (url) => {
+    const openedWindow = window.open(url, '_blank', 'noopener,noreferrer');
+    if (openedWindow) openedWindow.opener = null;
+    setIsShareMenuOpen(false);
+  };
+
+  const shareOptions = [
+    {
+      label: 'WhatsApp',
+      action: () => openShareWindow(`https://wa.me/?text=${encodeURIComponent(shareMessage)}`),
+      markerClass: 'bg-emerald-500',
+    },
+    {
+      label: 'Facebook',
+      action: () => openShareWindow(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(productUrl)}`),
+      markerClass: 'bg-blue-600',
+    },
+    {
+      label: 'X',
+      action: () => openShareWindow(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareTitle)}&url=${encodeURIComponent(productUrl)}`),
+      markerClass: 'bg-slate-900',
+    },
+    {
+      label: 'Email',
+      action: () => {
+        window.location.href = `mailto:?subject=${encodeURIComponent(product.name)}&body=${encodeURIComponent(shareMessage)}`;
+        setIsShareMenuOpen(false);
+      },
+      markerClass: 'bg-amber-500',
+    },
+  ];
 
   const addSelectedProductToCart = async () => {
     setCartError('');
@@ -640,6 +733,62 @@ function ProductDetail() {
                 <p className="mt-3 text-sm font-medium text-red-600">{cartError}</p>
               )}
             </form>
+
+            <div ref={shareMenuRef} className="relative mt-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShareFeedback('');
+                    setIsShareMenuOpen((isOpen) => !isOpen);
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-primary hover:bg-red-50 hover:text-primary"
+                  aria-expanded={isShareMenuOpen}
+                  aria-haspopup="menu"
+                >
+                  <UiIcon name="share" className="h-4 w-4" />
+                  Share
+                </button>
+                {shareFeedback && (
+                  <p className={`text-sm font-medium ${shareFeedback.includes('copied') ? 'text-emerald-700' : 'text-red-600'}`} aria-live="polite">
+                    {shareFeedback}
+                  </p>
+                )}
+              </div>
+
+              {isShareMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute left-0 z-20 mt-2 w-full max-w-sm rounded-lg border border-slate-200 bg-white p-2 shadow-lg sm:w-80"
+                >
+                  <button
+                    type="button"
+                    onClick={handleCopyShareLink}
+                    role="menuitem"
+                    className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
+                  >
+                    <UiIcon name="copy" className="h-4 w-4 text-slate-500" />
+                    Copy link
+                  </button>
+                  {shareOptions.map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={option.action}
+                      role="menuitem"
+                      className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
+                    >
+                      {option.label === 'Email' ? (
+                        <UiIcon name="mail" className="h-4 w-4 text-slate-500" />
+                      ) : (
+                        <span className={`h-3 w-3 rounded-full ${option.markerClass}`} aria-hidden="true" />
+                      )}
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {product.mainNote && (
               <div className="mt-10">
