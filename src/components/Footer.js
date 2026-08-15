@@ -150,6 +150,7 @@ function Footer() {
               <Link to="/products-by-industry" className="block text-slate-400 transition hover:text-white">{t('productsPage.title')}</Link>
               <Link to="/catalogue" className="block text-slate-400 transition hover:text-white">{t('nav.catalogue')}</Link>
               <Link to="/customer-portal" className="block text-slate-400 transition hover:text-white">{t('nav.myAccount')}</Link>
+              <Link to="/terms-and-conditions" className="block text-slate-400 transition hover:text-white">Terms and Conditions</Link>
             </div>
           </div>
 

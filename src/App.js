@@ -27,6 +27,7 @@ const Clients = lazy(() => import('./pages/Clients'));
 const Reviews = lazy(() => import('./pages/Reviews'));
 const Catalogue = lazy(() => import('./pages/Catalogue'));
 const Sponsor = lazy(() => import('./pages/Sponsor'));
+const TermsAndConditions = lazy(() => import('./pages/TermsAndConditions'));
 const Login = lazy(() => import('./pages/Login'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
@@ -115,6 +116,7 @@ function App() {
                       <Route path="/reviews" element={<Reviews />} />
                       <Route path="/catalogue" element={<Catalogue />} />
                       <Route path="/sponsor" element={<Sponsor />} />
+                      <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
                       <Route path="/categories" element={<CategoriesPage />} />
                       <Route path="/categories/:categorySlug" element={<CategoriesPage />} />
                       <Route
