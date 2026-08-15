@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import NewsletterSignupForm from './NewsletterSignupForm';
 import { useLanguage } from '../context/LanguageContext';
 import {
   CALL_PHONE_DISPLAY,
@@ -116,6 +117,19 @@ function Footer() {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        <div className="mb-10 border-b border-slate-800 pb-8">
+          <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-blue-300">Email Updates</p>
+              <h3 className="mt-2 text-2xl font-bold text-white">Stay in the loop</h3>
+              <p className="mt-3 text-sm leading-relaxed text-slate-400">
+                Get promotions, offers, and event details from Elmshelf.
+              </p>
+            </div>
+            <NewsletterSignupForm variant="dark" compact />
           </div>
         </div>
 

@@ -9,10 +9,13 @@ import IndustryManagement from './IndustryManagement';
 import InventoryManagement from './InventoryManagement';
 import ManagerManagement from './ManagerManagement';
 import OrderDetailsModal from '../components/OrderDetailsModal';
+import TipTapEditor from '../components/TipTapEditor';
 import UiIcon from '../components/UiIcon';
 
 const ORDER_STATUS_OPTIONS = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
 const ADMIN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const CAMPAIGN_IMAGE_MAX_COUNT = 5;
+const CAMPAIGN_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 const API_ORIGIN = API_BASE_URL ? new URL(API_BASE_URL).origin : '';
 const emptyCustomerEditForm = {
@@ -93,6 +96,11 @@ function AdminDashboard() {
   const [marketingDiscountSaving, setMarketingDiscountSaving] = useState(false);
   const [marketingMessage, setMarketingMessage] = useState('');
   const [marketingError, setMarketingError] = useState('');
+  const [newsletterSubscribers, setNewsletterSubscribers] = useState([]);
+  const [marketingCampaigns, setMarketingCampaigns] = useState([]);
+  const [campaignSubject, setCampaignSubject] = useState('');
+  const [campaignMessageHtml, setCampaignMessageHtml] = useState('');
+  const [campaignSending, setCampaignSending] = useState(false);
 
   const customerLookup = useMemo(
     () => new Map(registeredCustomers.map((customer) => [Number(customer.id), customer])),
@@ -141,6 +149,7 @@ function AdminDashboard() {
     if (marketingBannerFile) return URL.createObjectURL(marketingBannerFile);
     return resolveDashboardMediaUrl(marketingBanner?.image_url || '');
   }, [marketingBanner, marketingBannerFile]);
+  const activeNewsletterSubscriberCount = newsletterSubscribers.filter((subscriber) => subscriber.is_active).length;
 
   const customerOrderStats = useMemo(() => {
     const grouped = new Map();
@@ -420,23 +429,38 @@ function AdminDashboard() {
     if (user?.role !== 'admin' || activeTab !== 'marketing') return undefined;
 
     let cancelled = false;
-    const loadMarketingBanner = async () => {
+    const loadMarketingData = async () => {
       setMarketingLoading(true);
       setMarketingError('');
       setMarketingMessage('');
 
       try {
-        const response = await authFetch('/marketing/admin/banner');
-        const data = await response.json().catch(() => null);
-        if (!response.ok) {
-          throw new Error(data?.detail || 'Unable to load marketing banner.');
+        const [bannerResponse, subscribersResponse, campaignsResponse] = await Promise.all([
+          authFetch('/marketing/admin/banner'),
+          authFetch('/marketing/admin/subscribers'),
+          authFetch('/marketing/admin/campaigns'),
+        ]);
+        const bannerData = await bannerResponse.json().catch(() => null);
+        const subscribersData = await subscribersResponse.json().catch(() => []);
+        const campaignsData = await campaignsResponse.json().catch(() => []);
+
+        if (!bannerResponse.ok) {
+          throw new Error(bannerData?.detail || 'Unable to load marketing banner.');
+        }
+        if (!subscribersResponse.ok) {
+          throw new Error(subscribersData?.detail || 'Unable to load newsletter subscribers.');
+        }
+        if (!campaignsResponse.ok) {
+          throw new Error(campaignsData?.detail || 'Unable to load marketing campaigns.');
         }
 
         if (!cancelled) {
-          setMarketingBanner(data || null);
-          setMarketingBannerEnabled(Boolean(data?.is_active));
-          setMarketingBannerCtaUrl(data?.cta_url || '/catalogue');
-          setGlobalDiscountPercentage(String(Number(data?.global_discount_percentage || 0)));
+          setMarketingBanner(bannerData || null);
+          setMarketingBannerEnabled(Boolean(bannerData?.is_active));
+          setMarketingBannerCtaUrl(bannerData?.cta_url || '/catalogue');
+          setGlobalDiscountPercentage(String(Number(bannerData?.global_discount_percentage || 0)));
+          setNewsletterSubscribers(Array.isArray(subscribersData) ? subscribersData : []);
+          setMarketingCampaigns(Array.isArray(campaignsData) ? campaignsData : []);
           setMarketingBannerFile(null);
         }
       } catch (error) {
@@ -445,7 +469,9 @@ function AdminDashboard() {
           setMarketingBannerEnabled(false);
           setMarketingBannerCtaUrl('/catalogue');
           setGlobalDiscountPercentage('0');
-          setMarketingError(error.message || 'Unable to load marketing banner.');
+          setNewsletterSubscribers([]);
+          setMarketingCampaigns([]);
+          setMarketingError(error.message || 'Unable to load marketing data.');
         }
       } finally {
         if (!cancelled) {
@@ -454,7 +480,7 @@ function AdminDashboard() {
       }
     };
 
-    loadMarketingBanner();
+    loadMarketingData();
 
     return () => {
       cancelled = true;
@@ -605,6 +631,103 @@ function AdminDashboard() {
       setMarketingError(error.message || 'Unable to save global discount.');
     } finally {
       setMarketingDiscountSaving(false);
+    }
+  };
+
+  const uploadCampaignBodyImages = async (files) => {
+    setMarketingMessage('');
+
+    const existingImageCount = (campaignMessageHtml.match(/<img\b/gi) || []).length;
+    if (existingImageCount + files.length > CAMPAIGN_IMAGE_MAX_COUNT) {
+      setMarketingError('You can include a maximum of 5 images in one campaign email.');
+      return [];
+    }
+
+    if (files.length > CAMPAIGN_IMAGE_MAX_COUNT) {
+      setMarketingError('You can upload a maximum of 5 campaign images.');
+      return [];
+    }
+
+    const invalidFile = files.find((file) => !['image/png', 'image/jpeg'].includes(file.type));
+    if (invalidFile) {
+      setMarketingError('Campaign images must be PNG or JPEG files.');
+      return [];
+    }
+
+    const oversizedFile = files.find((file) => file.size > CAMPAIGN_IMAGE_MAX_BYTES);
+    if (oversizedFile) {
+      setMarketingError('Each campaign image must be 2 MB or smaller.');
+      return [];
+    }
+
+    try {
+      const formData = new FormData();
+      files.forEach((file) => formData.append('images', file));
+
+      const response = await authFetch('/marketing/admin/campaign-images', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Unable to upload campaign image.');
+      }
+
+      setMarketingError('');
+      return Array.isArray(data?.image_urls) ? data.image_urls : [];
+    } catch (error) {
+      setMarketingError(error.message || 'Unable to upload campaign image.');
+      return [];
+    }
+  };
+
+  const sendMarketingCampaign = async (event) => {
+    event.preventDefault();
+    if (campaignSending) return;
+
+    const subject = campaignSubject.trim();
+    const plainMessage = campaignMessageHtml.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
+    if (subject.length < 3) {
+      setMarketingError('Campaign subject must be at least 3 characters.');
+      return;
+    }
+    if (!plainMessage) {
+      setMarketingError('Campaign email message is required.');
+      return;
+    }
+
+    setCampaignSending(true);
+    setMarketingError('');
+    setMarketingMessage('');
+
+    try {
+      const formData = new FormData();
+      formData.append('subject', subject);
+      formData.append('message_html', campaignMessageHtml);
+
+      const response = await authFetch('/marketing/admin/campaigns/send', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Unable to send campaign.');
+      }
+
+      const campaign = data?.campaign;
+      setMarketingCampaigns((prev) => (campaign ? [campaign, ...prev].slice(0, 20) : prev));
+      setCampaignSubject('');
+      setCampaignMessageHtml('');
+      setMarketingMessage(
+        `Campaign sent to ${Number(campaign?.sent_count || 0)} subscriber${Number(campaign?.sent_count || 0) === 1 ? '' : 's'}.`
+      );
+      event.target.reset();
+    } catch (error) {
+      setMarketingError(error.message || 'Unable to send campaign.');
+    } finally {
+      setCampaignSending(false);
     }
   };
 
@@ -1071,6 +1194,124 @@ function AdminDashboard() {
                 </button>
               </div>
             </form>
+
+            <div className="mt-8 grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
+              <form onSubmit={sendMarketingCampaign} className="rounded-xl border border-gray-200 bg-white p-5">
+                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h4 className="text-lg font-bold text-gray-800">Email Campaign</h4>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Send promotions, offers, and event updates to active subscribers.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-700">
+                    {activeNewsletterSubscriberCount} active subscriber{activeNewsletterSubscriberCount === 1 ? '' : 's'}
+                  </span>
+                </div>
+
+                <div className="grid gap-4">
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-gray-700">Subject</span>
+                    <input
+                      type="text"
+                      value={campaignSubject}
+                      onChange={(event) => setCampaignSubject(event.target.value)}
+                      maxLength={180}
+                      placeholder="Summer shelving offers now available"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-5">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Email message</span>
+                  <TipTapEditor
+                    value={campaignMessageHtml}
+                    onChange={setCampaignMessageHtml}
+                    placeholder="Write the campaign email..."
+                    disabled={campaignSending}
+                    onImageUpload={uploadCampaignBodyImages}
+                  />
+                </div>
+
+                <p className="mt-2 text-sm font-medium text-gray-500">
+                  Images: PNG/JPEG, max 5 per email, 2 MB each.
+                </p>
+
+                <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h5 className="font-bold text-gray-800">Email Preview</h5>
+                  </div>
+                  <h6 className="text-lg font-bold text-gray-900">{campaignSubject.trim() || 'Campaign subject'}</h6>
+                  <div
+                    className="tiptap-render mt-3 min-h-[80px] rounded-lg bg-white p-3 text-sm text-gray-700"
+                    dangerouslySetInnerHTML={{ __html: campaignMessageHtml || '<p>Email message preview will appear here.</p>' }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={campaignSending || marketingLoading}
+                  className="mt-5 inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {campaignSending ? 'Sending...' : 'Send Campaign'}
+                </button>
+              </form>
+
+              <div className="space-y-6">
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                  <h4 className="text-lg font-bold text-gray-800">Subscribers</h4>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-lg bg-white p-4">
+                      <p className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Active</p>
+                      <p className="mt-1 text-2xl font-bold text-primary">{activeNewsletterSubscriberCount}</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-4">
+                      <p className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Total</p>
+                      <p className="mt-1 text-2xl font-bold text-gray-900">{newsletterSubscribers.length}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 max-h-56 space-y-2 overflow-y-auto pr-1">
+                    {newsletterSubscribers.length > 0 ? (
+                      newsletterSubscribers.slice(0, 8).map((subscriber) => (
+                        <div key={subscriber.id} className="rounded-lg bg-white px-3 py-2">
+                          <p className="truncate text-sm font-bold text-gray-800">{subscriber.full_name}</p>
+                          <p className="truncate text-xs text-gray-500">{subscriber.email}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="rounded-lg bg-white px-3 py-4 text-sm text-gray-500">No newsletter subscribers yet.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                  <h4 className="text-lg font-bold text-gray-800">Recent Campaigns</h4>
+                  <div className="mt-4 space-y-3">
+                    {marketingCampaigns.length > 0 ? (
+                      marketingCampaigns.slice(0, 5).map((campaign) => (
+                        <div key={campaign.id} className="rounded-lg bg-white px-3 py-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-bold text-gray-800">{campaign.subject}</p>
+                              <p className="text-xs text-gray-500">{campaign.campaign_type}</p>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-green-50 px-2 py-1 text-xs font-bold text-green-700">
+                              {campaign.status}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs text-gray-500">
+                            Sent: {campaign.sent_count} | Failed: {campaign.failed_count}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="rounded-lg bg-white px-3 py-4 text-sm text-gray-500">No campaigns sent yet.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
