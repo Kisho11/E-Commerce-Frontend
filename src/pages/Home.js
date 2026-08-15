@@ -2,7 +2,6 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import Slider from '../components/Slider';
 import CategoryLanding from '../components/CategoryLanding';
-import NewsletterSignupForm from '../components/NewsletterSignupForm';
 import Seo from '../components/Seo';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -42,21 +41,6 @@ function Home() {
 
       <section className="shell mt-10">
         <CategoryLanding />
-      </section>
-
-      <section className="shell mt-10">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-6 sm:px-8">
-          <div className="grid gap-5 lg:grid-cols-[0.9fr_1.2fr] lg:items-center">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-700">Email Updates</p>
-              <h2 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">Promotions, offers, and events</h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                Subscribe for Elmshelf updates straight to your inbox.
-              </p>
-            </div>
-            <NewsletterSignupForm />
-          </div>
-        </div>
       </section>
 
       <section className="shell mt-6">

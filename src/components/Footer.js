@@ -72,6 +72,19 @@ function Footer() {
     <footer className="mt-16 border-t border-slate-200 bg-slate-950 text-slate-200">
       <div className="shell py-12">
         <div className="mb-10 border-b border-slate-800 pb-8">
+          <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-blue-300">Email Updates</p>
+              <h3 className="mt-2 text-2xl font-bold text-white">Stay in the loop</h3>
+              <p className="mt-3 text-sm leading-relaxed text-slate-400">
+                Get promotions, offers, and event details from Elmshelf.
+              </p>
+            </div>
+            <NewsletterSignupForm variant="dark" compact />
+          </div>
+        </div>
+
+        <div className="mb-10 border-b border-slate-800 pb-8">
           <h4 className="text-sm font-bold uppercase tracking-[0.1em] text-slate-300">Our Delivery Partners</h4>
           <div className="mt-5 grid gap-4 sm:grid-cols-3">
             {deliveryPartners.map((partner) => {
@@ -117,19 +130,6 @@ function Footer() {
                 </div>
               );
             })}
-          </div>
-        </div>
-
-        <div className="mb-10 border-b border-slate-800 pb-8">
-          <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-blue-300">Email Updates</p>
-              <h3 className="mt-2 text-2xl font-bold text-white">Stay in the loop</h3>
-              <p className="mt-3 text-sm leading-relaxed text-slate-400">
-                Get promotions, offers, and event details from Elmshelf.
-              </p>
-            </div>
-            <NewsletterSignupForm variant="dark" compact />
           </div>
         </div>
 
