@@ -53,6 +53,25 @@ const formatDisplayDate = (value) => {
   }).format(date);
 };
 
+const formatSubscriberBusinessType = (value) => (
+  value === 'shopfitter' ? 'Shopfitter' : 'Shop owner'
+);
+
+const formatSubscriberStatus = (subscriber) => (
+  subscriber?.is_active ? 'Active' : 'Unsubscribed'
+);
+
+const escapeSpreadsheetCell = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;');
+
+const sanitizeSpreadsheetValue = (value) => {
+  const text = String(value ?? '');
+  return /^[=+\-@]/.test(text) ? `'${text}` : text;
+};
+
 function AdminDashboard() {
   const navigate = useNavigate();
   const { user, logout, registeredCustomers, loadCustomers, authFetch } = useAuth();
@@ -98,6 +117,9 @@ function AdminDashboard() {
   const [marketingMessage, setMarketingMessage] = useState('');
   const [marketingError, setMarketingError] = useState('');
   const [newsletterSubscribers, setNewsletterSubscribers] = useState([]);
+  const [subscriberLoading, setSubscriberLoading] = useState(false);
+  const [subscriberError, setSubscriberError] = useState('');
+  const [subscriberBusinessTypeFilter, setSubscriberBusinessTypeFilter] = useState('all');
   const [marketingCampaigns, setMarketingCampaigns] = useState([]);
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignMessageHtml, setCampaignMessageHtml] = useState('');
@@ -151,6 +173,13 @@ function AdminDashboard() {
     return resolveDashboardMediaUrl(marketingBanner?.image_url || '');
   }, [marketingBanner, marketingBannerFile]);
   const activeNewsletterSubscriberCount = newsletterSubscribers.filter((subscriber) => subscriber.is_active).length;
+  const shopOwnerSubscriberCount = newsletterSubscribers.filter((subscriber) => subscriber.business_type !== 'shopfitter').length;
+  const shopfitterSubscriberCount = newsletterSubscribers.filter((subscriber) => subscriber.business_type === 'shopfitter').length;
+  const filteredNewsletterSubscribers = useMemo(() => (
+    subscriberBusinessTypeFilter === 'all'
+      ? newsletterSubscribers
+      : newsletterSubscribers.filter((subscriber) => subscriber.business_type === subscriberBusinessTypeFilter)
+  ), [newsletterSubscribers, subscriberBusinessTypeFilter]);
 
   const customerOrderStats = useMemo(() => {
     const grouped = new Map();
@@ -494,6 +523,44 @@ function AdminDashboard() {
   }, [activeTab, authFetch, user]);
 
   useEffect(() => {
+    if (user?.role !== 'admin' || activeTab !== 'subscribers') return undefined;
+
+    let cancelled = false;
+    const loadSubscribers = async () => {
+      setSubscriberLoading(true);
+      setSubscriberError('');
+
+      try {
+        const response = await authFetch('/marketing/admin/subscribers');
+        const data = await response.json().catch(() => []);
+
+        if (!response.ok) {
+          throw new Error(data?.detail || 'Unable to load newsletter subscribers.');
+        }
+
+        if (!cancelled) {
+          setNewsletterSubscribers(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setNewsletterSubscribers([]);
+          setSubscriberError(error.message || 'Unable to load newsletter subscribers.');
+        }
+      } finally {
+        if (!cancelled) {
+          setSubscriberLoading(false);
+        }
+      }
+    };
+
+    loadSubscribers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, authFetch, user]);
+
+  useEffect(() => {
     if (!selectedOrderForActionId) {
       setSelectedOrderStatus('');
       return;
@@ -737,6 +804,53 @@ function AdminDashboard() {
     }
   };
 
+  const downloadSubscribersExcel = () => {
+    if (!filteredNewsletterSubscribers.length) {
+      setSubscriberError('No subscribers available to download.');
+      return;
+    }
+
+    const headers = ['Name', 'Email', 'Business Type', 'Status', 'Subscribed'];
+    const rows = filteredNewsletterSubscribers.map((subscriber) => [
+      subscriber.full_name,
+      subscriber.email,
+      formatSubscriberBusinessType(subscriber.business_type),
+      formatSubscriberStatus(subscriber),
+      formatDisplayDate(subscriber.subscribed_at || subscriber.created_at),
+    ]);
+    const renderCell = (value, tag = 'td') => (
+      `<${tag}>${escapeSpreadsheetCell(sanitizeSpreadsheetValue(value))}</${tag}>`
+    );
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    table { border-collapse: collapse; }
+    th, td { border: 1px solid #d1d5db; padding: 8px; mso-number-format: "\\@"; }
+    th { background: #f3f4f6; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <table>
+    <thead><tr>${headers.map((header) => renderCell(header, 'th')).join('')}</tr></thead>
+    <tbody>${rows.map((row) => `<tr>${row.map((cell) => renderCell(cell)).join('')}</tr>`).join('')}</tbody>
+  </table>
+</body>
+</html>`;
+    const blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+
+    link.href = url;
+    link.download = `newsletter-subscribers-${date}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const handleLogout = () => {
     if (!window.confirm('Are you sure you want to logout?')) return;
     logout();
@@ -915,7 +1029,7 @@ function AdminDashboard() {
       <div className="container mx-auto px-4 py-8 sm:px-8">
         {/* Tabs */}
         <div className="flex gap-4 mb-8 overflow-x-auto border-b border-gray-300 pb-4">
-          {['overview', 'products', 'inventory', 'categories', 'industries', 'marketing', 'managers', 'orders', 'customers', 'reports'].map((tab) => (
+          {['overview', 'products', 'inventory', 'categories', 'industries', 'marketing', 'subscribers', 'managers', 'orders', 'customers', 'reports'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1284,6 +1398,9 @@ function AdminDashboard() {
                           <div key={subscriber.id} className="rounded-lg bg-white px-3 py-2">
                             <p className="truncate text-sm font-bold text-gray-800">{subscriber.full_name}</p>
                             <p className="truncate text-xs text-gray-500">{subscriber.email}</p>
+                            <p className="truncate text-xs font-semibold text-gray-500">
+                              {subscriber.business_type === 'shopfitter' ? 'Shopfitter' : 'Shop owner'}
+                            </p>
                           </div>
                         ))
                       ) : (
@@ -1320,6 +1437,125 @@ function AdminDashboard() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Subscribers Tab */}
+        {activeTab === 'subscribers' && (
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h3 className="flex items-center gap-2 text-2xl font-bold text-primary">
+                  <UiIcon name="users" className="h-6 w-6" />
+                  Newsletter Subscribers
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  View customers who joined the promotion and event update list.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label className="block text-sm font-semibold text-gray-700">
+                  Business type
+                  <select
+                    value={subscriberBusinessTypeFilter}
+                    onChange={(event) => {
+                      setSubscriberBusinessTypeFilter(event.target.value);
+                      setSubscriberError('');
+                    }}
+                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:w-44"
+                  >
+                    <option value="all">All</option>
+                    <option value="shopowner">Shop owner</option>
+                    <option value="shopfitter">Shopfitter</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={downloadSubscribersExcel}
+                  disabled={subscriberLoading || filteredNewsletterSubscribers.length === 0}
+                  className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-5 py-2.5 font-semibold text-white transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <UiIcon name="download" className="mr-2 h-4 w-4" />
+                  Download Excel
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Total</p>
+                <p className="mt-1 text-2xl font-bold text-gray-900">{newsletterSubscribers.length}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Shop owners</p>
+                <p className="mt-1 text-2xl font-bold text-gray-900">{shopOwnerSubscriberCount}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Shopfitters</p>
+                <p className="mt-1 text-2xl font-bold text-gray-900">{shopfitterSubscriberCount}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Active</p>
+                <p className="mt-1 text-2xl font-bold text-primary">{activeNewsletterSubscriberCount}</p>
+              </div>
+            </div>
+
+            {subscriberError ? (
+              <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                {subscriberError}
+              </div>
+            ) : null}
+
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <table className="w-full min-w-[760px]">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
+                    <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
+                    <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Business Type</th>
+                    <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
+                    <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Subscribed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subscriberLoading ? (
+                    <tr>
+                      <td colSpan="5" className="px-5 py-8 text-center text-sm font-semibold text-gray-500">
+                        Loading subscribers...
+                      </td>
+                    </tr>
+                  ) : filteredNewsletterSubscribers.length > 0 ? (
+                    filteredNewsletterSubscribers.map((subscriber) => (
+                      <tr key={subscriber.id} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="px-5 py-4 text-sm font-semibold text-gray-900">{subscriber.full_name}</td>
+                        <td className="px-5 py-4 text-sm text-gray-700">{subscriber.email}</td>
+                        <td className="px-5 py-4 text-sm text-gray-700">
+                          {formatSubscriberBusinessType(subscriber.business_type)}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                            subscriber.is_active
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {formatSubscriberStatus(subscriber)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-sm text-gray-700">
+                          {formatDisplayDate(subscriber.subscribed_at || subscriber.created_at)}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="5" className="px-5 py-8 text-center text-sm font-semibold text-gray-500">
+                        No subscribers match this filter.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

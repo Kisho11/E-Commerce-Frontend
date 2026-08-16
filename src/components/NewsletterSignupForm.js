@@ -1,14 +1,41 @@
 import React, { useState } from 'react';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
+const BUSINESS_TYPE_OPTIONS = [
+  { value: 'shopowner', label: 'Shop owner' },
+  { value: 'shopfitter', label: 'Shopfitter' },
+];
+
+const initialForm = {
+  fullName: '',
+  email: '',
+  businessType: 'shopowner',
+  consentAccepted: false,
+};
+
+const showSubscriptionNotification = async (message) => {
+  if (!('Notification' in window)) return;
+
+  try {
+    if (Notification.permission === 'granted') {
+      new Notification('Subscription successful', { body: message });
+      return;
+    }
+
+    if (Notification.permission === 'default') {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        new Notification('Subscription successful', { body: message });
+      }
+    }
+  } catch (error) {
+    // The inline success message remains the fallback if browser notifications are unavailable.
+  }
+};
 
 function NewsletterSignupForm({ variant = 'light', compact = false }) {
   const isDark = variant === 'dark';
-  const [form, setForm] = useState({
-    fullName: '',
-    email: '',
-    consentAccepted: false,
-  });
+  const [form, setForm] = useState(initialForm);
   const [status, setStatus] = useState({ type: '', message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -32,9 +59,15 @@ function NewsletterSignupForm({ variant = 'light', compact = false }) {
 
     const fullName = form.fullName.trim();
     const email = form.email.trim().toLowerCase();
+    const businessType = form.businessType || 'shopowner';
 
     if (fullName.length < 2) {
       setStatus({ type: 'error', message: 'Please enter your name.' });
+      return;
+    }
+
+    if (!BUSINESS_TYPE_OPTIONS.some((option) => option.value === businessType)) {
+      setStatus({ type: 'error', message: 'Please select your business type.' });
       return;
     }
 
@@ -56,6 +89,7 @@ function NewsletterSignupForm({ variant = 'light', compact = false }) {
         body: JSON.stringify({
           full_name: fullName,
           email,
+          business_type: businessType,
           consent_accepted: form.consentAccepted,
         }),
       });
@@ -65,8 +99,10 @@ function NewsletterSignupForm({ variant = 'light', compact = false }) {
         throw new Error(data?.detail || 'Unable to subscribe right now.');
       }
 
-      setForm({ fullName: '', email: '', consentAccepted: false });
-      setStatus({ type: 'success', message: data?.message || "Thanks, you're subscribed." });
+      const successMessage = data?.message || "Thanks, you're subscribed.";
+      setForm(initialForm);
+      setStatus({ type: 'success', message: successMessage });
+      showSubscriptionNotification(successMessage);
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'Unable to subscribe right now.' });
     } finally {
@@ -108,6 +144,22 @@ function NewsletterSignupForm({ variant = 'light', compact = false }) {
             className={`mt-1 w-full rounded-md border px-3 py-2 text-sm outline-none transition focus:ring-2 ${inputClass}`}
             placeholder="you@example.com"
           />
+        </label>
+        <label className={`block text-sm font-semibold ${labelClass}`}>
+          Business type
+          <select
+            name="businessType"
+            value={form.businessType}
+            onChange={handleChange}
+            required
+            className={`mt-1 w-full rounded-md border px-3 py-2 text-sm outline-none transition focus:ring-2 ${inputClass}`}
+          >
+            {BUSINESS_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
 
