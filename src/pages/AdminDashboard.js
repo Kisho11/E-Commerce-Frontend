@@ -14,6 +14,7 @@ import UiIcon from '../components/UiIcon';
 
 const ORDER_STATUS_OPTIONS = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
 const ADMIN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const ADMIN_EMAIL_CAMPAIGNS_ENABLED = false;
 const CAMPAIGN_IMAGE_MAX_COUNT = 5;
 const CAMPAIGN_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -435,22 +436,27 @@ function AdminDashboard() {
       setMarketingMessage('');
 
       try {
+        const campaignRequests = ADMIN_EMAIL_CAMPAIGNS_ENABLED
+          ? [
+              authFetch('/marketing/admin/subscribers'),
+              authFetch('/marketing/admin/campaigns'),
+            ]
+          : [];
         const [bannerResponse, subscribersResponse, campaignsResponse] = await Promise.all([
           authFetch('/marketing/admin/banner'),
-          authFetch('/marketing/admin/subscribers'),
-          authFetch('/marketing/admin/campaigns'),
+          ...campaignRequests,
         ]);
         const bannerData = await bannerResponse.json().catch(() => null);
-        const subscribersData = await subscribersResponse.json().catch(() => []);
-        const campaignsData = await campaignsResponse.json().catch(() => []);
+        const subscribersData = subscribersResponse ? await subscribersResponse.json().catch(() => []) : [];
+        const campaignsData = campaignsResponse ? await campaignsResponse.json().catch(() => []) : [];
 
         if (!bannerResponse.ok) {
           throw new Error(bannerData?.detail || 'Unable to load marketing banner.');
         }
-        if (!subscribersResponse.ok) {
+        if (subscribersResponse && !subscribersResponse.ok) {
           throw new Error(subscribersData?.detail || 'Unable to load newsletter subscribers.');
         }
-        if (!campaignsResponse.ok) {
+        if (campaignsResponse && !campaignsResponse.ok) {
           throw new Error(campaignsData?.detail || 'Unable to load marketing campaigns.');
         }
 
@@ -1195,123 +1201,125 @@ function AdminDashboard() {
               </div>
             </form>
 
-            <div className="mt-8 grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
-              <form onSubmit={sendMarketingCampaign} className="rounded-xl border border-gray-200 bg-white p-5">
-                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h4 className="text-lg font-bold text-gray-800">Email Campaign</h4>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Send promotions, offers, and event updates to active subscribers.
-                    </p>
+            {ADMIN_EMAIL_CAMPAIGNS_ENABLED && (
+              <div className="mt-8 grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
+                <form onSubmit={sendMarketingCampaign} className="rounded-xl border border-gray-200 bg-white p-5">
+                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h4 className="text-lg font-bold text-gray-800">Email Campaign</h4>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Send promotions, offers, and event updates to active subscribers.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-700">
+                      {activeNewsletterSubscriberCount} active subscriber{activeNewsletterSubscriberCount === 1 ? '' : 's'}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-700">
-                    {activeNewsletterSubscriberCount} active subscriber{activeNewsletterSubscriberCount === 1 ? '' : 's'}
-                  </span>
-                </div>
 
-                <div className="grid gap-4">
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-semibold text-gray-700">Subject</span>
-                    <input
-                      type="text"
-                      value={campaignSubject}
-                      onChange={(event) => setCampaignSubject(event.target.value)}
-                      maxLength={180}
-                      placeholder="Summer shelving offers now available"
-                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  <div className="grid gap-4">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-gray-700">Subject</span>
+                      <input
+                        type="text"
+                        value={campaignSubject}
+                        onChange={(event) => setCampaignSubject(event.target.value)}
+                        maxLength={180}
+                        placeholder="Summer shelving offers now available"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-5">
+                    <span className="mb-2 block text-sm font-semibold text-gray-700">Email message</span>
+                    <TipTapEditor
+                      value={campaignMessageHtml}
+                      onChange={setCampaignMessageHtml}
+                      placeholder="Write the campaign email..."
+                      disabled={campaignSending}
+                      onImageUpload={uploadCampaignBodyImages}
                     />
-                  </label>
-                </div>
-
-                <div className="mt-5">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Email message</span>
-                  <TipTapEditor
-                    value={campaignMessageHtml}
-                    onChange={setCampaignMessageHtml}
-                    placeholder="Write the campaign email..."
-                    disabled={campaignSending}
-                    onImageUpload={uploadCampaignBodyImages}
-                  />
-                </div>
-
-                <p className="mt-2 text-sm font-medium text-gray-500">
-                  Images: PNG/JPEG, max 5 per email, 2 MB each.
-                </p>
-
-                <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <h5 className="font-bold text-gray-800">Email Preview</h5>
                   </div>
-                  <h6 className="text-lg font-bold text-gray-900">{campaignSubject.trim() || 'Campaign subject'}</h6>
-                  <div
-                    className="tiptap-render mt-3 min-h-[80px] rounded-lg bg-white p-3 text-sm text-gray-700"
-                    dangerouslySetInnerHTML={{ __html: campaignMessageHtml || '<p>Email message preview will appear here.</p>' }}
-                  />
-                </div>
 
-                <button
-                  type="submit"
-                  disabled={campaignSending || marketingLoading}
-                  className="mt-5 inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {campaignSending ? 'Sending...' : 'Send Campaign'}
-                </button>
-              </form>
+                  <p className="mt-2 text-sm font-medium text-gray-500">
+                    Images: PNG/JPEG, max 5 per email, 2 MB each.
+                  </p>
 
-              <div className="space-y-6">
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
-                  <h4 className="text-lg font-bold text-gray-800">Subscribers</h4>
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-lg bg-white p-4">
-                      <p className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Active</p>
-                      <p className="mt-1 text-2xl font-bold text-primary">{activeNewsletterSubscriberCount}</p>
+                  <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h5 className="font-bold text-gray-800">Email Preview</h5>
                     </div>
-                    <div className="rounded-lg bg-white p-4">
-                      <p className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Total</p>
-                      <p className="mt-1 text-2xl font-bold text-gray-900">{newsletterSubscribers.length}</p>
-                    </div>
+                    <h6 className="text-lg font-bold text-gray-900">{campaignSubject.trim() || 'Campaign subject'}</h6>
+                    <div
+                      className="tiptap-render mt-3 min-h-[80px] rounded-lg bg-white p-3 text-sm text-gray-700"
+                      dangerouslySetInnerHTML={{ __html: campaignMessageHtml || '<p>Email message preview will appear here.</p>' }}
+                    />
                   </div>
-                  <div className="mt-4 max-h-56 space-y-2 overflow-y-auto pr-1">
-                    {newsletterSubscribers.length > 0 ? (
-                      newsletterSubscribers.slice(0, 8).map((subscriber) => (
-                        <div key={subscriber.id} className="rounded-lg bg-white px-3 py-2">
-                          <p className="truncate text-sm font-bold text-gray-800">{subscriber.full_name}</p>
-                          <p className="truncate text-xs text-gray-500">{subscriber.email}</p>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="rounded-lg bg-white px-3 py-4 text-sm text-gray-500">No newsletter subscribers yet.</p>
-                    )}
-                  </div>
-                </div>
 
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
-                  <h4 className="text-lg font-bold text-gray-800">Recent Campaigns</h4>
-                  <div className="mt-4 space-y-3">
-                    {marketingCampaigns.length > 0 ? (
-                      marketingCampaigns.slice(0, 5).map((campaign) => (
-                        <div key={campaign.id} className="rounded-lg bg-white px-3 py-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-bold text-gray-800">{campaign.subject}</p>
-                              <p className="text-xs text-gray-500">{campaign.campaign_type}</p>
-                            </div>
-                            <span className="shrink-0 rounded-full bg-green-50 px-2 py-1 text-xs font-bold text-green-700">
-                              {campaign.status}
-                            </span>
+                  <button
+                    type="submit"
+                    disabled={campaignSending || marketingLoading}
+                    className="mt-5 inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {campaignSending ? 'Sending...' : 'Send Campaign'}
+                  </button>
+                </form>
+
+                <div className="space-y-6">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                    <h4 className="text-lg font-bold text-gray-800">Subscribers</h4>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-lg bg-white p-4">
+                        <p className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Active</p>
+                        <p className="mt-1 text-2xl font-bold text-primary">{activeNewsletterSubscriberCount}</p>
+                      </div>
+                      <div className="rounded-lg bg-white p-4">
+                        <p className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Total</p>
+                        <p className="mt-1 text-2xl font-bold text-gray-900">{newsletterSubscribers.length}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 max-h-56 space-y-2 overflow-y-auto pr-1">
+                      {newsletterSubscribers.length > 0 ? (
+                        newsletterSubscribers.slice(0, 8).map((subscriber) => (
+                          <div key={subscriber.id} className="rounded-lg bg-white px-3 py-2">
+                            <p className="truncate text-sm font-bold text-gray-800">{subscriber.full_name}</p>
+                            <p className="truncate text-xs text-gray-500">{subscriber.email}</p>
                           </div>
-                          <p className="mt-2 text-xs text-gray-500">
-                            Sent: {campaign.sent_count} | Failed: {campaign.failed_count}
-                          </p>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="rounded-lg bg-white px-3 py-4 text-sm text-gray-500">No campaigns sent yet.</p>
-                    )}
+                        ))
+                      ) : (
+                        <p className="rounded-lg bg-white px-3 py-4 text-sm text-gray-500">No newsletter subscribers yet.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                    <h4 className="text-lg font-bold text-gray-800">Recent Campaigns</h4>
+                    <div className="mt-4 space-y-3">
+                      {marketingCampaigns.length > 0 ? (
+                        marketingCampaigns.slice(0, 5).map((campaign) => (
+                          <div key={campaign.id} className="rounded-lg bg-white px-3 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-bold text-gray-800">{campaign.subject}</p>
+                                <p className="text-xs text-gray-500">{campaign.campaign_type}</p>
+                              </div>
+                              <span className="shrink-0 rounded-full bg-green-50 px-2 py-1 text-xs font-bold text-green-700">
+                                {campaign.status}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-xs text-gray-500">
+                              Sent: {campaign.sent_count} | Failed: {campaign.failed_count}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="rounded-lg bg-white px-3 py-4 text-sm text-gray-500">No campaigns sent yet.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
