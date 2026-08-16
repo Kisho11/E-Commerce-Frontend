@@ -26,6 +26,7 @@ const Showroom = lazy(() => import('./pages/Showroom'));
 const Clients = lazy(() => import('./pages/Clients'));
 const Reviews = lazy(() => import('./pages/Reviews'));
 const Catalogue = lazy(() => import('./pages/Catalogue'));
+const RequestQuotation = lazy(() => import('./pages/RequestQuotation'));
 const Sponsor = lazy(() => import('./pages/Sponsor'));
 const TermsAndConditions = lazy(() => import('./pages/TermsAndConditions'));
 const Login = lazy(() => import('./pages/Login'));
@@ -115,6 +116,7 @@ function App() {
                       <Route path="/clients" element={<Clients />} />
                       <Route path="/reviews" element={<Reviews />} />
                       <Route path="/catalogue" element={<Catalogue />} />
+                      <Route path="/request-quotation" element={<RequestQuotation />} />
                       <Route path="/sponsor" element={<Sponsor />} />
                       <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
                       <Route path="/categories" element={<CategoriesPage />} />

@@ -52,14 +52,12 @@ function Home() {
             {t('home.ctaDesc')}
           </p>
           <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              disabled
-              className="cursor-not-allowed rounded-full bg-slate-600 px-6 py-3 text-sm font-bold text-slate-300 opacity-70"
-              aria-disabled="true"
+            <Link
+              to="/request-quotation"
+              className="rounded-full bg-primary px-6 py-3 text-sm font-bold text-white transition hover:bg-red-700"
             >
               {t('home.requestConsultation')}
-            </button>
+            </Link>
             <Link to="/catalogue" className="rounded-full border border-slate-500 px-6 py-3 text-sm font-bold text-slate-100">
               {t('home.downloadCatalogue')}
             </Link>

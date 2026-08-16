@@ -137,6 +137,10 @@ function AdminDashboard() {
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignMessageHtml, setCampaignMessageHtml] = useState('');
   const [campaignSending, setCampaignSending] = useState(false);
+  const [quotationRequests, setQuotationRequests] = useState([]);
+  const [quotationLoading, setQuotationLoading] = useState(false);
+  const [quotationError, setQuotationError] = useState('');
+  const [quotationTotal, setQuotationTotal] = useState(0);
 
   const customerLookup = useMemo(
     () => new Map(registeredCustomers.map((customer) => [Number(customer.id), customer])),
@@ -193,6 +197,11 @@ function AdminDashboard() {
       ? newsletterSubscribers
       : newsletterSubscribers.filter((subscriber) => subscriber.business_type === subscriberBusinessTypeFilter)
   ), [newsletterSubscribers, subscriberBusinessTypeFilter]);
+  const recentQuotationCount = quotationRequests.filter((request) => {
+    const createdAt = new Date(request.created_at);
+    if (Number.isNaN(createdAt.getTime())) return false;
+    return Date.now() - createdAt.getTime() <= 7 * 24 * 60 * 60 * 1000;
+  }).length;
 
   const customerOrderStats = useMemo(() => {
     const grouped = new Map();
@@ -578,6 +587,46 @@ function AdminDashboard() {
     };
 
     loadSubscribers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, authFetch, user]);
+
+  useEffect(() => {
+    if (user?.role !== 'admin' || activeTab !== 'quotations') return undefined;
+
+    let cancelled = false;
+    const loadQuotationRequests = async () => {
+      setQuotationLoading(true);
+      setQuotationError('');
+
+      try {
+        const response = await authFetch('/quotations/admin/requests');
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(data?.detail || 'Unable to load quotation requests.');
+        }
+
+        if (!cancelled) {
+          setQuotationRequests(Array.isArray(data?.items) ? data.items : []);
+          setQuotationTotal(Number(data?.total || 0));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setQuotationRequests([]);
+          setQuotationTotal(0);
+          setQuotationError(error.message || 'Unable to load quotation requests.');
+        }
+      } finally {
+        if (!cancelled) {
+          setQuotationLoading(false);
+        }
+      }
+    };
+
+    loadQuotationRequests();
 
     return () => {
       cancelled = true;
@@ -973,6 +1022,37 @@ function AdminDashboard() {
     URL.revokeObjectURL(url);
   };
 
+  const formatQuotationRequirements = (requirements) => {
+    if (!Array.isArray(requirements) || requirements.length === 0) return 'None selected';
+    return requirements.join(', ');
+  };
+
+  const downloadQuotationRequestsExcel = async () => {
+    setQuotationError('');
+
+    try {
+      const response = await authFetch('/quotations/admin/requests/export');
+      const blob = await response.blob();
+
+      if (!response.ok) {
+        throw new Error('Unable to download quotation requests.');
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+
+      link.href = url;
+      link.download = `quotation-requests-${date}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setQuotationError(error.message || 'Unable to download quotation requests.');
+    }
+  };
+
   const handleLogout = () => {
     if (!window.confirm('Are you sure you want to logout?')) return;
     logout();
@@ -1151,7 +1231,7 @@ function AdminDashboard() {
       <div className="container mx-auto px-4 py-8 sm:px-8">
         {/* Tabs */}
         <div className="flex gap-4 mb-8 overflow-x-auto border-b border-gray-300 pb-4">
-          {['overview', 'products', 'inventory', 'categories', 'industries', 'marketing', 'subscribers', 'managers', 'orders', 'customers', 'reports'].map((tab) => (
+          {['overview', 'products', 'inventory', 'categories', 'industries', 'marketing', 'subscribers', 'quotations', 'managers', 'orders', 'customers', 'reports'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1744,6 +1824,100 @@ function AdminDashboard() {
                     <tr>
                       <td colSpan="5" className="px-5 py-8 text-center text-sm font-semibold text-gray-500">
                         No subscribers match this filter.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Quotations Tab */}
+        {activeTab === 'quotations' && (
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h3 className="flex items-center gap-2 text-2xl font-bold text-primary">
+                  <UiIcon name="list" className="h-6 w-6" />
+                  Quotation Requests
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  View enquiries submitted from the Request Quotation form.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={downloadQuotationRequestsExcel}
+                disabled={quotationLoading || quotationRequests.length === 0}
+                className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-5 py-2.5 font-semibold text-white transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <UiIcon name="download" className="mr-2 h-4 w-4" />
+                Download Excel
+              </button>
+            </div>
+
+            <div className="mb-5 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Total Requests</p>
+                <p className="mt-1 text-2xl font-bold text-gray-900">{quotationTotal}</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.1em] text-gray-500">Last 7 Days</p>
+                <p className="mt-1 text-2xl font-bold text-primary">{recentQuotationCount}</p>
+              </div>
+            </div>
+
+            {quotationError ? (
+              <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                {quotationError}
+              </div>
+            ) : null}
+
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <table className="w-full min-w-[980px]">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Submitted</th>
+                    <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
+                    <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
+                    <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Phone</th>
+                    <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Requirements</th>
+                    <th className="px-5 py-3 text-left text-sm font-semibold text-gray-700">Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quotationLoading ? (
+                    <tr>
+                      <td colSpan="6" className="px-5 py-8 text-center text-sm font-semibold text-gray-500">
+                        Loading quotation requests...
+                      </td>
+                    </tr>
+                  ) : quotationRequests.length > 0 ? (
+                    quotationRequests.map((request) => (
+                      <tr key={request.id} className="border-t border-gray-100 align-top hover:bg-gray-50">
+                        <td className="px-5 py-4 text-sm text-gray-700">
+                          {formatDisplayDate(request.created_at)}
+                        </td>
+                        <td className="px-5 py-4 text-sm font-semibold text-gray-900">{request.full_name}</td>
+                        <td className="px-5 py-4 text-sm text-gray-700">
+                          <a href={`mailto:${request.email}`} className="font-semibold text-blue-700 hover:text-blue-900">
+                            {request.email}
+                          </a>
+                        </td>
+                        <td className="px-5 py-4 text-sm text-gray-700">{request.phone}</td>
+                        <td className="px-5 py-4 text-sm text-gray-700">
+                          {formatQuotationRequirements(request.requirements)}
+                        </td>
+                        <td className="max-w-md px-5 py-4 text-sm leading-relaxed text-gray-700">
+                          {request.message}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="6" className="px-5 py-8 text-center text-sm font-semibold text-gray-500">
+                        No quotation requests yet.
                       </td>
                     </tr>
                   )}

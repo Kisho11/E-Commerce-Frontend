@@ -67,7 +67,7 @@ const translations = {
       nextStep: 'Next step',
       ctaTitle: 'Ready to upgrade your retail space?',
       ctaDesc: 'Share your store type and dimensions. We will recommend shelving and fixtures that maximize product visibility.',
-      requestConsultation: 'Request Consultation',
+      requestConsultation: 'Request Quotation',
       downloadCatalogue: 'Download Catalogue',
     },
     categories: {
@@ -203,7 +203,7 @@ const translations = {
       nextStep: 'அடுத்த படி',
       ctaTitle: 'உங்கள் கடையை மேம்படுத்த தயாரா?',
       ctaDesc: 'உங்கள் கடை வகை மற்றும் அளவுகளை பகிருங்கள். பொருட்களின் காட்சித் திறனை அதிகரிக்கும் தீர்வுகளை பரிந்துரைப்போம்.',
-      requestConsultation: 'ஆலோசனை கோரிக்கை',
+      requestConsultation: 'விலை கோரிக்கை',
       downloadCatalogue: 'கேட்டலாக் பதிவிறக்கம்',
     },
     categories: {
