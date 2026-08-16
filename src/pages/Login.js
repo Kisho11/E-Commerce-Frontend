@@ -5,6 +5,33 @@ import Seo from '../components/Seo';
 
 const MIN_PASSWORD_LENGTH = 8;
 
+const requestPasswordResetNotificationPermission = async () => {
+  if (!('Notification' in window)) return false;
+
+  try {
+    if (Notification.permission === 'granted') {
+      return true;
+    }
+
+    if (Notification.permission === 'default') {
+      const permission = await Notification.requestPermission();
+      return permission === 'granted';
+    }
+  } catch (error) {
+    return false;
+  }
+
+  return false;
+};
+
+const showPasswordResetNotification = () => {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  new Notification('Password reset link sent', {
+    body: 'Check your email for the password reset link.',
+  });
+};
+
 function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -21,6 +48,7 @@ function Login() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [resetToastVisible, setResetToastVisible] = useState(false);
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,9 +74,17 @@ function Login() {
     setError('');
     setGoogleError('');
     setSuccessMessage('');
+    setResetToastVisible(false);
     setShowForgotPassword(false);
     setShowPassword(false);
   }, [mode]);
+
+  useEffect(() => {
+    if (!resetToastVisible) return undefined;
+
+    const timeoutId = window.setTimeout(() => setResetToastVisible(false), 6000);
+    return () => window.clearTimeout(timeoutId);
+  }, [resetToastVisible]);
 
   useEffect(() => {
     if (!isCustomerMode || !googleClientId) return;
@@ -178,12 +214,14 @@ function Login() {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
+    setResetToastVisible(false);
 
     if (!resetEmail.trim()) {
       setError('Please enter your account email address.');
       return;
     }
 
+    const canShowBrowserNotification = await requestPasswordResetNotificationPermission();
     const result = await requestPasswordReset(resetEmail);
     if (!result.success) {
       setError(result.error);
@@ -191,6 +229,10 @@ function Login() {
     }
 
     setSuccessMessage('Check your email — we sent you a password reset link.');
+    setResetToastVisible(true);
+    if (canShowBrowserNotification) {
+      showPasswordResetNotification();
+    }
   };
 
   const currentSubmitHandler =
@@ -217,6 +259,28 @@ function Login() {
   return (
     <main className="min-h-[100svh] bg-white md:h-screen md:overflow-hidden">
       <Seo title="Account Access" description="Sign in or create your Elmshelf account." noindex />
+      {resetToastVisible ? (
+        <div
+          className="fixed right-4 top-4 z-50 w-[min(calc(100vw-2rem),22rem)] rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm text-slate-800 shadow-2xl"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold text-emerald-700">Password reset link sent</p>
+              <p className="mt-1 text-slate-600">Check your email for the password reset link.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setResetToastVisible(false)}
+              className="shrink-0 rounded-md px-2 py-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+              aria-label="Close notification"
+            >
+              x
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="grid min-h-[100svh] md:h-screen md:grid-cols-[0.82fr_1.18fr]">
         <section className="relative hidden bg-black md:flex md:flex-col md:justify-between md:p-5 lg:p-6">
           <div className="h-12" />
