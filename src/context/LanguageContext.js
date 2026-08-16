@@ -8,7 +8,7 @@ const translations = {
       limitedOffer: 'Limited Offer: Up to 25% off',
       viewDeals: 'View Deals',
       getQuote: 'Get Quote',
-      banner: 'SAME DAY PICK UP | DELIVERY WITHIN 1 - 3 WORKING DAYS | GET A QUOTE',
+      banner: 'SAME DAY PICK UP | DELIVERY WITHIN 1 - 2 WORKING DAYS | OPEN 7 DAYS A WEEK',
       home: 'Home',
       about: 'About',
       showroom: 'Showroom',

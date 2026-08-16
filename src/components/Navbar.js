@@ -224,7 +224,7 @@ function Navbar() {
             <span className="px-1.5 text-black sm:px-2">|</span>
             <span>DELIVERY WITHIN 1 - 2 WORKING DAYS</span>
             <span className="px-1.5 text-black sm:px-2">|</span>
-            <span>GET A QUOTE</span>
+            <span>OPEN 7 DAYS A WEEK</span>
           </p>
           <div className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-full border border-white/35 bg-[#a81831] p-0.5 sm:inline-flex">
             <button
