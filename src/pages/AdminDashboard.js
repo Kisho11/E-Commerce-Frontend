@@ -17,6 +17,7 @@ const ADMIN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const ADMIN_EMAIL_CAMPAIGNS_ENABLED = false;
 const CAMPAIGN_IMAGE_MAX_COUNT = 5;
 const CAMPAIGN_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+const CATALOGUE_PDF_MAX_BYTES = 50 * 1024 * 1024;
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 const API_ORIGIN = API_BASE_URL ? new URL(API_BASE_URL).origin : '';
 const emptyCustomerEditForm = {
@@ -60,6 +61,13 @@ const formatSubscriberBusinessType = (value) => (
 const formatSubscriberStatus = (subscriber) => (
   subscriber?.is_active ? 'Active' : 'Unsubscribed'
 );
+
+const formatFileSize = (bytes) => {
+  const size = Number(bytes || 0);
+  if (!Number.isFinite(size) || size <= 0) return 'N/A';
+  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(size / 1024))} KB`;
+};
 
 const escapeSpreadsheetCell = (value) => String(value ?? '')
   .replace(/&/g, '&amp;')
@@ -111,9 +119,14 @@ function AdminDashboard() {
   const [marketingBannerEnabled, setMarketingBannerEnabled] = useState(false);
   const [marketingBannerCtaUrl, setMarketingBannerCtaUrl] = useState('/catalogue');
   const [globalDiscountPercentage, setGlobalDiscountPercentage] = useState('0');
+  const [cataloguePdf, setCataloguePdf] = useState(null);
+  const [cataloguePdfFile, setCataloguePdfFile] = useState(null);
+  const [cataloguePdfInputKey, setCataloguePdfInputKey] = useState(0);
   const [marketingLoading, setMarketingLoading] = useState(false);
   const [marketingSaving, setMarketingSaving] = useState(false);
   const [marketingDiscountSaving, setMarketingDiscountSaving] = useState(false);
+  const [cataloguePdfSaving, setCataloguePdfSaving] = useState(false);
+  const [cataloguePdfDeleting, setCataloguePdfDeleting] = useState(false);
   const [marketingMessage, setMarketingMessage] = useState('');
   const [marketingError, setMarketingError] = useState('');
   const [newsletterSubscribers, setNewsletterSubscribers] = useState([]);
@@ -471,16 +484,21 @@ function AdminDashboard() {
               authFetch('/marketing/admin/campaigns'),
             ]
           : [];
-        const [bannerResponse, subscribersResponse, campaignsResponse] = await Promise.all([
+        const [bannerResponse, catalogueResponse, subscribersResponse, campaignsResponse] = await Promise.all([
           authFetch('/marketing/admin/banner'),
+          authFetch('/marketing/admin/catalogue'),
           ...campaignRequests,
         ]);
         const bannerData = await bannerResponse.json().catch(() => null);
+        const catalogueData = await catalogueResponse.json().catch(() => null);
         const subscribersData = subscribersResponse ? await subscribersResponse.json().catch(() => []) : [];
         const campaignsData = campaignsResponse ? await campaignsResponse.json().catch(() => []) : [];
 
         if (!bannerResponse.ok) {
           throw new Error(bannerData?.detail || 'Unable to load marketing banner.');
+        }
+        if (!catalogueResponse.ok) {
+          throw new Error(catalogueData?.detail || 'Unable to load catalogue PDF.');
         }
         if (subscribersResponse && !subscribersResponse.ok) {
           throw new Error(subscribersData?.detail || 'Unable to load newsletter subscribers.');
@@ -494,6 +512,9 @@ function AdminDashboard() {
           setMarketingBannerEnabled(Boolean(bannerData?.is_active));
           setMarketingBannerCtaUrl(bannerData?.cta_url || '/catalogue');
           setGlobalDiscountPercentage(String(Number(bannerData?.global_discount_percentage || 0)));
+          setCataloguePdf(catalogueData || null);
+          setCataloguePdfFile(null);
+          setCataloguePdfInputKey((key) => key + 1);
           setNewsletterSubscribers(Array.isArray(subscribersData) ? subscribersData : []);
           setMarketingCampaigns(Array.isArray(campaignsData) ? campaignsData : []);
           setMarketingBannerFile(null);
@@ -504,6 +525,9 @@ function AdminDashboard() {
           setMarketingBannerEnabled(false);
           setMarketingBannerCtaUrl('/catalogue');
           setGlobalDiscountPercentage('0');
+          setCataloguePdf(null);
+          setCataloguePdfFile(null);
+          setCataloguePdfInputKey((key) => key + 1);
           setNewsletterSubscribers([]);
           setMarketingCampaigns([]);
           setMarketingError(error.message || 'Unable to load marketing data.');
@@ -669,6 +693,104 @@ function AdminDashboard() {
       setMarketingError(error.message || 'Unable to save marketing banner.');
     } finally {
       setMarketingSaving(false);
+    }
+  };
+
+  const handleCataloguePdfChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    setMarketingMessage('');
+
+    if (!file) {
+      setCataloguePdfFile(null);
+      return;
+    }
+
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setCataloguePdfFile(null);
+      setMarketingError('Please upload a PDF catalogue file.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > CATALOGUE_PDF_MAX_BYTES) {
+      setCataloguePdfFile(null);
+      setMarketingError('Catalogue PDF must be 50 MB or smaller.');
+      event.target.value = '';
+      return;
+    }
+
+    setMarketingError('');
+    setCataloguePdfFile(file);
+  };
+
+  const saveCataloguePdf = async (event) => {
+    event.preventDefault();
+    if (cataloguePdfSaving) return;
+
+    if (!cataloguePdfFile) {
+      setMarketingError('Choose a PDF file before uploading the catalogue.');
+      return;
+    }
+
+    setCataloguePdfSaving(true);
+    setMarketingError('');
+    setMarketingMessage('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', cataloguePdfFile);
+
+      const response = await authFetch('/marketing/admin/catalogue', {
+        method: 'PUT',
+        body: formData,
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Unable to upload catalogue PDF.');
+      }
+
+      setCataloguePdf(data || null);
+      setCataloguePdfFile(null);
+      setCataloguePdfInputKey((key) => key + 1);
+      setMarketingMessage('Catalogue PDF uploaded. Customers can now preview and download it.');
+    } catch (error) {
+      setMarketingError(error.message || 'Unable to upload catalogue PDF.');
+    } finally {
+      setCataloguePdfSaving(false);
+    }
+  };
+
+  const deleteCataloguePdf = async () => {
+    if (cataloguePdfDeleting || !cataloguePdf) return;
+
+    if (!window.confirm('Delete the current catalogue PDF? Customers will no longer see it on the catalogue page.')) {
+      return;
+    }
+
+    setCataloguePdfDeleting(true);
+    setMarketingError('');
+    setMarketingMessage('');
+
+    try {
+      const response = await authFetch('/marketing/admin/catalogue', {
+        method: 'DELETE',
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Unable to delete catalogue PDF.');
+      }
+
+      setCataloguePdf(null);
+      setCataloguePdfFile(null);
+      setCataloguePdfInputKey((key) => key + 1);
+      setMarketingMessage(data?.message || 'Catalogue deleted.');
+    } catch (error) {
+      setMarketingError(error.message || 'Unable to delete catalogue PDF.');
+    } finally {
+      setCataloguePdfDeleting(false);
     }
   };
 
@@ -1206,6 +1328,78 @@ function AdminDashboard() {
                 {marketingMessage}
               </div>
             ) : null}
+
+            <form onSubmit={saveCataloguePdf} className="mb-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
+              <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <h4 className="text-lg font-bold text-gray-800">Product Catalogue PDF</h4>
+                  <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                    Upload one PDF catalogue for customers to preview and download on the Catalogue page.
+                    Uploading a new PDF replaces the current catalogue immediately.
+                  </p>
+                </div>
+                {cataloguePdf ? (
+                  <span className="w-fit rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-700">
+                    Catalogue uploaded
+                  </span>
+                ) : (
+                  <span className="w-fit rounded-full bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-600">
+                    No catalogue
+                  </span>
+                )}
+              </div>
+
+              <div className="mb-5 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                <p className="font-semibold">Upload instructions</p>
+                <p>Accepted format: PDF only</p>
+                <p>Maximum file size: 50 MB</p>
+                <p>Use a compressed catalogue for faster customer preview on mobile devices.</p>
+              </div>
+
+              {cataloguePdf ? (
+                <div className="mb-5 rounded-lg border border-gray-200 bg-white px-4 py-3">
+                  <p className="text-sm font-bold text-gray-800">{cataloguePdf.original_filename}</p>
+                  <p className="mt-1 text-xs font-semibold text-gray-500">
+                    {formatFileSize(cataloguePdf.file_size)} | Updated {formatDisplayDate(cataloguePdf.updated_at || cataloguePdf.created_at)}
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto] lg:items-end">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Catalogue PDF</span>
+                  <input
+                    key={cataloguePdfInputKey}
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    onChange={handleCataloguePdfChange}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:font-semibold file:text-white"
+                  />
+                  {cataloguePdfFile ? (
+                    <span className="mt-2 block text-xs font-semibold text-gray-500">
+                      Selected: {cataloguePdfFile.name} ({formatFileSize(cataloguePdfFile.size)})
+                    </span>
+                  ) : null}
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={cataloguePdfSaving || marketingLoading}
+                  className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {cataloguePdfSaving ? 'Uploading...' : cataloguePdf ? 'Replace Catalogue' : 'Upload Catalogue'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={deleteCataloguePdf}
+                  disabled={!cataloguePdf || cataloguePdfDeleting || marketingLoading}
+                  className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-5 py-2.5 font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+                >
+                  {cataloguePdfDeleting ? 'Deleting...' : 'Delete Catalogue'}
+                </button>
+              </div>
+            </form>
 
             <form onSubmit={saveMarketingBanner} className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
               <div className="space-y-5">
