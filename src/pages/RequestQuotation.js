@@ -1,19 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Seo from '../components/Seo';
+import { useProducts } from '../context/ProductContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
-
-const requirementOptions = [
-  'Shop Shelves',
-  'Fruit & Veg Shelves',
-  'Tobacco & Vape Shelves',
-  'Bread & Bakery Shelves',
-  'Counters',
-  'Refrigeration',
-  'Flooring',
-  'Ceiling',
-];
 
 const initialForm = {
   fullName: '',
@@ -24,9 +14,15 @@ const initialForm = {
 };
 
 function RequestQuotation() {
+  const { categories, categoriesLoading, categoriesError } = useProducts();
   const [form, setForm] = useState(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState({ type: '', message: '' });
+
+  const requirementOptions = useMemo(
+    () => categories.map((category) => category.name).filter(Boolean),
+    [categories]
+  );
 
   const selectedRequirementText = useMemo(() => {
     if (form.requirements.length === 0) return 'No requirements selected yet';
@@ -195,6 +191,16 @@ function RequestQuotation() {
 
             <fieldset className="mt-6">
               <legend className="text-sm font-bold text-gray-800">Select Your Requirements</legend>
+              {categoriesLoading ? (
+                <p className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-500">
+                  Loading product categories...
+                </p>
+              ) : null}
+              {categoriesError ? (
+                <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                  Unable to load product categories. Please describe your requirements in the message.
+                </p>
+              ) : null}
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {requirementOptions.map((requirement) => (
                   <label
@@ -210,6 +216,11 @@ function RequestQuotation() {
                     {requirement}
                   </label>
                 ))}
+                {!categoriesLoading && requirementOptions.length === 0 ? (
+                  <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-500 sm:col-span-2">
+                    No product categories are available right now. Please describe your requirements in the message.
+                  </p>
+                ) : null}
               </div>
             </fieldset>
 
