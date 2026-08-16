@@ -13,6 +13,7 @@ const logos = [
   { src: '/clilogs/Nisa_retailer-Logo.wine_.png', alt: 'Nisa logo' },
   { src: '/clilogs/Spar-Logo.jpg', alt: 'SPAR logo' },
   { src: '/clilogs/best-one-blue-logo.png', alt: 'Best-one logo' },
+  { src: '/clilogs/go-local-logo.jpg', alt: 'Go Local logo' },
   { src: '/clilogs/premier-logo.png', alt: 'Premier logo' },
 ];
 
