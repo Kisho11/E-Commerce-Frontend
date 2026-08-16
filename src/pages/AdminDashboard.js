@@ -1002,7 +1002,7 @@ function AdminDashboard() {
       <nav className="bg-red-600 text-white p-4 shadow-lg">
         <div className="container mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <img src="/elmshelf-logo.png" alt="Elmshelf logo" className="h-10 w-auto max-w-[180px] object-contain" />
+            <img src="/elmshelf-logo.png" alt="Elmshelf logo" className="h-auto w-44 object-contain sm:w-52" />
             <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
           </div>
           <div className="flex items-center gap-6">

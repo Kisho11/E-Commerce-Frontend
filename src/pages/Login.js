@@ -263,7 +263,7 @@ function Login() {
           <div className="mx-auto w-full max-w-lg">
             <div className="mb-4 md:hidden">
               <div className="mb-3 flex items-center gap-3 text-slate-900">
-                <img src="/elmshelf-logo.png" alt="Elmshelf logo" className="h-12 w-auto max-w-[180px] object-contain" />
+                <img src="/elmshelf-logo.png" alt="Elmshelf logo" className="h-auto w-44 object-contain" />
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Elmshelf</p>
                   <h1 className="text-lg font-bold text-slate-900">Account access</h1>

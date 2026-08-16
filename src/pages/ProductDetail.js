@@ -337,6 +337,7 @@ function ProductDetail() {
     brand: {
       '@type': 'Brand',
       name: 'Elmshelf',
+      logo: new URL('/elmshelf-logo.png', window.location.origin).toString(),
     },
     offers: productType === PRODUCT_TYPES.CUSTOM
       ? {

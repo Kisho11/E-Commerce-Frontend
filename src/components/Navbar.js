@@ -273,7 +273,7 @@ function Navbar() {
       <div className="shell">
         <div className="flex h-[72px] items-center justify-between gap-4">
           <Link to="/" aria-label="Go to home" className="block shrink-0 cursor-pointer" onClick={handleLogoClick}>
-            <img src="/elmshelf-logo.png" alt="Elmshelf logo" className="h-12 w-auto max-w-[180px] object-contain sm:h-14 sm:max-w-[220px] lg:h-16 lg:max-w-[280px]" />
+            <img src="/elmshelf-logo.png" alt="Elmshelf logo" className="h-auto w-[180px] object-contain sm:w-[230px] lg:w-[300px]" />
           </Link>
 
           <div className="hidden flex-1 items-center justify-center md:flex">

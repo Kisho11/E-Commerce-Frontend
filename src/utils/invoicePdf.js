@@ -94,13 +94,13 @@ export async function downloadInvoicePdf(order) {
     author: BUSINESS.name,
   });
 
-  const logoDataUrl = await imageToDataUrl('/elmshelf-logo.png');
+  const logoDataUrl = await imageToDataUrl('/elmshelf-invoice-logo.png');
 
   doc.setFillColor(249, 250, 251);
   doc.rect(0, 0, pageWidth, 44, 'F');
   doc.setTextColor(15, 23, 42);
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, 'PNG', margin, 7, 70, 22);
+    doc.addImage(logoDataUrl, 'PNG', margin, 8, 82, 17.5);
   }
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(logoDataUrl ? 11 : 24);
