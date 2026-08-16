@@ -1,14 +1,20 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { CALL_PHONE_DISPLAY } from './contactDetails';
+import { formatShippingFee } from './shipping';
 
 const BUSINESS = {
-  name: 'Elmshelf',
-  address: '3, Langley Close, Romford, RM3 8XB',
+  legalName: 'SHOP FITTINGS RETAIL LTD',
+  addressLines: ['3 LANGLEY CLOSE', 'ROMFORD', 'UK, RM3 8XB'],
   phone: CALL_PHONE_DISPLAY,
-  hoursWeekday: 'Monday-Saturday: 8:00 AM - 7:00 PM',
-  hoursSunday: 'Sunday: 9:00 AM - 5:00 PM',
 };
+
+const VAT_NUMBER = '477 287 344';
+const TERMS = [
+  'All items remain the property of ELM SHELF LTD until paid for in full.',
+  'Returns are subject to the terms and conditions at www.elmshelf.co.uk/terms&conditions',
+];
+const BANK_DETAILS = 'BANK DETAILS: SHOP FITTINGS RETAIL LTD | Acc. No.: 28842668 | Sort Code: 30-54-66';
 
 const money = (value) => `\u00a3${(Number(value) || 0).toFixed(2)}`;
 
@@ -36,12 +42,6 @@ const formatDateTime = (order) => {
   return new Date(order.createdAt).toLocaleString();
 };
 
-const formatDeliveryMode = (value = '') => {
-  if (value === 'ship') return 'Ship to address';
-  if (value === 'pickup') return 'Pickup from store';
-  return value || '-';
-};
-
 const getCustomerName = (order) => (
   order.customer ||
   [order.customerFirstName, order.customerLastName].filter(Boolean).join(' ') ||
@@ -58,13 +58,28 @@ const formatVariant = (item) => {
   return [
     item?.selectedColor ? `Color: ${item.selectedColor}` : null,
     item?.selectedSize ? `Size: ${item.selectedSize}` : null,
-  ].filter(Boolean).join(' | ') || '-';
+  ].filter(Boolean).join(' | ');
 };
 
-const getDeliveryNote = (order) => {
-  const note = (order.notes || order.deliveryNote || '').trim();
-  const duplicateDeliveryMode = `Delivery mode: ${formatDeliveryMode(order.deliveryMode)}`.toLowerCase();
-  return note.toLowerCase() === duplicateDeliveryMode ? '' : note;
+const getAddressLines = (order) => {
+  const address = order.shippingAddress || {};
+  const cityLine = [address.city, address.state].filter(Boolean).join(', ');
+  return [
+    address.address,
+    cityLine,
+    address.zipCode,
+  ].filter(Boolean);
+};
+
+const getItemSubtotal = (order, pricing) => {
+  if (pricing.subtotal !== undefined && pricing.subtotal !== null) {
+    return Number(pricing.subtotal) || 0;
+  }
+
+  return (order.items || []).reduce(
+    (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
+    0
+  );
 };
 
 const writeLines = (doc, lines, x, y, lineHeight = 5) => {
@@ -74,187 +89,185 @@ const writeLines = (doc, lines, x, y, lineHeight = 5) => {
   return y + lines.filter(Boolean).length * lineHeight;
 };
 
+const drawFooter = (doc, margin, pageWidth, pageHeight) => {
+  doc.setDrawColor(221, 221, 221);
+  doc.line(margin, pageHeight - 22, pageWidth - margin, pageHeight - 22);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(41, 41, 41);
+  doc.text(BANK_DETAILS, pageWidth / 2, pageHeight - 12, { align: 'center' });
+};
+
 export async function downloadInvoicePdf(order) {
   if (!order) return;
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 14;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 18;
   const pricing = order.pricing || {};
-  const subtotal = pricing.subtotal ?? order.amount;
+  const itemSubtotal = getItemSubtotal(order, pricing);
+  const shippingFee = Number(pricing.shippingFee || 0);
   const discountPercentage = Number(pricing.discountPercentage || 0);
   const discountAmount = Number(pricing.discountAmount || 0);
-  const discountedSubtotal = Number(pricing.discountedSubtotal ?? Math.max(Number(subtotal || 0) - discountAmount, 0));
-  const vatRate = `${((Number(pricing.taxRate) || 0) * 100).toFixed(2)}%`;
-  const deliveryNote = getDeliveryNote(order);
+  const discountedSubtotal = Number(pricing.discountedSubtotal ?? Math.max(itemSubtotal - discountAmount, 0));
+  const vatRate = `${Math.round(Number(pricing.taxRate ?? 0.2) * 100)}%`;
+  const vatAmount = Number(pricing.taxAmount || 0);
+  const logoDataUrl = await imageToDataUrl('/elmshelf-invoice-logo.png');
 
   doc.setProperties({
     title: `Elmshelf Invoice #${order.id}`,
     subject: `Invoice for order #${order.id}`,
-    author: BUSINESS.name,
+    author: BUSINESS.legalName,
   });
 
-  const logoDataUrl = await imageToDataUrl('/elmshelf-invoice-logo.png');
-
-  doc.setFillColor(249, 250, 251);
-  doc.rect(0, 0, pageWidth, 44, 'F');
-  doc.setTextColor(15, 23, 42);
+  doc.setTextColor(41, 41, 41);
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, 'PNG', margin, 8, 82, 17.5);
+    doc.addImage(logoDataUrl, 'PNG', margin, 14, 74, 16);
+  } else {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(24);
+    doc.text('ELMSHELF', margin, 24);
   }
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(logoDataUrl ? 11 : 24);
-  if (!logoDataUrl) {
-    doc.text(BUSINESS.name, margin, 18);
-  }
-  doc.setFontSize(9);
+
+  doc.setDrawColor(217, 75, 67);
+  doc.setLineWidth(0.6);
+  doc.line(margin, 35, margin + 72, 35);
+
   doc.setFont('helvetica', 'normal');
-  doc.text(BUSINESS.address, margin, logoDataUrl ? 35 : 25);
-  doc.text(BUSINESS.phone, margin, logoDataUrl ? 41 : 31);
+  doc.setFontSize(8);
+  writeLines(
+    doc,
+    [BUSINESS.legalName, ...BUSINESS.addressLines, `Tel: ${BUSINESS.phone}`],
+    margin,
+    48,
+    5
+  );
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
-  doc.text('INVOICE', pageWidth - margin, 16, { align: 'right' });
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`#${order.id}`, pageWidth - margin, 23, { align: 'right' });
-  doc.text(`Placed: ${formatDateTime(order)}`, pageWidth - margin, 29, { align: 'right' });
-  doc.text(`Status: ${order.status || '-'}`, pageWidth - margin, 35, { align: 'right' });
+  doc.text('INVOICE', pageWidth - margin, 22, { align: 'right' });
 
-  const sectionTop = 56;
-  const colWidth = (pageWidth - margin * 2 - 8) / 3;
-  const sections = [
-    {
-      title: 'Bill To',
-      x: margin,
-      lines: [
-        getCustomerName(order),
-        order.customerEmail || '',
-        order.customerPhone || '',
-      ],
-    },
-    {
-      title: 'Delivery',
-      x: margin + colWidth + 4,
-      lines: [
-        formatDeliveryMode(order.deliveryMode),
-        order.shippingAddress?.address || '-',
-        [order.shippingAddress?.city, order.shippingAddress?.state, order.shippingAddress?.zipCode].filter(Boolean).join(', ') || '-',
-      ],
-    },
-    {
-      title: 'Payment',
-      x: margin + (colWidth + 4) * 2,
-      lines: [
-        `Method: ${order.payment?.method || '-'}`,
-        order.payment?.cardLast4 ? `Card: **** ${order.payment.cardLast4}` : '',
-        `Total: ${money(order.amount)}`,
-      ],
-    },
+  const metaLabelX = pageWidth - margin - 50;
+  const metaValueX = pageWidth - margin;
+  const metaRows = [
+    ['Invoice Number:', `#${order.id}`],
+    ['VAT Number:', VAT_NUMBER],
+    ['Order Date:', formatDateTime(order)],
   ];
 
-  sections.forEach((section) => {
-    doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(section.x, sectionTop - 6, colWidth, 34, 2, 2);
+  doc.setFontSize(9);
+  metaRows.forEach(([label, value], index) => {
+    const y = 36 + index * 8;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.text(section.title.toUpperCase(), section.x + 4, sectionTop);
-    doc.setFontSize(9);
-    doc.setTextColor(15, 23, 42);
-    writeLines(doc, section.lines, section.x + 4, sectionTop + 7, 5);
+    doc.text(label, metaLabelX, y, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.text(value, metaValueX, y, { align: 'right' });
   });
 
-  const tableRows = (order.items || []).map((item) => [
-    item.name || '-',
-    formatVariant(item),
-    String(item.quantity || 0),
-    money(item.price),
-    money((Number(item.price) || 0) * (Number(item.quantity) || 0)),
-  ]);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Bill To', margin, 92);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  writeLines(
+    doc,
+    [
+      getCustomerName(order),
+      ...getAddressLines(order),
+      order.customerEmail || '',
+      order.customerPhone || '',
+    ],
+    margin,
+    98,
+    5
+  );
+
+  const tableRows = (order.items || []).map((item, index) => {
+    const variant = formatVariant(item);
+    const description = [item.name || '-', variant].filter(Boolean).join('\n');
+
+    return [
+      String(index + 1),
+      description,
+      String(item.quantity || 0),
+      money(item.price),
+      money((Number(item.price) || 0) * (Number(item.quantity) || 0)),
+    ];
+  });
 
   autoTable(doc, {
-    startY: sectionTop + 42,
-    head: [['Product', 'Variant', 'Qty', 'Unit Price', 'Line Total']],
-    body: tableRows.length > 0 ? tableRows : [['No items found', '-', '-', '-', '-']],
-    styles: { fontSize: 9, cellPadding: 2.6, valign: 'middle' },
-    headStyles: { fillColor: [241, 245, 249], textColor: [51, 65, 85], fontStyle: 'bold' },
+    startY: 128,
+    head: [['S.No', 'Description', 'Qty', 'Rate', 'Amount']],
+    body: tableRows.length > 0 ? tableRows : [['-', 'No items found', '-', '-', '-']],
+    styles: {
+      fontSize: 8,
+      cellPadding: 2.2,
+      lineColor: [221, 221, 221],
+      lineWidth: 0.1,
+      textColor: [41, 41, 41],
+      valign: 'top',
+    },
+    headStyles: {
+      fillColor: [41, 41, 41],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      halign: 'left',
+    },
+    alternateRowStyles: { fillColor: [255, 255, 255] },
     columnStyles: {
-      0: { cellWidth: 58 },
-      1: { cellWidth: 48 },
+      0: { cellWidth: 15 },
+      1: { cellWidth: 94 },
       2: { halign: 'right', cellWidth: 16 },
-      3: { halign: 'right', cellWidth: 28 },
-      4: { halign: 'right', cellWidth: 28 },
+      3: { halign: 'right', cellWidth: 24 },
+      4: { halign: 'right', cellWidth: 25 },
     },
     margin: { left: margin, right: margin },
   });
 
-  const afterTableY = doc.lastAutoTable.finalY + 10;
-  const totalsX = pageWidth - margin - 68;
-  const totalRows = [
-    ['Subtotal', money(subtotal)],
-    ...(discountAmount > 0
-      ? [
-          [`Global Discount (${discountPercentage.toFixed(2)}%)`, `-${money(discountAmount)}`],
-          ['Discounted Subtotal', money(discountedSubtotal)],
-        ]
-      : []),
-    ['Shipping', money(pricing.shippingFee)],
-    [`VAT (${vatRate})`, money(pricing.taxAmount)],
-  ];
-  const totalsBoxHeight = 18 + totalRows.length * 7;
+  let summaryY = pageHeight - 62;
+  if (doc.lastAutoTable.finalY > summaryY - 10) {
+    doc.addPage();
+    summaryY = pageHeight - 62;
+  }
 
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(totalsX, afterTableY - 4, 68, totalsBoxHeight, 2, 2);
-  doc.setFontSize(9);
-  totalRows.forEach(([label, value], index) => {
-    const y = afterTableY + index * 7;
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(71, 85, 105);
-    doc.text(label, totalsX + 4, y);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(15, 23, 42);
-    doc.text(value, pageWidth - margin - 4, y, { align: 'right' });
-  });
-
-  doc.setDrawColor(203, 213, 225);
-  const totalDividerY = afterTableY + totalRows.length * 7;
-  doc.line(totalsX + 4, totalDividerY, pageWidth - margin - 4, totalDividerY);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text('Total', totalsX + 4, totalDividerY + 9);
-  doc.text(money(order.amount), pageWidth - margin - 4, totalDividerY + 9, { align: 'right' });
+  const termsX = margin;
+  const totalsLabelX = pageWidth - margin - 38;
+  const totalsValueX = pageWidth - margin;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.setTextColor(100, 116, 139);
-  doc.text('STORE HOURS', margin, afterTableY);
+  doc.setTextColor(41, 41, 41);
+  doc.text('TERMS & CONDITIONS', termsX, summaryY);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(51, 65, 85);
-  writeLines(doc, [BUSINESS.hoursWeekday, BUSINESS.hoursSunday], margin, afterTableY + 7, 5);
+  doc.setFontSize(7);
+  writeLines(doc, TERMS, termsX, summaryY + 7, 4.5);
 
-  if (deliveryNote) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.text('DELIVERY NOTES', margin, afterTableY + 24);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(51, 65, 85);
-    doc.text(doc.splitTextToSize(deliveryNote, 100), margin, afterTableY + 31);
-  }
-
-  const footerY = doc.internal.pageSize.getHeight() - 18;
-  doc.setDrawColor(226, 232, 240);
-  doc.line(margin, footerY - 7, pageWidth - margin, footerY - 7);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`Thank you for choosing ${BUSINESS.name}.`, pageWidth / 2, footerY, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139);
-  doc.text('Please keep this invoice for your records.', pageWidth / 2, footerY + 5, { align: 'center' });
+  doc.setFontSize(11);
+  doc.text('Order Summary', totalsValueX, summaryY, { align: 'right' });
 
+  const totalRows = [
+    ['Sub Total:', money(itemSubtotal), 'normal'],
+    ...(discountAmount > 0
+      ? [
+          [`Global Discount (${discountPercentage.toFixed(2)}%):`, `-${money(discountAmount)}`, 'normal'],
+          ['Discounted Subtotal:', money(discountedSubtotal), 'normal'],
+        ]
+      : []),
+    ['Shipping:', formatShippingFee(shippingFee), 'normal'],
+    [`VAT (${vatRate}):`, money(vatAmount), 'normal'],
+    ['Total:', money(order.amount), 'bold'],
+  ];
+
+  totalRows.forEach(([label, value, weight], index) => {
+    const y = summaryY + 9 + index * 8;
+    doc.setFont('helvetica', weight === 'bold' ? 'bold' : 'normal');
+    doc.setFontSize(weight === 'bold' ? 11 : 9);
+    doc.text(label, totalsLabelX, y, { align: 'right' });
+    doc.text(value, totalsValueX, y, { align: 'right' });
+  });
+
+  drawFooter(doc, margin, pageWidth, pageHeight);
   doc.save(`elmshelf-invoice-${order.id}.pdf`);
 }

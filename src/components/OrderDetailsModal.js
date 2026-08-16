@@ -1,17 +1,23 @@
 import React from 'react';
 import { downloadInvoicePdf } from '../utils/invoicePdf';
 import { CALL_PHONE_DISPLAY } from '../utils/contactDetails';
+import { formatShippingFee } from '../utils/shipping';
 
 const BUSINESS = {
-  name: 'Elmshelf',
-  address: '3, Langley Close, Romford, RM3 8XB',
+  legalName: 'SHOP FITTINGS RETAIL LTD',
+  addressLines: ['3 LANGLEY CLOSE', 'ROMFORD', 'UK, RM3 8XB'],
   phone: CALL_PHONE_DISPLAY,
-  hoursWeekday: 'Monday-Saturday: 8:00 AM - 7:00 PM',
-  hoursSunday: 'Sunday: 9:00 AM - 5:00 PM',
 };
 
+const VAT_NUMBER = '477 287 344';
+const TERMS = [
+  'All items remain the property of ELM SHELF LTD until paid for in full.',
+  'Returns are subject to the terms and conditions at www.elmshelf.co.uk/terms&conditions',
+];
+const BANK_DETAILS = 'BANK DETAILS: SHOP FITTINGS RETAIL LTD | Acc. No.: 28842668 | Sort Code: 30-54-66';
+
 function formatCurrency(value) {
-  return `£${(Number(value) || 0).toFixed(2)}`;
+  return `\u00a3${(Number(value) || 0).toFixed(2)}`;
 }
 
 function formatDateTime(order) {
@@ -32,12 +38,6 @@ function formatVariant(item) {
   ].filter(Boolean).join(' | ');
 }
 
-function formatDeliveryMode(value = '') {
-  if (value === 'ship') return 'Ship to address';
-  if (value === 'pickup') return 'Pickup from store';
-  return value || '-';
-}
-
 function getCustomerName(order) {
   return (
     order.customer ||
@@ -46,26 +46,43 @@ function getCustomerName(order) {
   );
 }
 
-function getDeliveryNote(order) {
-  const note = (order.notes || order.deliveryNote || '').trim();
-  const duplicateDeliveryMode = `Delivery mode: ${formatDeliveryMode(order.deliveryMode)}`.toLowerCase();
-  return note.toLowerCase() === duplicateDeliveryMode ? '' : note;
+function getAddressLines(order) {
+  const address = order.shippingAddress || {};
+  const cityLine = [address.city, address.state].filter(Boolean).join(', ');
+  return [
+    address.address,
+    cityLine,
+    address.zipCode,
+  ].filter(Boolean);
+}
+
+function getItemSubtotal(order, pricing) {
+  if (pricing.subtotal !== undefined && pricing.subtotal !== null) {
+    return Number(pricing.subtotal) || 0;
+  }
+
+  return (order.items || []).reduce(
+    (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
+    0
+  );
 }
 
 function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
   if (!order) return null;
 
   const pricing = order.pricing || {};
-  const subtotal = pricing.subtotal ?? order.amount;
+  const itemSubtotal = getItemSubtotal(order, pricing);
+  const shippingFee = Number(pricing.shippingFee || 0);
   const discountPercentage = Number(pricing.discountPercentage || 0);
   const discountAmount = Number(pricing.discountAmount || 0);
-  const discountedSubtotal = Number(pricing.discountedSubtotal ?? Math.max(Number(subtotal || 0) - discountAmount, 0));
-  const vatRate = `${((Number(pricing.taxRate) || 0) * 100).toFixed(2)}%`;
-  const deliveryNote = getDeliveryNote(order);
+  const discountedSubtotal = Number(pricing.discountedSubtotal ?? Math.max(itemSubtotal - discountAmount, 0));
+  const vatRate = `${Math.round(Number(pricing.taxRate ?? 0.2) * 100)}%`;
+  const vatAmount = Number(pricing.taxAmount || 0);
+  const addressLines = getAddressLines(order);
 
   return (
     <div className="order-print-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
-      <div className="order-print-panel flex h-[82svh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+      <div className="order-print-panel flex h-[82svh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
         <div className="no-print flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 sm:px-5">
           <div>
             <h3 className={`text-xl font-bold ${accentClass}`}>Invoice #{order.id}</h3>
@@ -89,133 +106,139 @@ function OrderDetailsModal({ order, onClose, accentClass = 'text-primary' }) {
           </div>
         </div>
 
-        <div className="order-print-content overflow-y-scroll px-4 py-5 text-sm sm:px-6">
-          <header className="flex flex-col gap-5 border-b-2 border-slate-900 pb-5 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <img src="/elmshelf-invoice-logo.png" alt="Elmshelf logo" className="h-auto w-56 max-w-full object-contain sm:w-72" />
+        <div className="order-print-content overflow-y-scroll bg-gray-100 px-3 py-5 text-sm sm:px-6">
+          <article className="mx-auto flex aspect-[210/297] w-[794px] max-w-full flex-col bg-white px-8 py-9 text-slate-900 shadow-sm sm:px-10">
+            <header className="grid gap-6 border-b border-[#d94b43] pb-5 md:grid-cols-[1fr_240px]">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Invoice from</p>
-                <h1 className="mt-1 text-3xl font-extrabold text-slate-950">{BUSINESS.name}</h1>
-                <p className="mt-2 max-w-sm font-semibold leading-relaxed text-slate-700">{BUSINESS.address}</p>
-                <p className="mt-1 font-bold text-primary">{BUSINESS.phone}</p>
+                <img src="/elmshelf-invoice-logo.png" alt="Elmshelf logo" className="h-auto w-64 max-w-full object-contain" />
+                <div className="mt-6 space-y-1 text-xs font-semibold uppercase leading-relaxed text-slate-700">
+                  <p>{BUSINESS.legalName}</p>
+                  {BUSINESS.addressLines.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                  <p>Tel: {BUSINESS.phone}</p>
+                </div>
               </div>
-            </div>
 
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-left sm:min-w-56 sm:text-right">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Invoice</p>
-              <p className="mt-1 text-2xl font-extrabold text-slate-950">#{order.id}</p>
-              <p className="mt-2 text-sm text-slate-600">Placed: {formatDateTime(order)}</p>
-              <p className="mt-1 text-sm font-bold text-slate-800">Status: {order.status || '-'}</p>
-            </div>
-          </header>
+              <div className="text-left md:text-right">
+                <h1 className="text-2xl font-extrabold uppercase tracking-normal text-slate-900">INVOICE</h1>
+                <dl className="mt-7 space-y-3 text-sm">
+                  <div className="flex justify-between gap-4 md:justify-end">
+                    <dt className="font-bold">Invoice Number:</dt>
+                    <dd>#{order.id}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 md:justify-end">
+                    <dt className="font-bold">VAT Number:</dt>
+                    <dd>{VAT_NUMBER}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 md:justify-end">
+                    <dt className="font-bold">Order Date:</dt>
+                    <dd>{formatDateTime(order)}</dd>
+                  </div>
+                </dl>
+              </div>
+            </header>
 
-          <section className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="rounded-lg border border-gray-200 p-4">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Bill To</p>
-              <p className="font-bold text-slate-900">{getCustomerName(order)}</p>
-              {order.customerEmail && <p className="mt-1 text-slate-700">{order.customerEmail}</p>}
-              {order.customerPhone && <p className="mt-1 text-slate-700">{order.customerPhone}</p>}
-            </div>
+            <section className="mt-8 grid gap-6 md:grid-cols-[1fr_240px]">
+              <div>
+                <h2 className="text-base font-bold">Bill To</h2>
+                <div className="mt-1.5 space-y-1 text-sm text-slate-700">
+                  <p className="font-semibold text-slate-900">{getCustomerName(order)}</p>
+                  {addressLines.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                  {order.customerEmail && <p>{order.customerEmail}</p>}
+                  {order.customerPhone && <p>{order.customerPhone}</p>}
+                </div>
+              </div>
+            </section>
 
-            <div className="rounded-lg border border-gray-200 p-4">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Delivery</p>
-              <p><strong>Mode:</strong> {formatDeliveryMode(order.deliveryMode)}</p>
-              <p className="mt-1">{order.shippingAddress?.address || '-'}</p>
-              <p>{[order.shippingAddress?.city, order.shippingAddress?.state, order.shippingAddress?.zipCode].filter(Boolean).join(', ') || '-'}</p>
-            </div>
-
-            <div className="rounded-lg border border-gray-200 p-4">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Payment</p>
-              <p><strong>Method:</strong> {order.payment?.method || '-'}</p>
-              {order.payment?.cardLast4 && <p><strong>Card:</strong> **** {order.payment.cardLast4}</p>}
-              <p><strong>Total:</strong> {formatCurrency(order.amount)}</p>
-            </div>
-          </section>
-
-          <section className="mt-5">
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Items</p>
-            {order.items?.length ? (
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-100 text-slate-700">
+            <section className="mt-10">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] border-collapse text-sm">
+                  <thead className="bg-slate-900 text-white">
                     <tr>
-                      <th className="px-3 py-2 text-left">Product</th>
-                      <th className="px-3 py-2 text-left">Variant</th>
-                      <th className="px-3 py-2 text-right">Qty</th>
-                      <th className="px-3 py-2 text-right">Unit Price</th>
-                      <th className="px-3 py-2 text-right">Line Total</th>
+                      <th className="w-14 px-3 py-2 text-left font-bold">S.No</th>
+                      <th className="px-3 py-2 text-left font-bold">Description</th>
+                      <th className="w-16 px-3 py-2 text-right font-bold">Qty</th>
+                      <th className="w-24 px-3 py-2 text-right font-bold">Rate</th>
+                      <th className="w-28 px-3 py-2 text-right font-bold">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {order.items.map((item) => (
-                      <tr key={item.lineId || `${item.id}-${item.name}`} className="border-t border-gray-200">
-                        <td className="px-3 py-3 font-semibold text-slate-900">{item.name}</td>
-                        <td className="px-3 py-3 text-slate-600">{formatVariant(item) || '-'}</td>
-                        <td className="px-3 py-3 text-right">{item.quantity}</td>
-                        <td className="px-3 py-3 text-right">{formatCurrency(item.price)}</td>
-                        <td className="px-3 py-3 text-right font-bold">{formatCurrency((Number(item.price) || 0) * (Number(item.quantity) || 0))}</td>
+                    {order.items?.length ? (
+                      order.items.map((item, index) => {
+                        const variant = formatVariant(item);
+                        const lineTotal = (Number(item.price) || 0) * (Number(item.quantity) || 0);
+
+                        return (
+                          <tr key={item.lineId || `${item.id}-${item.name}`} className="border-b border-gray-200">
+                            <td className="px-3 py-3 align-top">{index + 1}</td>
+                            <td className="px-3 py-3 align-top">
+                              <p className="font-semibold text-slate-900">{item.name || '-'}</p>
+                              {variant && <p className="mt-1 text-xs text-slate-500">{variant}</p>}
+                            </td>
+                            <td className="px-3 py-3 text-right align-top">{item.quantity || 0}</td>
+                            <td className="px-3 py-3 text-right align-top">{formatCurrency(item.price)}</td>
+                            <td className="px-3 py-3 text-right align-top font-semibold">{formatCurrency(lineTotal)}</td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr className="border-b border-gray-200">
+                        <td className="px-3 py-4 text-slate-600" colSpan={5}>No items found.</td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
-            ) : (
-              <p className="rounded-lg border border-gray-200 p-4 text-sm text-gray-600">No items found.</p>
-            )}
-          </section>
+            </section>
 
-          <section className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="rounded-lg border border-gray-200 p-4">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Store Hours</p>
-              <p className="font-semibold text-slate-800">{BUSINESS.hoursWeekday}</p>
-              <p className="mt-1 font-semibold text-slate-700">{BUSINESS.hoursSunday}</p>
-              {deliveryNote && (
-                <>
-                  <p className="mt-4 mb-1 text-xs font-bold uppercase tracking-wide text-gray-500">Delivery Notes</p>
-                  <p className="whitespace-pre-line text-sm text-gray-700">{deliveryNote}</p>
-                </>
-              )}
-            </div>
+            <section className="mt-auto grid gap-8 pt-10 md:grid-cols-[1fr_260px]">
+              <div className="text-xs leading-relaxed text-slate-700">
+                <p className="mb-3 text-sm font-bold uppercase text-slate-900">TERMS & CONDITIONS</p>
+                {TERMS.map((term) => (
+                  <p key={term}>{term}</p>
+                ))}
+              </div>
 
-            <div className="rounded-lg border border-gray-200 p-4">
-              <p className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">Totals</p>
-              <div className="space-y-2">
+              <div className="space-y-2 text-sm">
+                <p className="mb-3 text-lg font-bold text-slate-900">Order Summary</p>
                 <div className="flex justify-between gap-4">
-                  <span className="text-slate-600">Subtotal</span>
-                  <span className="font-semibold">{formatCurrency(subtotal)}</span>
+                  <span>Sub Total:</span>
+                  <span>{formatCurrency(itemSubtotal)}</span>
                 </div>
                 {discountAmount > 0 && (
                   <>
                     <div className="flex justify-between gap-4 text-green-700">
-                      <span>Global Discount ({discountPercentage.toFixed(2)}%)</span>
-                      <span className="font-semibold">-{formatCurrency(discountAmount)}</span>
+                      <span>Global Discount ({discountPercentage.toFixed(2)}%):</span>
+                      <span>-{formatCurrency(discountAmount)}</span>
                     </div>
                     <div className="flex justify-between gap-4">
-                      <span className="text-slate-600">Discounted Subtotal</span>
-                      <span className="font-semibold">{formatCurrency(discountedSubtotal)}</span>
+                      <span>Discounted Subtotal:</span>
+                      <span>{formatCurrency(discountedSubtotal)}</span>
                     </div>
                   </>
                 )}
                 <div className="flex justify-between gap-4">
-                  <span className="text-slate-600">Shipping</span>
-                  <span className="font-semibold">{formatCurrency(pricing.shippingFee)}</span>
+                  <span>Shipping:</span>
+                  <span>{formatShippingFee(shippingFee)}</span>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <span className="text-slate-600">VAT ({vatRate})</span>
-                  <span className="font-semibold">{formatCurrency(pricing.taxAmount)}</span>
+                  <span>VAT ({vatRate}):</span>
+                  <span>{formatCurrency(vatAmount)}</span>
                 </div>
-                <div className="mt-3 flex justify-between gap-4 border-t border-slate-200 pt-3 text-lg font-extrabold text-slate-950">
-                  <span>Total</span>
+                <div className="mt-3 flex justify-between gap-4 border-t border-slate-300 pt-3 text-base font-extrabold">
+                  <span>Total:</span>
                   <span>{formatCurrency(order.amount)}</span>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
 
-          <footer className="mt-6 border-t border-slate-200 pt-4 text-center text-sm text-slate-600">
-            <p className="font-semibold text-slate-800">Thank you for choosing {BUSINESS.name}.</p>
-            <p className="mt-1">Please keep this invoice for your records.</p>
-          </footer>
+            <footer className="mt-10 border-t border-gray-300 pt-4 text-center text-xs font-bold text-slate-800">
+              {BANK_DETAILS}
+            </footer>
+          </article>
         </div>
       </div>
     </div>
