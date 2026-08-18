@@ -149,6 +149,7 @@ const EXPRESS_CHECKOUT_OPTIONS = {
   buttonHeight: 48,
   emailRequired: true,
   phoneNumberRequired: true,
+  shippingAddressRequired: true,
   buttonType: {
     applePay: 'check-out',
     googlePay: 'checkout',
@@ -739,7 +740,6 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
 
     event.resolve({
       lineItems: getStripeLineItems(),
-      shippingAddressRequired: true,
       shippingRates: getExpressShippingRates(),
     });
   };
