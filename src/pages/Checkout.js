@@ -721,6 +721,14 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
     }
   }
 
+  function getExpressShippingRates() {
+    return [{
+      id: shippingFee >= 180 ? 'boards-shipping' : shippingFee > 0 ? 'standard-shipping' : 'pickup',
+      amount: Math.round(shippingFee * 100),
+      displayName: shippingFee >= 180 ? 'Boards shipping' : shippingFee > 0 ? 'Standard shipping' : 'Pickup',
+    }];
+  }
+
   const handleExpressCheckoutClick = (event) => {
     setSelectedPaymentMethod(event.expressPaymentType || 'Express Checkout');
     setSubmitError('');
@@ -731,12 +739,13 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
 
     event.resolve({
       lineItems: getStripeLineItems(),
-      shippingRates: [{
-        id: shippingFee >= 180 ? 'boards-shipping' : shippingFee > 0 ? 'standard-shipping' : 'pickup',
-        amount: Math.round(shippingFee * 100),
-        displayName: shippingFee >= 180 ? 'Boards shipping' : shippingFee > 0 ? 'Standard shipping' : 'Pickup',
-      }],
+      shippingAddressRequired: true,
+      shippingRates: getExpressShippingRates(),
     });
+  };
+
+  const handleExpressCheckoutShippingAddressChange = (event) => {
+    event.resolve({ shippingRates: getExpressShippingRates() });
   };
 
   const handleExpressCheckoutConfirm = async (event) => {
@@ -1230,6 +1239,7 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
                     options={EXPRESS_CHECKOUT_OPTIONS}
                     onClick={handleExpressCheckoutClick}
                     onConfirm={handleExpressCheckoutConfirm}
+                    onShippingAddressChange={handleExpressCheckoutShippingAddressChange}
                     onReady={({ availablePaymentMethods }) => {
                       console.info('Stripe express checkout methods:', availablePaymentMethods);
                       setExpressCheckoutReady(Boolean(availablePaymentMethods));
