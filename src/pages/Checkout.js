@@ -156,23 +156,19 @@ const EXPRESS_CHECKOUT_OPTIONS = {
     maxRows: 3,
     overflow: 'auto',
   },
-  paymentMethodOrder: ['apple_pay', 'google_pay', 'link', 'amazon_pay', 'klarna'],
+  paymentMethodOrder: ['apple_pay', 'google_pay', 'link', 'klarna'],
   paymentMethods: {
     applePay: 'auto',
     googlePay: 'auto',
     link: 'auto',
     klarna: 'auto',
-    amazonPay: 'auto',
   },
 };
 
 const STRIPE_PAYMENT_METHOD_TYPES = [
   'card',
   'link',
-  'amazon_pay',
   'klarna',
-  'afterpay_clearpay',
-  'revolut_pay',
 ];
 
 const PAYMENT_ELEMENT_OPTIONS = {
@@ -185,10 +181,7 @@ const PAYMENT_ELEMENT_OPTIONS = {
   paymentMethodOrder: [
     'card',
     'link',
-    'amazon_pay',
     'klarna',
-    'afterpay_clearpay',
-    'revolut_pay',
   ],
   wallets: {
     applePay: 'never',
