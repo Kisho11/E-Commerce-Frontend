@@ -147,6 +147,8 @@ const stripeAppearance = {
 
 const EXPRESS_CHECKOUT_OPTIONS = {
   buttonHeight: 48,
+  emailRequired: true,
+  phoneNumberRequired: true,
   buttonType: {
     applePay: 'check-out',
     googlePay: 'checkout',
@@ -239,7 +241,14 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
     : 0;
   const taxAmount = roundMoney((discountedSubtotal + shippingFee) * taxRate);
   const totalWithTax = roundMoney(discountedSubtotal + taxAmount + shippingFee);
+  const stripeCheckoutAmount = Math.max(50, Math.round(totalWithTax * 100) || 50);
   const requiresBackendCheckout = Boolean(API_BASE_URL);
+
+  useEffect(() => {
+    if (requiresBackendCheckout && elements) {
+      elements.update({ amount: stripeCheckoutAmount });
+    }
+  }, [elements, requiresBackendCheckout, stripeCheckoutAmount]);
 
   useEffect(() => {
     if (requiresBackendCheckout && !user && checkoutItems.length > 0) {
@@ -475,16 +484,22 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
   }
 
   function getStripeLineItems() {
-    const lineItems = checkoutItems.map((item) => ({
-      name: `${item.name} x ${item.quantity}`,
-      amount: Math.round((item.salePrice || item.price) * item.quantity * 100),
-    }));
-    if (discountAmount > 0) {
+    const lineItems = [
+      {
+        name: discountAmount > 0 ? 'Discounted items subtotal' : 'Items subtotal',
+        amount: Math.round(discountedSubtotal * 100),
+      },
+    ];
+    if (taxAmount > 0) {
       lineItems.push({
-        name: `Global discount (${discountPercentage.toFixed(2)}%)`,
-        amount: -Math.round(discountAmount * 100),
+        name: `VAT (${Math.round(taxRate * 100)}%)`,
+        amount: Math.round(taxAmount * 100),
       });
     }
+    lineItems.push({
+      name: formData.deliveryMode === 'pickup' ? 'Pickup' : 'Shipping',
+      amount: Math.round(shippingFee * 100),
+    });
     return lineItems;
   }
 
