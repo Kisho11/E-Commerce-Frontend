@@ -1243,7 +1243,7 @@ function CheckoutForm({ globalDiscountPercentage = 0 }) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
-                  Secured by Stripe. Card, wallet, PayPal, Klarna/Clearpay and Pay by Bank details are never stored on our servers.
+                  Secured by Stripe. Card, Apple Pay, Google Pay, Link and Klarna details are never stored on our servers.
                 </p>
               </>
             ) : (
