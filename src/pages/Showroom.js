@@ -1,14 +1,24 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Seo from '../components/Seo';
 import {
   CALL_PHONE_DISPLAY,
   CALL_PHONE_TEL,
 } from '../utils/contactDetails';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL;
+const API_ORIGIN = API_BASE_URL ? new URL(API_BASE_URL).origin : '';
 const showroomAddress = 'Elmshelf, 3 Langley Cl, Romford RM3 8XB';
 const encodedAddress = encodeURIComponent(showroomAddress);
 const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
 const mapEmbedUrl = `https://www.google.com/maps?q=${encodedAddress}&output=embed`;
+
+const resolveShowroomImageUrl = (value) => {
+  if (!value) return '';
+  if (/^(data:|blob:|https?:)/i.test(value)) return value;
+  if (!API_ORIGIN) return value;
+  if (value.startsWith('/uploads/')) return `${API_ORIGIN}${value}`;
+  return value;
+};
 
 const visitSteps = [
   {
@@ -26,6 +36,37 @@ const visitSteps = [
 ];
 
 function Showroom() {
+  const [showroomImageUrl, setShowroomImageUrl] = useState('');
+
+  useEffect(() => {
+    if (!API_BASE_URL) return undefined;
+
+    let cancelled = false;
+
+    const loadShowroomImage = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/marketing/settings`, {
+          credentials: 'include',
+        });
+        const data = await response.json().catch(() => null);
+
+        if (!cancelled && response.ok) {
+          setShowroomImageUrl(resolveShowroomImageUrl(data?.showroom_image_url));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setShowroomImageUrl('');
+        }
+      }
+    };
+
+    loadShowroomImage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="pb-10">
       <Seo
@@ -66,7 +107,7 @@ function Showroom() {
 
             <div
               className="min-h-[260px] bg-cover bg-center sm:min-h-[340px] lg:min-h-full"
-              style={{ backgroundImage: "url('/elm-shelf-storefront.jpg')" }}
+              style={{ backgroundImage: showroomImageUrl ? `url(${showroomImageUrl})` : 'none' }}
               aria-label="Elmshelf showroom storefront"
               role="img"
             />

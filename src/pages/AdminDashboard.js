@@ -119,6 +119,8 @@ function AdminDashboard() {
   const [marketingBannerFile, setMarketingBannerFile] = useState(null);
   const [heroImageFile, setHeroImageFile] = useState(null);
   const [heroImageInputKey, setHeroImageInputKey] = useState(0);
+  const [showroomImageFile, setShowroomImageFile] = useState(null);
+  const [showroomImageInputKey, setShowroomImageInputKey] = useState(0);
   const [marketingBannerEnabled, setMarketingBannerEnabled] = useState(false);
   const [marketingBannerCtaUrl, setMarketingBannerCtaUrl] = useState('/catalogue');
   const [globalDiscountPercentage, setGlobalDiscountPercentage] = useState('0');
@@ -128,6 +130,7 @@ function AdminDashboard() {
   const [marketingLoading, setMarketingLoading] = useState(false);
   const [marketingSaving, setMarketingSaving] = useState(false);
   const [heroImageSaving, setHeroImageSaving] = useState(false);
+  const [showroomImageSaving, setShowroomImageSaving] = useState(false);
   const [marketingDiscountSaving, setMarketingDiscountSaving] = useState(false);
   const [cataloguePdfSaving, setCataloguePdfSaving] = useState(false);
   const [cataloguePdfDeleting, setCataloguePdfDeleting] = useState(false);
@@ -197,6 +200,10 @@ function AdminDashboard() {
     if (heroImageFile) return URL.createObjectURL(heroImageFile);
     return resolveDashboardMediaUrl(marketingBanner?.hero_image_url || '');
   }, [heroImageFile, marketingBanner]);
+  const showroomImagePreviewUrl = useMemo(() => {
+    if (showroomImageFile) return URL.createObjectURL(showroomImageFile);
+    return resolveDashboardMediaUrl(marketingBanner?.showroom_image_url || '');
+  }, [marketingBanner, showroomImageFile]);
   const activeNewsletterSubscriberCount = newsletterSubscribers.filter((subscriber) => subscriber.is_active).length;
   const shopOwnerSubscriberCount = newsletterSubscribers.filter((subscriber) => subscriber.business_type !== 'shopfitter').length;
   const shopfitterSubscriberCount = newsletterSubscribers.filter((subscriber) => subscriber.business_type === 'shopfitter').length;
@@ -491,6 +498,11 @@ function AdminDashboard() {
   }, [heroImageFile, heroImagePreviewUrl]);
 
   useEffect(() => {
+    if (!showroomImageFile || !showroomImagePreviewUrl.startsWith('blob:')) return undefined;
+    return () => URL.revokeObjectURL(showroomImagePreviewUrl);
+  }, [showroomImageFile, showroomImagePreviewUrl]);
+
+  useEffect(() => {
     if (user?.role !== 'admin' || activeTab !== 'marketing') return undefined;
 
     let cancelled = false;
@@ -542,6 +554,8 @@ function AdminDashboard() {
           setMarketingBannerFile(null);
           setHeroImageFile(null);
           setHeroImageInputKey((key) => key + 1);
+          setShowroomImageFile(null);
+          setShowroomImageInputKey((key) => key + 1);
         }
       } catch (error) {
         if (!cancelled) {
@@ -554,6 +568,8 @@ function AdminDashboard() {
           setCataloguePdfInputKey((key) => key + 1);
           setHeroImageFile(null);
           setHeroImageInputKey((key) => key + 1);
+          setShowroomImageFile(null);
+          setShowroomImageInputKey((key) => key + 1);
           setNewsletterSubscribers([]);
           setMarketingCampaigns([]);
           setMarketingError(error.message || 'Unable to load marketing data.');
@@ -788,6 +804,74 @@ function AdminDashboard() {
       setMarketingError(error.message || 'Unable to replace homepage hero image.');
     } finally {
       setHeroImageSaving(false);
+    }
+  };
+
+  const handleShowroomImageFileChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    setMarketingMessage('');
+
+    if (!file) {
+      setShowroomImageFile(null);
+      return;
+    }
+
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setShowroomImageFile(null);
+      setMarketingError('Please upload a PNG or JPEG showroom image.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > HERO_IMAGE_MAX_BYTES) {
+      setShowroomImageFile(null);
+      setMarketingError('Showroom image must be 5 MB or smaller.');
+      event.target.value = '';
+      return;
+    }
+
+    setMarketingError('');
+    setShowroomImageFile(file);
+  };
+
+  const saveShowroomImage = async (event) => {
+    event.preventDefault();
+    if (showroomImageSaving) return;
+
+    if (!showroomImageFile) {
+      setMarketingError('Choose a PNG or JPEG image before replacing the showroom image.');
+      return;
+    }
+
+    setShowroomImageSaving(true);
+    setMarketingError('');
+    setMarketingMessage('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', showroomImageFile);
+
+      const response = await authFetch('/marketing/admin/showroom-image', {
+        method: 'PUT',
+        body: formData,
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Unable to replace showroom image.');
+      }
+
+      setMarketingBanner(data || null);
+      setMarketingBannerEnabled(Boolean(data?.is_active));
+      setMarketingBannerCtaUrl(data?.cta_url || '/catalogue');
+      setGlobalDiscountPercentage(String(Number(data?.global_discount_percentage ?? globalDiscountPercentage ?? 0)));
+      setShowroomImageFile(null);
+      setShowroomImageInputKey((key) => key + 1);
+      setMarketingMessage('Showroom image replaced. The Showroom page will keep this image until another one is uploaded.');
+    } catch (error) {
+      setMarketingError(error.message || 'Unable to replace showroom image.');
+    } finally {
+      setShowroomImageSaving(false);
     }
   };
 
@@ -1494,6 +1578,114 @@ function AdminDashboard() {
               </div>
             ) : null}
 
+            <form onSubmit={saveMarketingBanner} className="mb-8 grid gap-6 rounded-xl border border-gray-200 bg-gray-50 p-5 lg:grid-cols-[1fr_1.2fr]">
+              <div className="space-y-5">
+                <div>
+                  <h4 className="text-lg font-bold text-gray-800">Promotional Banner</h4>
+                  <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                    <p className="font-semibold">Upload requirements</p>
+                    <p>Recommended size: 1200 x 600 px</p>
+                    <p>Aspect ratio: 2:1</p>
+                    <p>Accepted formats: PNG or JPEG</p>
+                  </div>
+                </div>
+
+                <label className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                  <span>
+                    <span className="block font-semibold text-gray-800">Enable banner</span>
+                    <span className="block text-sm text-gray-500">Customers see this uploaded image when active.</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={marketingBannerEnabled}
+                    onChange={(event) => setMarketingBannerEnabled(event.target.checked)}
+                    className="h-5 w-5 accent-primary"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Banner image</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                    onChange={handleMarketingFileChange}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:font-semibold file:text-white"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Click-through URL</span>
+                  <input
+                    type="text"
+                    value={marketingBannerCtaUrl}
+                    onChange={(event) => setMarketingBannerCtaUrl(event.target.value)}
+                    placeholder="/catalogue"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={marketingSaving || marketingLoading}
+                  className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {marketingSaving ? 'Saving...' : 'Save Banner'}
+                </button>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="font-bold text-gray-800">Preview</h4>
+                  {marketingLoading ? <span className="text-sm text-gray-500">Loading...</span> : null}
+                </div>
+
+                {marketingPreviewUrl ? (
+                  <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+                    <img
+                      src={marketingPreviewUrl}
+                      alt="Marketing banner preview"
+                      className="h-auto max-h-[420px] w-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex min-h-[240px] items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white px-6 text-center text-sm font-semibold text-gray-500">
+                    No uploaded banner. Customers will not see an offer popup until a banner is enabled.
+                  </div>
+                )}
+              </div>
+            </form>
+
+            <form onSubmit={saveMarketingDiscount} className="mb-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
+              <div className="mb-4">
+                <h4 className="text-lg font-bold text-gray-800">Global Product Discount</h4>
+                <p className="mt-1 text-sm text-gray-500">
+                  Apply a promotional percentage to product subtotal only. Shipping and VAT are not discounted.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,260px)_auto] sm:items-end">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Discount (%)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={globalDiscountPercentage}
+                    onChange={(event) => setGlobalDiscountPercentage(event.target.value)}
+                    placeholder="0"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={marketingDiscountSaving || marketingLoading}
+                  className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-5 py-2.5 font-semibold text-white transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {marketingDiscountSaving ? 'Saving...' : 'Save Discount'}
+                </button>
+              </div>
+            </form>
+
             <form onSubmit={saveCataloguePdf} className="mb-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
               <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
@@ -1628,111 +1820,65 @@ function AdminDashboard() {
               </div>
             </form>
 
-            <form onSubmit={saveMarketingBanner} className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+            <form onSubmit={saveShowroomImage} className="mb-8 grid gap-6 rounded-xl border border-gray-200 bg-gray-50 p-5 lg:grid-cols-[1fr_1.2fr]">
               <div className="space-y-5">
                 <div>
-                  <h4 className="text-lg font-bold text-gray-800">Promotional Banner</h4>
+                  <h4 className="text-lg font-bold text-gray-800">Showroom Page Image</h4>
+                  <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                    Replace the storefront image on the Showroom page. One showroom image is always kept, so there is no delete option.
+                  </p>
                   <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-                    <p className="font-semibold">Upload requirements</p>
-                    <p>Recommended size: 1200 x 600 px</p>
-                    <p>Aspect ratio: 2:1</p>
-                    <p>Accepted formats: PNG or JPEG</p>
+                    <p className="font-semibold">Image instructions</p>
+                    <p>Recommended size: 1400 x 900 px or larger</p>
+                    <p>Use a clear landscape image of the showroom or storefront</p>
+                    <p>Accepted formats: PNG, JPG, or JPEG</p>
+                    <p>Maximum file size: 5 MB</p>
                   </div>
                 </div>
 
-                <label className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-                  <span>
-                    <span className="block font-semibold text-gray-800">Enable banner</span>
-                    <span className="block text-sm text-gray-500">Customers see this uploaded image when active.</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={marketingBannerEnabled}
-                    onChange={(event) => setMarketingBannerEnabled(event.target.checked)}
-                    className="h-5 w-5 accent-primary"
-                  />
-                </label>
-
                 <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Banner image</span>
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Showroom image</span>
                   <input
+                    key={showroomImageInputKey}
                     type="file"
                     accept="image/png,image/jpeg,.png,.jpg,.jpeg"
-                    onChange={handleMarketingFileChange}
+                    onChange={handleShowroomImageFileChange}
                     className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:font-semibold file:text-white"
                   />
-                </label>
-
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Click-through URL</span>
-                  <input
-                    type="text"
-                    value={marketingBannerCtaUrl}
-                    onChange={(event) => setMarketingBannerCtaUrl(event.target.value)}
-                    placeholder="/catalogue"
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
+                  {showroomImageFile ? (
+                    <span className="mt-2 block text-xs font-semibold text-gray-500">
+                      Selected: {showroomImageFile.name} ({formatFileSize(showroomImageFile.size)})
+                    </span>
+                  ) : null}
                 </label>
 
                 <button
                   type="submit"
-                  disabled={marketingSaving || marketingLoading}
+                  disabled={!showroomImageFile || showroomImageSaving || marketingLoading}
                   className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {marketingSaving ? 'Saving...' : 'Save Banner'}
+                  {showroomImageSaving ? 'Replacing...' : 'Replace Showroom Image'}
                 </button>
               </div>
 
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="rounded-lg border border-gray-200 bg-white p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <h4 className="font-bold text-gray-800">Preview</h4>
-                  {marketingLoading ? <span className="text-sm text-gray-500">Loading...</span> : null}
+                  <h4 className="font-bold text-gray-800">Current showroom image</h4>
+                  <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">Always active</span>
                 </div>
-
-                {marketingPreviewUrl ? (
-                  <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+                {showroomImagePreviewUrl ? (
+                  <div className="overflow-hidden rounded-lg border border-gray-200 bg-slate-900">
                     <img
-                      src={marketingPreviewUrl}
-                      alt="Marketing banner preview"
-                      className="h-auto max-h-[420px] w-full object-contain"
+                      src={showroomImagePreviewUrl}
+                      alt="Showroom page preview"
+                      className="aspect-[16/9] w-full object-cover"
                     />
                   </div>
                 ) : (
-                  <div className="flex min-h-[240px] items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white px-6 text-center text-sm font-semibold text-gray-500">
-                    No uploaded banner. Customers will not see an offer popup until a banner is enabled.
+                  <div className="flex aspect-[16/9] items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white px-6 text-center text-sm font-semibold text-gray-500">
+                    No showroom image uploaded yet. Replace it with one PNG or JPEG image.
                   </div>
                 )}
-              </div>
-            </form>
-
-            <form onSubmit={saveMarketingDiscount} className="mt-8 rounded-xl border border-gray-200 bg-gray-50 p-5">
-              <div className="mb-4">
-                <h4 className="text-lg font-bold text-gray-800">Global Product Discount</h4>
-                <p className="mt-1 text-sm text-gray-500">
-                  Apply a promotional percentage to product subtotal only. Shipping and VAT are not discounted.
-                </p>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-[minmax(0,260px)_auto] sm:items-end">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold text-gray-700">Discount (%)</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    value={globalDiscountPercentage}
-                    onChange={(event) => setGlobalDiscountPercentage(event.target.value)}
-                    placeholder="0"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                </label>
-                <button
-                  type="submit"
-                  disabled={marketingDiscountSaving || marketingLoading}
-                  className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-5 py-2.5 font-semibold text-white transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {marketingDiscountSaving ? 'Saving...' : 'Save Discount'}
-                </button>
               </div>
             </form>
 
