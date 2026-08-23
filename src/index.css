@@ -250,6 +250,11 @@ a {
 }
 
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
   body * {
     visibility: hidden !important;
   }
@@ -279,6 +284,17 @@ a {
 
   .order-print-content {
     overflow: visible !important;
+    background: #fff !important;
+    padding: 0 !important;
+  }
+
+  .invoice-a4-page {
+    box-shadow: none !important;
+    margin: 0 !important;
+    max-width: none !important;
+    min-height: 297mm !important;
+    page-break-after: always;
+    width: 210mm !important;
   }
 
   .no-print {

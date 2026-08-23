@@ -12,9 +12,14 @@ const BUSINESS = {
 const VAT_NUMBER = '477 287 344';
 const TERMS = [
   'All items remain the property of ELM SHELF LTD until paid for in full.',
-  'Returns are subject to the terms and conditions at www.elmshelf.co.uk/terms&conditions',
+  'Returns are subject to the terms and conditions at https://elm-shelf.co.uk/terms-and-conditions',
 ];
 const BANK_DETAILS = 'BANK DETAILS: SHOP FITTINGS RETAIL LTD | Acc. No.: 28842668 | Sort Code: 30-54-66';
+const PAGE_MARGIN = 18;
+const FOOTER_LINE_FROM_BOTTOM = 22;
+const FOOTER_TEXT_FROM_BOTTOM = 12;
+const FOOTER_SAFE_GAP = 8;
+const SUMMARY_GAP = 12;
 
 const money = (value) => `\u00a3${(Number(value) || 0).toFixed(2)}`;
 
@@ -90,12 +95,30 @@ const writeLines = (doc, lines, x, y, lineHeight = 5) => {
 };
 
 const drawFooter = (doc, margin, pageWidth, pageHeight) => {
+  const footerLineY = pageHeight - FOOTER_LINE_FROM_BOTTOM;
+
   doc.setDrawColor(221, 221, 221);
-  doc.line(margin, pageHeight - 22, pageWidth - margin, pageHeight - 22);
+  doc.line(margin, footerLineY, pageWidth - margin, footerLineY);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(41, 41, 41);
-  doc.text(BANK_DETAILS, pageWidth / 2, pageHeight - 12, { align: 'center' });
+  doc.text(BANK_DETAILS, pageWidth / 2, pageHeight - FOOTER_TEXT_FROM_BOTTOM, { align: 'center' });
+};
+
+const drawFooters = (doc, margin, pageWidth, pageHeight) => {
+  const pageCount = doc.internal.getNumberOfPages();
+
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    doc.setPage(pageNumber);
+    drawFooter(doc, margin, pageWidth, pageHeight);
+  }
+};
+
+const getSummaryHeight = (totalRows) => {
+  const totalsHeight = 9 + Math.max(totalRows.length - 1, 0) * 8 + 6;
+  const termsHeight = 7 + TERMS.length * 4.5;
+
+  return Math.max(totalsHeight, termsHeight);
 };
 
 export async function downloadInvoicePdf(order) {
@@ -104,7 +127,9 @@ export async function downloadInvoicePdf(order) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 18;
+  const margin = PAGE_MARGIN;
+  const contentBottomY = pageHeight - FOOTER_LINE_FROM_BOTTOM - FOOTER_SAFE_GAP;
+  const tableBottomMargin = pageHeight - contentBottomY;
   const pricing = order.pricing || {};
   const itemSubtotal = getItemSubtotal(order, pricing);
   const shippingFee = Number(pricing.shippingFee || 0);
@@ -222,18 +247,33 @@ export async function downloadInvoicePdf(order) {
       3: { halign: 'right', cellWidth: 24 },
       4: { halign: 'right', cellWidth: 25 },
     },
-    margin: { left: margin, right: margin },
+    margin: { top: margin, right: margin, bottom: tableBottomMargin, left: margin },
+    rowPageBreak: 'avoid',
+    showHead: 'everyPage',
   });
-
-  let summaryY = pageHeight - 62;
-  if (doc.lastAutoTable.finalY > summaryY - 10) {
-    doc.addPage();
-    summaryY = pageHeight - 62;
-  }
 
   const termsX = margin;
   const totalsLabelX = pageWidth - margin - 38;
   const totalsValueX = pageWidth - margin;
+  const totalRows = [
+    ['Sub Total:', money(itemSubtotal), 'normal'],
+    ...(discountAmount > 0
+      ? [
+          [`Global Discount (${discountPercentage.toFixed(2)}%):`, `-${money(discountAmount)}`, 'normal'],
+          ['Discounted Subtotal:', money(discountedSubtotal), 'normal'],
+        ]
+      : []),
+    ['Shipping:', formatShippingFee(shippingFee), 'normal'],
+    [`VAT (${vatRate}):`, money(vatAmount), 'normal'],
+    ['Total:', money(order.amount), 'bold'],
+  ];
+  const summaryHeight = getSummaryHeight(totalRows);
+  let summaryY = (doc.lastAutoTable?.finalY || 128) + SUMMARY_GAP;
+
+  if (summaryY + summaryHeight > contentBottomY) {
+    doc.addPage();
+    summaryY = margin;
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
@@ -247,19 +287,6 @@ export async function downloadInvoicePdf(order) {
   doc.setFontSize(11);
   doc.text('Order Summary', totalsValueX, summaryY, { align: 'right' });
 
-  const totalRows = [
-    ['Sub Total:', money(itemSubtotal), 'normal'],
-    ...(discountAmount > 0
-      ? [
-          [`Global Discount (${discountPercentage.toFixed(2)}%):`, `-${money(discountAmount)}`, 'normal'],
-          ['Discounted Subtotal:', money(discountedSubtotal), 'normal'],
-        ]
-      : []),
-    ['Shipping:', formatShippingFee(shippingFee), 'normal'],
-    [`VAT (${vatRate}):`, money(vatAmount), 'normal'],
-    ['Total:', money(order.amount), 'bold'],
-  ];
-
   totalRows.forEach(([label, value, weight], index) => {
     const y = summaryY + 9 + index * 8;
     doc.setFont('helvetica', weight === 'bold' ? 'bold' : 'normal');
@@ -268,6 +295,6 @@ export async function downloadInvoicePdf(order) {
     doc.text(value, totalsValueX, y, { align: 'right' });
   });
 
-  drawFooter(doc, margin, pageWidth, pageHeight);
+  drawFooters(doc, margin, pageWidth, pageHeight);
   doc.save(`elmshelf-invoice-${order.id}.pdf`);
 }
