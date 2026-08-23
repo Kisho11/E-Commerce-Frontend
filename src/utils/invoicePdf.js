@@ -1,20 +1,18 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { CALL_PHONE_DISPLAY } from './contactDetails';
 import { formatShippingFee } from './shipping';
-
-const BUSINESS = {
-  legalName: 'SHOP FITTINGS RETAIL LTD',
-  addressLines: ['3 LANGLEY CLOSE', 'ROMFORD', 'UK, RM3 8XB'],
-  phone: CALL_PHONE_DISPLAY,
-};
-
-const VAT_NUMBER = '477 287 344';
-const TERMS = [
-  'All items remain the property of ELM SHELF LTD until paid for in full.',
-  'Returns are subject to the terms and conditions at https://elm-shelf.co.uk/terms-and-conditions',
-];
-const BANK_DETAILS = 'BANK DETAILS: SHOP FITTINGS RETAIL LTD | Acc. No.: 28842668 | Sort Code: 30-54-66';
+import {
+  BANK_DETAILS,
+  BUSINESS,
+  TERMS,
+  VAT_NUMBER,
+  buildInvoicePages,
+  formatDateTime,
+  formatVariant,
+  getAddressLines,
+  getCustomerName,
+  getItemSubtotal,
+} from './invoiceLayout';
 const PAGE_MARGIN = 18;
 const FOOTER_LINE_FROM_BOTTOM = 22;
 const FOOTER_TEXT_FROM_BOTTOM = 12;
@@ -41,51 +39,6 @@ const imageToDataUrl = (src) => new Promise((resolve) => {
   image.onerror = () => resolve('');
   image.src = src;
 });
-
-const formatDateTime = (order) => {
-  if (!order?.createdAt) return `${order?.date || '-'} ${order?.orderTime || ''}`.trim();
-  return new Date(order.createdAt).toLocaleString();
-};
-
-const getCustomerName = (order) => (
-  order.customer ||
-  [order.customerFirstName, order.customerLastName].filter(Boolean).join(' ') ||
-  'Customer'
-);
-
-const formatVariant = (item) => {
-  if (item?.selectedAttributes && Object.keys(item.selectedAttributes).length > 0) {
-    return Object.entries(item.selectedAttributes)
-      .map(([key, value]) => `${key}: ${value}`)
-      .join(' | ');
-  }
-
-  return [
-    item?.selectedColor ? `Color: ${item.selectedColor}` : null,
-    item?.selectedSize ? `Size: ${item.selectedSize}` : null,
-  ].filter(Boolean).join(' | ');
-};
-
-const getAddressLines = (order) => {
-  const address = order.shippingAddress || {};
-  const cityLine = [address.city, address.state].filter(Boolean).join(', ');
-  return [
-    address.address,
-    cityLine,
-    address.zipCode,
-  ].filter(Boolean);
-};
-
-const getItemSubtotal = (order, pricing) => {
-  if (pricing.subtotal !== undefined && pricing.subtotal !== null) {
-    return Number(pricing.subtotal) || 0;
-  }
-
-  return (order.items || []).reduce(
-    (sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
-    0
-  );
-};
 
 const writeLines = (doc, lines, x, y, lineHeight = 5) => {
   lines.filter(Boolean).forEach((line, index) => {
@@ -121,31 +74,7 @@ const getSummaryHeight = (totalRows) => {
   return Math.max(totalsHeight, termsHeight);
 };
 
-export async function downloadInvoicePdf(order) {
-  if (!order) return;
-
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = PAGE_MARGIN;
-  const contentBottomY = pageHeight - FOOTER_LINE_FROM_BOTTOM - FOOTER_SAFE_GAP;
-  const tableBottomMargin = pageHeight - contentBottomY;
-  const pricing = order.pricing || {};
-  const itemSubtotal = getItemSubtotal(order, pricing);
-  const shippingFee = Number(pricing.shippingFee || 0);
-  const discountPercentage = Number(pricing.discountPercentage || 0);
-  const discountAmount = Number(pricing.discountAmount || 0);
-  const discountedSubtotal = Number(pricing.discountedSubtotal ?? Math.max(itemSubtotal - discountAmount, 0));
-  const vatRate = `${Math.round(Number(pricing.taxRate ?? 0.2) * 100)}%`;
-  const vatAmount = Number(pricing.taxAmount || 0);
-  const logoDataUrl = await imageToDataUrl('/elmshelf-invoice-logo.png');
-
-  doc.setProperties({
-    title: `Elmshelf Invoice #${order.id}`,
-    subject: `Invoice for order #${order.id}`,
-    author: BUSINESS.legalName,
-  });
-
+const drawIntro = (doc, order, logoDataUrl, margin, pageWidth) => {
   doc.setTextColor(41, 41, 41);
   if (logoDataUrl) {
     doc.addImage(logoDataUrl, 'PNG', margin, 14, 74, 16);
@@ -207,13 +136,15 @@ export async function downloadInvoicePdf(order) {
     98,
     5
   );
+};
 
-  const tableRows = (order.items || []).map((item, index) => {
+const drawItemsTable = (doc, pageItems, startY, margin, tableBottomMargin) => {
+  const tableRows = pageItems.map(({ item, itemNumber }) => {
     const variant = formatVariant(item);
     const description = [item.name || '-', variant].filter(Boolean).join('\n');
 
     return [
-      String(index + 1),
+      String(itemNumber),
       description,
       String(item.quantity || 0),
       money(item.price),
@@ -222,7 +153,7 @@ export async function downloadInvoicePdf(order) {
   });
 
   autoTable(doc, {
-    startY: 128,
+    startY,
     head: [['S.No', 'Description', 'Qty', 'Rate', 'Amount']],
     body: tableRows.length > 0 ? tableRows : [['-', 'No items found', '-', '-', '-']],
     styles: {
@@ -248,32 +179,38 @@ export async function downloadInvoicePdf(order) {
       4: { halign: 'right', cellWidth: 25 },
     },
     margin: { top: margin, right: margin, bottom: tableBottomMargin, left: margin },
+    pageBreak: 'avoid',
     rowPageBreak: 'avoid',
-    showHead: 'everyPage',
+    showHead: 'firstPage',
   });
+};
 
+const buildTotalRows = ({
+  itemSubtotal,
+  discountAmount,
+  discountPercentage,
+  discountedSubtotal,
+  shippingFee,
+  vatRate,
+  vatAmount,
+  amount,
+}) => [
+  ['Sub Total:', money(itemSubtotal), 'normal'],
+  ...(discountAmount > 0
+    ? [
+        [`Global Discount (${discountPercentage.toFixed(2)}%):`, `-${money(discountAmount)}`, 'normal'],
+        ['Discounted Subtotal:', money(discountedSubtotal), 'normal'],
+      ]
+    : []),
+  ['Shipping:', formatShippingFee(shippingFee), 'normal'],
+  [`VAT (${vatRate}):`, money(vatAmount), 'normal'],
+  ['Total:', money(amount), 'bold'],
+];
+
+const drawSummary = (doc, totalRows, summaryY, margin, pageWidth) => {
   const termsX = margin;
   const totalsLabelX = pageWidth - margin - 38;
   const totalsValueX = pageWidth - margin;
-  const totalRows = [
-    ['Sub Total:', money(itemSubtotal), 'normal'],
-    ...(discountAmount > 0
-      ? [
-          [`Global Discount (${discountPercentage.toFixed(2)}%):`, `-${money(discountAmount)}`, 'normal'],
-          ['Discounted Subtotal:', money(discountedSubtotal), 'normal'],
-        ]
-      : []),
-    ['Shipping:', formatShippingFee(shippingFee), 'normal'],
-    [`VAT (${vatRate}):`, money(vatAmount), 'normal'],
-    ['Total:', money(order.amount), 'bold'],
-  ];
-  const summaryHeight = getSummaryHeight(totalRows);
-  let summaryY = (doc.lastAutoTable?.finalY || 128) + SUMMARY_GAP;
-
-  if (summaryY + summaryHeight > contentBottomY) {
-    doc.addPage();
-    summaryY = margin;
-  }
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
@@ -293,6 +230,72 @@ export async function downloadInvoicePdf(order) {
     doc.setFontSize(weight === 'bold' ? 11 : 9);
     doc.text(label, totalsLabelX, y, { align: 'right' });
     doc.text(value, totalsValueX, y, { align: 'right' });
+  });
+};
+
+export async function downloadInvoicePdf(order) {
+  if (!order) return;
+
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = PAGE_MARGIN;
+  const contentBottomY = pageHeight - FOOTER_LINE_FROM_BOTTOM - FOOTER_SAFE_GAP;
+  const tableBottomMargin = pageHeight - contentBottomY;
+  const pricing = order.pricing || {};
+  const itemSubtotal = getItemSubtotal(order, pricing);
+  const shippingFee = Number(pricing.shippingFee || 0);
+  const discountPercentage = Number(pricing.discountPercentage || 0);
+  const discountAmount = Number(pricing.discountAmount || 0);
+  const discountedSubtotal = Number(pricing.discountedSubtotal ?? Math.max(itemSubtotal - discountAmount, 0));
+  const vatRate = `${Math.round(Number(pricing.taxRate ?? 0.2) * 100)}%`;
+  const vatAmount = Number(pricing.taxAmount || 0);
+  const logoDataUrl = await imageToDataUrl('/elmshelf-invoice-logo.png');
+
+  doc.setProperties({
+    title: `Elmshelf Invoice #${order.id}`,
+    subject: `Invoice for order #${order.id}`,
+    author: BUSINESS.legalName,
+  });
+
+  const totalRows = buildTotalRows({
+    itemSubtotal,
+    discountAmount,
+    discountPercentage,
+    discountedSubtotal,
+    shippingFee,
+    vatRate,
+    vatAmount,
+    amount: order.amount,
+  });
+  const summaryHeight = getSummaryHeight(totalRows);
+  const pages = buildInvoicePages(order.items);
+
+  pages.forEach((page, pageIndex) => {
+    if (pageIndex > 0) {
+      doc.addPage();
+    }
+
+    if (page.showIntro) {
+      drawIntro(doc, order, logoDataUrl, margin, pageWidth);
+    }
+
+    const shouldDrawTable = page.items.length > 0 || (page.showIntro && !(order.items || []).length);
+    const startY = page.showIntro ? 128 : margin;
+
+    if (shouldDrawTable) {
+      drawItemsTable(doc, page.items, startY, margin, tableBottomMargin);
+    }
+
+    if (page.showSummary) {
+      const tableEndY = shouldDrawTable ? (doc.lastAutoTable?.finalY || startY) : margin - SUMMARY_GAP;
+      const bottomAnchoredSummaryY = Math.max(margin, contentBottomY - summaryHeight);
+      const summaryY = tableEndY + SUMMARY_GAP <= bottomAnchoredSummaryY
+        ? bottomAnchoredSummaryY
+        : tableEndY + SUMMARY_GAP;
+
+      drawSummary(doc, totalRows, summaryY, margin, pageWidth);
+    }
   });
 
   drawFooters(doc, margin, pageWidth, pageHeight);
