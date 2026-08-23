@@ -18,6 +18,7 @@ const ADMIN_EMAIL_CAMPAIGNS_ENABLED = false;
 const CAMPAIGN_IMAGE_MAX_COUNT = 5;
 const CAMPAIGN_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 const CATALOGUE_PDF_MAX_BYTES = 50 * 1024 * 1024;
+const HERO_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 const API_ORIGIN = API_BASE_URL ? new URL(API_BASE_URL).origin : '';
 const emptyCustomerEditForm = {
@@ -116,6 +117,8 @@ function AdminDashboard() {
   const [reportsError, setReportsError] = useState('');
   const [marketingBanner, setMarketingBanner] = useState(null);
   const [marketingBannerFile, setMarketingBannerFile] = useState(null);
+  const [heroImageFile, setHeroImageFile] = useState(null);
+  const [heroImageInputKey, setHeroImageInputKey] = useState(0);
   const [marketingBannerEnabled, setMarketingBannerEnabled] = useState(false);
   const [marketingBannerCtaUrl, setMarketingBannerCtaUrl] = useState('/catalogue');
   const [globalDiscountPercentage, setGlobalDiscountPercentage] = useState('0');
@@ -124,6 +127,7 @@ function AdminDashboard() {
   const [cataloguePdfInputKey, setCataloguePdfInputKey] = useState(0);
   const [marketingLoading, setMarketingLoading] = useState(false);
   const [marketingSaving, setMarketingSaving] = useState(false);
+  const [heroImageSaving, setHeroImageSaving] = useState(false);
   const [marketingDiscountSaving, setMarketingDiscountSaving] = useState(false);
   const [cataloguePdfSaving, setCataloguePdfSaving] = useState(false);
   const [cataloguePdfDeleting, setCataloguePdfDeleting] = useState(false);
@@ -189,6 +193,10 @@ function AdminDashboard() {
     if (marketingBannerFile) return URL.createObjectURL(marketingBannerFile);
     return resolveDashboardMediaUrl(marketingBanner?.image_url || '');
   }, [marketingBanner, marketingBannerFile]);
+  const heroImagePreviewUrl = useMemo(() => {
+    if (heroImageFile) return URL.createObjectURL(heroImageFile);
+    return resolveDashboardMediaUrl(marketingBanner?.hero_image_url || '');
+  }, [heroImageFile, marketingBanner]);
   const activeNewsletterSubscriberCount = newsletterSubscribers.filter((subscriber) => subscriber.is_active).length;
   const shopOwnerSubscriberCount = newsletterSubscribers.filter((subscriber) => subscriber.business_type !== 'shopfitter').length;
   const shopfitterSubscriberCount = newsletterSubscribers.filter((subscriber) => subscriber.business_type === 'shopfitter').length;
@@ -478,6 +486,11 @@ function AdminDashboard() {
   }, [marketingBannerFile, marketingPreviewUrl]);
 
   useEffect(() => {
+    if (!heroImageFile || !heroImagePreviewUrl.startsWith('blob:')) return undefined;
+    return () => URL.revokeObjectURL(heroImagePreviewUrl);
+  }, [heroImageFile, heroImagePreviewUrl]);
+
+  useEffect(() => {
     if (user?.role !== 'admin' || activeTab !== 'marketing') return undefined;
 
     let cancelled = false;
@@ -527,6 +540,8 @@ function AdminDashboard() {
           setNewsletterSubscribers(Array.isArray(subscribersData) ? subscribersData : []);
           setMarketingCampaigns(Array.isArray(campaignsData) ? campaignsData : []);
           setMarketingBannerFile(null);
+          setHeroImageFile(null);
+          setHeroImageInputKey((key) => key + 1);
         }
       } catch (error) {
         if (!cancelled) {
@@ -537,6 +552,8 @@ function AdminDashboard() {
           setCataloguePdf(null);
           setCataloguePdfFile(null);
           setCataloguePdfInputKey((key) => key + 1);
+          setHeroImageFile(null);
+          setHeroImageInputKey((key) => key + 1);
           setNewsletterSubscribers([]);
           setMarketingCampaigns([]);
           setMarketingError(error.message || 'Unable to load marketing data.');
@@ -704,6 +721,74 @@ function AdminDashboard() {
 
     setMarketingError('');
     setMarketingBannerFile(file);
+  };
+
+  const handleHeroImageFileChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    setMarketingMessage('');
+
+    if (!file) {
+      setHeroImageFile(null);
+      return;
+    }
+
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setHeroImageFile(null);
+      setMarketingError('Please upload a PNG or JPEG homepage hero image.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > HERO_IMAGE_MAX_BYTES) {
+      setHeroImageFile(null);
+      setMarketingError('Homepage hero image must be 5 MB or smaller.');
+      event.target.value = '';
+      return;
+    }
+
+    setMarketingError('');
+    setHeroImageFile(file);
+  };
+
+  const saveHeroImage = async (event) => {
+    event.preventDefault();
+    if (heroImageSaving) return;
+
+    if (!heroImageFile) {
+      setMarketingError('Choose a PNG or JPEG image before replacing the homepage hero image.');
+      return;
+    }
+
+    setHeroImageSaving(true);
+    setMarketingError('');
+    setMarketingMessage('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', heroImageFile);
+
+      const response = await authFetch('/marketing/admin/hero-image', {
+        method: 'PUT',
+        body: formData,
+      });
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Unable to replace homepage hero image.');
+      }
+
+      setMarketingBanner(data || null);
+      setMarketingBannerEnabled(Boolean(data?.is_active));
+      setMarketingBannerCtaUrl(data?.cta_url || '/catalogue');
+      setGlobalDiscountPercentage(String(Number(data?.global_discount_percentage ?? globalDiscountPercentage ?? 0)));
+      setHeroImageFile(null);
+      setHeroImageInputKey((key) => key + 1);
+      setMarketingMessage('Homepage hero image replaced. The home page will keep this image until another one is uploaded.');
+    } catch (error) {
+      setMarketingError(error.message || 'Unable to replace homepage hero image.');
+    } finally {
+      setHeroImageSaving(false);
+    }
   };
 
   const saveMarketingBanner = async (event) => {
@@ -1478,6 +1563,68 @@ function AdminDashboard() {
                 >
                   {cataloguePdfDeleting ? 'Deleting...' : 'Delete Catalogue'}
                 </button>
+              </div>
+            </form>
+
+            <form onSubmit={saveHeroImage} className="mb-8 grid gap-6 rounded-xl border border-gray-200 bg-gray-50 p-5 lg:grid-cols-[1fr_1.2fr]">
+              <div className="space-y-5">
+                <div>
+                  <h4 className="text-lg font-bold text-gray-800">Homepage Hero Image</h4>
+                  <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                    Replace the main home page image. One hero image is always kept, so there is no delete option.
+                  </p>
+                  <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                    <p className="font-semibold">Image instructions</p>
+                    <p>Recommended size: 1920 x 900 px or larger</p>
+                    <p>Use a wide landscape image with the important subject near the centre</p>
+                    <p>Accepted formats: PNG, JPG, or JPEG</p>
+                    <p>Maximum file size: 5 MB</p>
+                  </div>
+                </div>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-gray-700">Hero image</span>
+                  <input
+                    key={heroImageInputKey}
+                    type="file"
+                    accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                    onChange={handleHeroImageFileChange}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:font-semibold file:text-white"
+                  />
+                  {heroImageFile ? (
+                    <span className="mt-2 block text-xs font-semibold text-gray-500">
+                      Selected: {heroImageFile.name} ({formatFileSize(heroImageFile.size)})
+                    </span>
+                  ) : null}
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={!heroImageFile || heroImageSaving || marketingLoading}
+                  className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {heroImageSaving ? 'Replacing...' : 'Replace Hero Image'}
+                </button>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 bg-white p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="font-bold text-gray-800">Current home page image</h4>
+                  <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">Always active</span>
+                </div>
+                {heroImagePreviewUrl ? (
+                  <div className="overflow-hidden rounded-lg border border-gray-200 bg-slate-900">
+                    <img
+                      src={heroImagePreviewUrl}
+                      alt="Homepage hero preview"
+                      className="aspect-[16/7] w-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex aspect-[16/7] items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white px-6 text-center text-sm font-semibold text-gray-500">
+                    No homepage hero image uploaded yet. Replace it with one PNG or JPEG image.
+                  </div>
+                )}
               </div>
             </form>
 

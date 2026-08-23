@@ -1,9 +1,19 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { CALL_PHONE_DISPLAY, CALL_PHONE_TEL } from '../utils/contactDetails';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL;
+const API_ORIGIN = API_BASE_URL ? new URL(API_BASE_URL).origin : '';
+
+const resolveHeroImageUrl = (value) => {
+  if (!value) return '';
+  if (/^(data:|blob:|https?:)/i.test(value)) return value;
+  if (!API_ORIGIN) return value;
+  if (value.startsWith('/uploads/')) return `${API_ORIGIN}${value}`;
+  return value;
+};
+
 const stableSlide = {
-  backgroundImage: 'url(/main.webp)',
   backgroundSize: 'cover',
   backgroundPosition: 'center',
   backgroundRepeat: 'no-repeat',
@@ -11,6 +21,36 @@ const stableSlide = {
 
 function Slider() {
   const { t } = useLanguage();
+  const [heroImageUrl, setHeroImageUrl] = useState('');
+
+  useEffect(() => {
+    if (!API_BASE_URL) return undefined;
+
+    let cancelled = false;
+
+    const loadHeroImage = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/marketing/settings`, {
+          credentials: 'include',
+        });
+        const data = await response.json().catch(() => null);
+
+        if (!cancelled && response.ok) {
+          setHeroImageUrl(resolveHeroImageUrl(data?.hero_image_url));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setHeroImageUrl('');
+        }
+      }
+    };
+
+    loadHeroImage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <section className="fade-up">
@@ -19,7 +59,7 @@ function Slider() {
           <div
             className="hero-pan absolute inset-0"
             style={{
-              backgroundImage: stableSlide.backgroundImage,
+              backgroundImage: heroImageUrl ? `url(${heroImageUrl})` : 'none',
               backgroundSize: stableSlide.backgroundSize || 'auto',
               backgroundPosition: stableSlide.backgroundPosition || 'center',
               backgroundRepeat: stableSlide.backgroundRepeat || 'no-repeat',
